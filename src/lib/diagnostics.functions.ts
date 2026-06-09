@@ -37,6 +37,8 @@ const StepInput = z.object({
     applianceType: z.string(),
     modelNumber: z.string(),
     serialNumber: z.string().optional().default(""),
+    manufactureYear: z.number().int().optional(),
+    ageYears: z.number().optional(),
   }),
   complaint: z.string().min(1),
   history: z.array(QAItem).default([]),
@@ -74,7 +76,7 @@ Rules:
 - Set done=true only when the failure is conclusively isolated; then leave nextQuestion fields empty.
 - If a tech sheet excerpt is provided, ground your reasoning in it.
 - Never guess wildly; if the appliance type is too vague to proceed, ask a clarifying question first.`,
-      prompt: `Appliance: ${data.appliance.manufacturer} ${data.appliance.applianceType} (Model ${data.appliance.modelNumber}${data.appliance.serialNumber ? `, S/N ${data.appliance.serialNumber}` : ""})
+      prompt: `Appliance: ${data.appliance.manufacturer} ${data.appliance.applianceType} (Model ${data.appliance.modelNumber}${data.appliance.serialNumber ? `, S/N ${data.appliance.serialNumber}` : ""})${data.appliance.manufactureYear ? `\nManufactured: ${data.appliance.manufactureYear}${data.appliance.ageYears != null ? ` (~${Math.round(data.appliance.ageYears)} yr old — factor wear-related failures accordingly)` : ""}` : ""}
 
 Customer Complaint: ${data.complaint}
 
