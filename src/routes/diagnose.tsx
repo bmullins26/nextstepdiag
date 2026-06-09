@@ -12,7 +12,6 @@ import {
   RotateCcw,
   Send,
   Upload,
-  Wrench,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
@@ -20,10 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  verifyAppliance,
   nextDiagnosticStep,
   askDocumentQuestion,
 } from "@/lib/diagnostics.functions";
+import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
 
 export const Route = createFileRoute("/diagnose")({
   head: () => ({
@@ -35,16 +34,7 @@ export const Route = createFileRoute("/diagnose")({
   component: DiagnosePage,
 });
 
-type Appliance = {
-  manufacturer: string;
-  applianceType: string;
-  modelNumber: string;
-  serialNumber: string;
-  confidence: string;
-  notes: string;
-  identified: boolean;
-  brand: string;
-};
+type Appliance = DecodedAppliance;
 
 type QA = { question: string; answer: string };
 
@@ -60,13 +50,7 @@ function DiagnosePage() {
   const [phase, setPhase] = useState<1 | 2 | 3>(1);
 
   // Step 1
-  const [brand, setBrand] = useState("");
-  const [model, setModel] = useState("");
-  const [serial, setSerial] = useState("");
-  const [verifying, setVerifying] = useState(false);
   const [appliance, setAppliance] = useState<Appliance | null>(null);
-  const [clarification, setClarification] = useState("");
-  const verify = useServerFn(verifyAppliance);
 
   // Step 2
   const [complaint, setComplaint] = useState("");
@@ -88,27 +72,6 @@ function DiagnosePage() {
   const askDoc = useServerFn(askDocumentQuestion);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function handleVerify() {
-    if (!brand.trim() || !model.trim()) {
-      toast.error("Brand and model number are required.");
-      return;
-    }
-    setVerifying(true);
-    try {
-      const result = await verify({ data: { brand, modelNumber: model, serialNumber: serial } });
-      setAppliance(result as Appliance);
-      if (!result.identified) {
-        setClarification(result.notes || "Please clarify the appliance configuration.");
-      } else {
-        setClarification("");
-      }
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Verification failed.");
-    } finally {
-      setVerifying(false);
-    }
-  }
-
   async function startDiagnosis() {
     if (!complaint.trim()) {
       toast.error("Describe the customer complaint to begin.");
@@ -129,6 +92,8 @@ function DiagnosePage() {
             applianceType: appliance.applianceType,
             modelNumber: appliance.modelNumber,
             serialNumber: appliance.serialNumber,
+            manufactureYear: appliance.manufactureDate?.year,
+            ageYears: appliance.ageYears,
           },
           complaint,
           history: h,
@@ -157,9 +122,6 @@ function DiagnosePage() {
     setComplaint("");
     setHistory([]);
     setStep(null);
-    setBrand("");
-    setModel("");
-    setSerial("");
     setDocText("");
     setDocName("");
   }
@@ -221,14 +183,15 @@ function DiagnosePage() {
 
       <div className="mx-auto max-w-md px-4 pb-32 pt-5">
         {phase === 1 && (
-          <Phase1
-            {...{
-              brand, setBrand, model, setModel, serial, setSerial,
-              verifying, appliance, clarification,
-              handleVerify,
-              onContinue: () => setPhase(2),
-            }}
-          />
+          <section className="space-y-5">
+            <SectionHead step="STEP 1" title="Verify the appliance" />
+            <VerifyAppliance
+              onConfirm={(a) => {
+                setAppliance(a);
+                setPhase(2);
+              }}
+            />
+          </section>
         )}
 
         {phase === 2 && appliance && (
@@ -301,61 +264,6 @@ function StepBar({ phase }: { phase: number }) {
         );
       })}
     </div>
-  );
-}
-
-function Phase1(props: {
-  brand: string; setBrand: (v: string) => void;
-  model: string; setModel: (v: string) => void;
-  serial: string; setSerial: (v: string) => void;
-  verifying: boolean; appliance: Appliance | null; clarification: string;
-  handleVerify: () => void; onContinue: () => void;
-}) {
-  const { brand, setBrand, model, setModel, serial, setSerial, verifying, appliance, clarification, handleVerify, onContinue } = props;
-  return (
-    <section className="space-y-5">
-      <SectionHead step="STEP 1" title="Verify the appliance" />
-      <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
-        <Field id="brand" label="Brand">
-          <Input id="brand" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Whirlpool, GE, Samsung…" className="h-12 text-base" />
-        </Field>
-        <Field id="model" label="Model Number">
-          <Input id="model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="WTW5000DW1" className="h-12 text-base" />
-        </Field>
-        <Field id="serial" label="Serial Number (optional)">
-          <Input id="serial" value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="C81234567" className="h-12 text-base" />
-        </Field>
-        <Button onClick={handleVerify} disabled={verifying} className="h-14 w-full text-base font-bold">
-          {verifying ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…</> : "Verify Appliance"}
-        </Button>
-      </div>
-
-      {appliance && (
-        <div className="space-y-3 rounded-2xl border border-primary/40 bg-card p-5">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
-            <Wrench className="h-4 w-4" /> Identification
-          </div>
-          <KV k="Manufacturer" v={appliance.manufacturer || appliance.brand} />
-          <KV k="Appliance Type" v={appliance.applianceType || "—"} />
-          <KV k="Model Number" v={appliance.modelNumber} />
-          <KV k="Serial Number" v={appliance.serialNumber || "—"} />
-          <KV k="Confidence" v={appliance.confidence} />
-          {appliance.notes && (
-            <p className="rounded-lg border border-border bg-background/40 p-3 text-sm text-muted-foreground">
-              {appliance.notes}
-            </p>
-          )}
-          {!appliance.identified && (
-            <p className="text-sm text-secondary">
-              {clarification || "Please clarify the appliance type before continuing."}
-            </p>
-          )}
-          <Button onClick={onContinue} disabled={!appliance.identified} className="h-12 w-full font-bold">
-            Continue to Complaint
-          </Button>
-        </div>
-      )}
-    </section>
   );
 }
 
