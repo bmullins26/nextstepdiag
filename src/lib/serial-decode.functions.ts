@@ -34,6 +34,7 @@ export const decodeAppliance = createServerFn({ method: "POST" })
 
     const { object } = await generateObject({
       model: gateway(DEFAULT_MODEL),
+      mode: "json",
       schema: z.object({
         identified: z.boolean(),
         manufacturer: z.string(),
@@ -88,6 +89,7 @@ export const extractTagFromImage = createServerFn({ method: "POST" })
     const gateway = getGateway();
     const { object } = await generateObject({
       model: gateway(DEFAULT_MODEL),
+      mode: "json",
       schema: z.object({
         brand: z.string(),
         modelNumber: z.string(),
@@ -104,7 +106,7 @@ export const extractTagFromImage = createServerFn({ method: "POST" })
               type: "text",
               text: `Read this appliance data plate photo and extract brand, model number, and serial number.${data.brandHint ? ` Brand hint from technician: ${data.brandHint}.` : ""}`,
             },
-            { type: "image", image: data.imageDataUrl },
+            { type: "image_url", image_url: { url: data.imageDataUrl } } as never,
           ],
         },
       ],

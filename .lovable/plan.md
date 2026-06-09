@@ -1,79 +1,37 @@
-## Goal
+## Diagnosis
 
-Replace the current free-text verification step on `/diagnose` with a HomeSpy-style "Appliance Age & ID Finder" that decodes the serial number into manufacturer, model family, appliance type, and approximate manufacture date — then feeds that into the existing diagnostic engine.
+Decode silently fails because `generateObject(...)` is being called with the default `mode: 'auto'`, which uses provider-side `response_format: json_schema`. Gemini 3 Flash through the Lovable gateway logs:
 
-## User flow
+```
+AI SDK Warning (lovable.chat / google/gemini-3-flash-preview):
+The feature "responseFormat" is not supported.
+JSON response format schema is only supported with structuredOutputs
+```
 
-1. Tech opens **Verify Appliance**.
-2. Picks **Brand** from a curated dropdown (≈60 brands, matching HomeSpy's supported list — Whirlpool, GE, Samsung, LG, Frigidaire, Maytag, KitchenAid, Bosch, Kenmore, etc.). Searchable combobox; "Other" allowed.
-3. Enters **Model #** and **Serial #** (required) and **Serial #** (optional second line if dual-tag).
-4. Optional: taps a **camera button** on the serial field. If the selected brand supports OCR, the button is **green**; otherwise greyed with tooltip "Image recognition coming soon". Tapping opens the device camera / file picker, uploads the photo, and auto-fills brand / model / serial from the data plate.
-5. Taps **Decode**. We show a result card:
-   - Manufacturer (confirmed)
-   - Appliance type + configuration (e.g. "Top-Load Washer, VMW platform")
-   - **Manufacture date** with range + confidence ("Built ~Mar 2017, High confidence")
-   - Age in years
-   - Decoded serial breakdown (year code, week/month code, plant code) — collapsible "How we decoded this"
-   - Buttons: **Looks right → continue to complaint** / **Not my appliance → edit**
-6. Verified appliance object (including manufacture date and age) is passed to the existing `nextDiagnosticStep` engine, which can now factor age into its hypotheses ("13-year-old drain pump, check for wear first").
+The provider returns plain text, AI SDK's schema parse rejects it, the server function throws, the UI just toasts the error and clears state — so the user sees "no results."
 
-## Decode engine (AI + rules)
+This affects every `generateObject` call in the project, not just decode.
 
-New server module `src/lib/serial-decode.server.ts` containing a rules table for major brands. Each rule = `{ brand, pattern: RegExp, extract: (m) => { yearCandidates: number[], weekOrMonth?, plant? } }`. Coverage at launch (matches HomeSpy's most-used decoders):
+## Fix
 
-- Whirlpool family (Whirlpool, KitchenAid, Maytag, Amana, Jenn-Air, Roper, Estate, Inglis, Magic Chef, Admiral, Crosley) — letter+digit week/year (`C` = 2013, etc.)
-- GE / Hotpoint / Cafe / Haier-GE — 2-letter month/year code
-- Samsung — position 7 = year, position 8 = month (alphanumeric)
-- LG — positions 1–3 = YYM
-- Frigidaire / Electrolux / Gibson / Tappan / Kelvinator / Westinghouse — 2-digit year + week
-- Bosch / Thermador / Gaggenau / Siemens — FD code
-- Speed Queen / Alliance / Huebsch — YYMM prefix
-- Sub-Zero, Wolf, Viking, Dacor — passthrough to AI
-- Anything else → fall back to AI-only decode
+Switch every `generateObject` call to `mode: 'json'` (uses `response_format: { type: 'json_object' }`, which the gateway supports) and keep the existing Zod schema for validation client-side.
 
-New server function `decodeAppliance({ brand, modelNumber, serialNumber })`:
-1. Run brand-specific rule → list of candidate manufacture dates.
-2. Call AI (existing `generateObject` + Lovable Gateway, `google/gemini-3-flash-preview`) with: brand, model, serial, candidate dates from step 1. Prompt instructs it to:
-   - Confirm/refine appliance type & configuration from the **model number**.
-   - Pick the most likely date from candidates (or say "ambiguous").
-   - Return structured `{ manufacturer, applianceType, platform, manufactureDate: {year, month?, rangeStart, rangeEnd}, ageYears, confidence: High|Medium|Low|Unknown, decodedBreakdown: string, notes: string }`.
-3. If rules produced zero candidates AND AI confidence < Medium, return `identified: false` with a clarifying question for the tech (e.g. "Serial format not recognized — is there a second tag inside the door?").
+Files to edit:
 
-Replaces the current `verifyAppliance` server function; downstream `nextDiagnosticStep` is extended to accept `manufactureDate` and `ageYears` so the diagnostic prompt can reason about age.
+- `src/lib/serial-decode.functions.ts` — add `mode: 'json'` to `decodeAppliance` and `extractTagFromImage`.
+- `src/lib/diagnostics.functions.ts` — add `mode: 'json'` to `verifyAppliance`, `nextDiagnosticStep`, and `askDocumentQuestion`.
 
-## Photo OCR auto-fill
+For `extractTagFromImage` (multimodal), also change the content block from AI-SDK's `{ type: 'image', image: ... }` to the OpenAI-compatible `{ type: 'image_url', image_url: { url: dataUrl } }`, since the gateway is OpenAI-shape passthrough.
 
-New server function `extractTagFromImage({ imageBase64, brand? })` using the Lovable AI Gateway multimodal chat-completions endpoint with `google/gemini-3-flash-preview`. Prompt: "Read the data plate from this appliance. Return `{brand, modelNumber, serialNumber, typeHints}` exactly as printed; leave blank if not visible." On client:
+## Hardening
 
-- `<input type="file" accept="image/*" capture="environment">` triggered by the camera button.
-- Compress to ≤1.5 MB JPEG (canvas re-encode) before sending.
-- On return, prefill the form fields; tech can correct before pressing Decode.
+In `src/components/verify-appliance.tsx`, surface a more useful error: when the decode call throws, also keep the form populated (already the case) but log the underlying error message to the toast (already the case) — and add a `console.error` so the user/devtools see the real cause if they look.
 
-OCR-supported brand list (camera button green) starts with the Whirlpool family, GE, Samsung, LG, Frigidaire, Bosch, Maytag, KitchenAid — same brands we have decode rules for. All other brands show the camera as disabled with a "coming soon" tooltip (matches HomeSpy behavior).
+## Verification
 
-## UI changes
-
-- `src/routes/diagnose.tsx` — replace the current brand/model/serial inputs with the new `<VerifyAppliance>` step component. Result card + "How we decoded this" disclosure. Mobile-first, dark theme, brand tokens unchanged.
-- New `src/components/verify-appliance.tsx` — combobox + inputs + camera button + Decode action + result card. Uses existing shadcn `Command`, `Popover`, `Input`, `Button`, `Badge`, `Card`.
-- New `src/lib/appliance-brands.ts` — flat list of supported brands with `{name, slug, ocrSupported, decodeSupported}` flags.
-- Keep the existing complaint + guided-engine phases; they receive the richer appliance object automatically.
-
-## Files
-
-Create:
-- `src/lib/appliance-brands.ts`
-- `src/lib/serial-decode.server.ts`
-- `src/lib/serial-decode.functions.ts` (exports `decodeAppliance`, `extractTagFromImage`)
-- `src/components/verify-appliance.tsx`
-
-Edit:
-- `src/lib/diagnostics.functions.ts` — remove old `verifyAppliance`; extend `StepInput.appliance` with `manufactureDate?` and `ageYears?`; update the senior-tech system prompt to use age.
-- `src/routes/diagnose.tsx` — swap verification step to the new component; thread the new appliance object through to the engine.
-
-No DB, no auth changes, no new packages — everything runs through the existing AI Gateway helper and shadcn primitives.
+After the edits, re-run the decode in preview with Brand=Whirlpool / Model=WTW5000DW1 / Serial=C81234567 and confirm the result card appears with year ~2018 candidates and "How we decoded this" populated. Confirm no `responseFormat` warnings in the dev-server log.
 
 ## Out of scope
 
-- Voice-to-text for serial input (not selected).
-- Persisting decode history (no Cloud yet).
-- reCAPTCHA (this is a technician tool, not a public form).
+- Switching models or moving off `generateObject` to `generateText + Output.object`.
+- Persisting decoded results.
