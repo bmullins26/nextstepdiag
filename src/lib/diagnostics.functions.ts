@@ -15,7 +15,6 @@ export const verifyAppliance = createServerFn({ method: "POST" })
     const gateway = getGateway();
     const { object } = await generateObject({
       model: gateway(DEFAULT_MODEL),
-      mode: "json",
       schema: z.object({
         identified: z.boolean().describe("True only if you can confidently identify the appliance type from brand + model."),
         manufacturer: z.string(),
@@ -56,7 +55,6 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
 
     const { object } = await generateObject({
       model: gateway(DEFAULT_MODEL),
-      mode: "json",
       schema: z.object({
         done: z.boolean().describe("True only when you have enough evidence to name the most likely failure with confidence."),
         currentFindings: z.string().describe("One short sentence summarizing what's been ruled in/out so far."),
@@ -99,7 +97,6 @@ export const askDocumentQuestion = createServerFn({ method: "POST" })
     const gateway = getGateway();
     const { object } = await generateObject({
       model: gateway(DEFAULT_MODEL),
-      mode: "json",
       schema: z.object({ answer: z.string() }),
       system:
         "You are a senior appliance tech answering a follow-up question about a tech sheet or wiring diagram. Be concise, cite component names, terminals, and expected values. If the document does not contain the answer, say so.",
