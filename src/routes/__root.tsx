@@ -80,11 +80,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "NextStep Diagnostics — A Technician In Your Pocket" },
       { name: "description", content: "Guided field diagnostics for appliance technicians. Don't guess. Know your next step." },
-      { property: "og:title", content: "NextStep Diagnostics" },
-      { property: "og:description", content: "Guided field diagnostics for appliance technicians." },
+      { property: "og:title", content: "NextStep Diagnostics — A Technician In Your Pocket" },
+      { property: "og:description", content: "Guided field diagnostics for appliance technicians. Don't guess. Know your next step." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "NextStep Diagnostics — A Technician In Your Pocket" },
+      { name: "twitter:description", content: "Guided field diagnostics for appliance technicians. Don't guess. Know your next step." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/9cbc3468-c024-4d5c-b4b0-97407aa3b5f9/id-preview-ea0c6507--a3786821-6f1a-4d3b-9c2b-bf174637d4b3.lovable.app-1781044328372.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/9cbc3468-c024-4d5c-b4b0-97407aa3b5f9/id-preview-ea0c6507--a3786821-6f1a-4d3b-9c2b-bf174637d4b3.lovable.app-1781044328372.png" },
     ],
     links: [
       {
