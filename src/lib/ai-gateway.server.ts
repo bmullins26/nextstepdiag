@@ -5,11 +5,11 @@ export function createLovableAiGatewayProvider(apiKey: string) {
     name: "lovable",
     baseURL: "https://ai.gateway.lovable.dev/v1",
     headers: { "Lovable-API-Key": apiKey },
-    // Gemini-via-Gateway doesn't accept response_format: json_schema (provider-side
-    // structured outputs). Telling the adapter the provider doesn't support
-    // structured outputs makes generateObject fall back to json_object mode,
-    // which the gateway supports.
-    supportsStructuredOutputs: false,
+    // Gemini-via-Gateway rejects the `responseFormat` field and requires the
+    // OpenAI-style `structured_outputs` request flag instead. Telling the
+    // adapter the provider supports structured outputs makes generateObject
+    // send the right shape.
+    supportsStructuredOutputs: true,
   });
 }
 
