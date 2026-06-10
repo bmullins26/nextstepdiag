@@ -61,6 +61,26 @@ type Step = {
   nextQuestion: { text: string; choices: string[]; allowFreeText: boolean };
 };
 
+type ResumeRow = {
+  id: string;
+  status: "active" | "completed" | "abandoned";
+  brand: string;
+  appliance_type: string;
+  model_number: string;
+  serial_number: string;
+  manufacture_year: number | null;
+  age_years: number | null;
+  complaint: string;
+  findings: string[];
+  history: QA[];
+  most_likely_failures: string[];
+  most_likely_failure: string;
+  recommended_next_test: string;
+  current_findings_summary: string;
+  appliance: Record<string, unknown> | null;
+  updated_at: string;
+};
+
 function DiagnosePage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
