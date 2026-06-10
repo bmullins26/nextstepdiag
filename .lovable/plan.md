@@ -1,37 +1,43 @@
-## Diagnosis
+## Document Assistant — `/documents`
 
-Decode silently fails because `generateObject(...)` is being called with the default `mode: 'auto'`, which uses provider-side `response_format: json_schema`. Gemini 3 Flash through the Lovable gateway logs:
+Two new files, zero edits to existing code. To remove later, delete the two files; nothing else needs to change.
+
+### Files
+
+1. **`src/lib/document-assistant.functions.ts`** (new) — two server functions calling Gemini via the existing Lovable AI gateway helper.
+   - `analyzeDocument({ fileName, mimeType, dataUrl })` → returns structured analysis (Zod schema below).
+   - `askDocumentFollowUp({ file, analysisSummary, history, question })` → returns `{ answer }`.
+   - PDFs are sent as `{ type: "file", file: { filename, file_data } }`. JPG/PNG sent as `{ type: "image_url", image_url: { url } }`. Both via OpenAI-compatible chat messages, same gateway as `extractTagFromImage`.
+   - Strong system prompt enforcing: **never invent voltage values, connector numbers, fault codes, wire colors, or part numbers**; missing info must read exactly `"Not visible in this document."`
+
+2. **`src/routes/documents.tsx`** (new) — page UI.
+   - Header with back link to `/` and `BrandLogo`.
+   - Two-column layout (stacks on mobile):
+     - **Left:** drag/drop file picker; once uploaded, shows `<img>` for images or `<object data type=application/pdf>` for PDFs.
+     - **Right top:** analysis card with all 8 sections (Overview, Visible Text, Components, Circuit Operation, Voltage Paths, Test Points table, Next Diagnostic Step (highlighted), Follow-Up Questions as clickable chips that populate the question box).
+     - **Right bottom:** follow-up chat with conversation history + textarea + send button (Enter to send).
+   - Client-side validation: only PDF/JPG/PNG, max 15 MB, toast on rejection.
+   - Uses existing semantic tokens (`bg-card`, `text-primary`, etc.) — matches `/diagnose` styling.
+
+### Analysis schema (Zod, structured output via `generateObject`)
 
 ```
-AI SDK Warning (lovable.chat / google/gemini-3-flash-preview):
-The feature "responseFormat" is not supported.
-JSON response format schema is only supported with structuredOutputs
+documentOverview: string
+visibleText: string                              // verbatim transcription, [illegible] when needed
+componentsIdentified: string[]
+circuitOperation: string
+voltagePaths: string[]                           // e.g. "L1 → F1 → K1 → HE1 → N"
+testPoints: { location: string; expectedReading: string }[]
+nextDiagnosticStep: string
+followUpQuestions: string[]
 ```
 
-The provider returns plain text, AI SDK's schema parse rejects it, the server function throws, the UI just toasts the error and clears state — so the user sees "no results."
+### Model & gateway
 
-This affects every `generateObject` call in the project, not just decode.
+Uses existing `getGateway()` + `DEFAULT_MODEL` (`google/gemini-3-flash-preview`) from `src/lib/ai-gateway.server.ts`. No new secrets, no new packages.
 
-## Fix
+### Removal
 
-Switch every `generateObject` call to `mode: 'json'` (uses `response_format: { type: 'json_object' }`, which the gateway supports) and keep the existing Zod schema for validation client-side.
+Delete `src/routes/documents.tsx` and `src/lib/document-assistant.functions.ts`. Done — no other file references them.
 
-Files to edit:
-
-- `src/lib/serial-decode.functions.ts` — add `mode: 'json'` to `decodeAppliance` and `extractTagFromImage`.
-- `src/lib/diagnostics.functions.ts` — add `mode: 'json'` to `verifyAppliance`, `nextDiagnosticStep`, and `askDocumentQuestion`.
-
-For `extractTagFromImage` (multimodal), also change the content block from AI-SDK's `{ type: 'image', image: ... }` to the OpenAI-compatible `{ type: 'image_url', image_url: { url: dataUrl } }`, since the gateway is OpenAI-shape passthrough.
-
-## Hardening
-
-In `src/components/verify-appliance.tsx`, surface a more useful error: when the decode call throws, also keep the form populated (already the case) but log the underlying error message to the toast (already the case) — and add a `console.error` so the user/devtools see the real cause if they look.
-
-## Verification
-
-After the edits, re-run the decode in preview with Brand=Whirlpool / Model=WTW5000DW1 / Serial=C81234567 and confirm the result card appears with year ~2018 candidates and "How we decoded this" populated. Confirm no `responseFormat` warnings in the dev-server log.
-
-## Out of scope
-
-- Switching models or moving off `generateObject` to `generateText + Output.object`.
-- Persisting decoded results.
+Approve to build.
