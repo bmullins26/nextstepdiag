@@ -611,6 +611,211 @@ function ApplianceChip({ appliance }: { appliance: Appliance }) {
   );
 }
 
+const FINDING_SUGGESTIONS = [
+  "120 VAC Verified",
+  "240 VAC Verified",
+  "Control Board Receiving Power",
+  "Drain Pump Runs",
+  "No Fault Codes Present",
+  "Lid Lock Tested Good",
+  "Thermistor Tested Good",
+  "Heater Tested Good",
+  "Compressor Running",
+  "Capacitor Tested Good",
+  "Motor Windings Test Good",
+];
+
+function CurrentFindings({
+  findings,
+  setFindings,
+  onChange,
+}: {
+  findings: string[];
+  setFindings: (f: string[]) => void;
+  onChange?: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+
+  function commitAdd(value: string) {
+    const v = value.trim();
+    if (!v) return;
+    if (findings.includes(v)) {
+      toast.error("Already in findings.");
+      return;
+    }
+    setFindings([...findings, v]);
+    setDraft("");
+    setAdding(false);
+  }
+
+  function remove(i: number) {
+    setFindings(findings.filter((_, idx) => idx !== i));
+    onChange?.();
+  }
+
+  function startEdit(i: number) {
+    setEditingIdx(i);
+    setEditText(findings[i]);
+  }
+
+  function commitEdit() {
+    if (editingIdx === null) return;
+    const v = editText.trim();
+    if (!v) return;
+    const copy = [...findings];
+    copy[editingIdx] = v;
+    setFindings(copy);
+    setEditingIdx(null);
+    setEditText("");
+    onChange?.();
+  }
+
+  const unusedSuggestions = FINDING_SUGGESTIONS.filter((s) => !findings.includes(s));
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-bold uppercase tracking-wide text-secondary">
+          Current Findings
+        </div>
+        <span className="text-[10px] uppercase text-muted-foreground">
+          {findings.length} verified
+        </span>
+      </div>
+
+      {findings.length === 0 && !adding && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Add anything you've already verified — voltage, fault codes, component tests.
+        </p>
+      )}
+
+      {findings.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {findings.map((f, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-2 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm"
+            >
+              {editingIdx === i ? (
+                <>
+                  <Input
+                    autoFocus
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitEdit();
+                      if (e.key === "Escape") {
+                        setEditingIdx(null);
+                        setEditText("");
+                      }
+                    }}
+                    className="h-9 flex-1"
+                  />
+                  <button
+                    onClick={commitEdit}
+                    className="text-xs font-semibold text-primary"
+                  >
+                    Save
+                  </button>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="flex-1 font-semibold">{f}</span>
+                  <button
+                    onClick={() => startEdit(i)}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Edit finding"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => remove(i)}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Remove finding"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding ? (
+        <div className="mt-3 space-y-2">
+          <div className="flex gap-2">
+            <Input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  commitAdd(draft);
+                  onChange?.();
+                }
+                if (e.key === "Escape") {
+                  setAdding(false);
+                  setDraft("");
+                }
+              }}
+              placeholder="e.g. F7E1 Fault Code Present"
+              className="h-10 flex-1"
+            />
+            <Button
+              onClick={() => {
+                commitAdd(draft);
+                onChange?.();
+              }}
+              disabled={!draft.trim()}
+              className="h-10"
+            >
+              Add
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setAdding(false);
+                setDraft("");
+              }}
+              className="h-10"
+            >
+              Cancel
+            </Button>
+          </div>
+          {unusedSuggestions.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {unusedSuggestions.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    commitAdd(s);
+                    onChange?.();
+                  }}
+                  className="rounded-full border border-border bg-background/40 px-2.5 py-1 text-[11px] hover:border-primary hover:text-primary"
+                >
+                  + {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Finding
+        </button>
+      )}
+    </div>
+  );
+}
+
 // --- Web Speech API dictation ---
 function useDictation(onText: (t: string) => void) {
   const [listening, setListening] = useState(false);
