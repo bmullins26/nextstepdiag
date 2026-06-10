@@ -131,13 +131,13 @@ function DiagnosePage() {
     (async () => {
       if (search.session) {
         try {
-          const r = (await fetchSession({ data: { id: search.session } })) as ResumeRow | null;
+          const r = (await fetchSession({ data: { id: search.session } })) as unknown as ResumeRow | null;
           if (!cancelled && r) hydrateFrom(r);
         } catch {/* ignore */}
         return;
       }
       try {
-        const rows = (await fetchList({ data: { status: "active" } })) as ResumeRow[];
+        const rows = (await fetchList({ data: { status: "active" } })) as unknown as ResumeRow[];
         if (!cancelled) setResumeCandidates(rows);
       } catch {/* ignore */}
     })();
