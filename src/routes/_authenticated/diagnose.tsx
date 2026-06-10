@@ -27,7 +27,7 @@ import {
 } from "@/lib/diagnostics.functions";
 import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
 
-export const Route = createFileRoute("/diagnose")({
+export const Route = createFileRoute("/_authenticated/diagnose")({
   head: () => ({
     meta: [
       { title: "Diagnose — NextStep Diagnostics" },
