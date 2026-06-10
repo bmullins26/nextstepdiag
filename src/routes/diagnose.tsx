@@ -9,9 +9,12 @@ import {
   Loader2,
   Mic,
   MicOff,
+  Pencil,
+  Plus,
   RotateCcw,
   Send,
   Upload,
+  X,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
@@ -42,6 +45,7 @@ type Step = {
   done: boolean;
   currentFindings: string;
   mostLikelyFailure: string;
+  mostLikelyFailures?: string[];
   recommendedNextTest: string;
   nextQuestion: { text: string; choices: string[]; allowFreeText: boolean };
 };
@@ -62,6 +66,9 @@ function DiagnosePage() {
   const [freeText, setFreeText] = useState("");
   const next = useServerFn(nextDiagnosticStep);
 
+  // Current Findings (things the tech has already verified before/during the call)
+  const [findings, setFindings] = useState<string[]>([]);
+
   // Document
   const [docText, setDocText] = useState("");
   const [docName, setDocName] = useState("");
@@ -78,10 +85,10 @@ function DiagnosePage() {
       return;
     }
     setPhase(3);
-    await advance([]);
+    await advance([], findings);
   }
 
-  async function advance(h: QA[]) {
+  async function advance(h: QA[], f: string[] = findings) {
     if (!appliance) return;
     setThinking(true);
     try {
@@ -98,6 +105,7 @@ function DiagnosePage() {
           complaint,
           history: h,
           documentExcerpt: docText,
+          currentFindings: f,
         },
       });
       setStep(r as Step);
@@ -116,6 +124,19 @@ function DiagnosePage() {
     await advance(h);
   }
 
+  async function goBackOneQuestion() {
+    if (history.length === 0) return;
+    const h = history.slice(0, -1);
+    setHistory(h);
+    await advance(h);
+  }
+
+  async function rewindTo(index: number) {
+    const h = history.slice(0, index);
+    setHistory(h);
+    await advance(h);
+  }
+
   function resetAll() {
     setPhase(1);
     setAppliance(null);
@@ -124,6 +145,7 @@ function DiagnosePage() {
     setStep(null);
     setDocText("");
     setDocName("");
+    setFindings([]);
   }
 
   async function onFile(file: File) {
@@ -201,6 +223,8 @@ function DiagnosePage() {
             setComplaint={setComplaint}
             onBack={() => setPhase(1)}
             onStart={startDiagnosis}
+            findings={findings}
+            setFindings={setFindings}
           />
         )}
 
@@ -214,6 +238,11 @@ function DiagnosePage() {
             freeText={freeText}
             setFreeText={setFreeText}
             answerWith={answerWith}
+            findings={findings}
+            setFindings={setFindings}
+            onReevaluate={() => advance(history)}
+            onPrevious={goBackOneQuestion}
+            onRewindTo={rewindTo}
           />
         )}
 
@@ -270,8 +299,9 @@ function StepBar({ phase }: { phase: number }) {
 function Phase2(props: {
   appliance: Appliance; complaint: string; setComplaint: (v: string) => void;
   onBack: () => void; onStart: () => void;
+  findings: string[]; setFindings: (f: string[]) => void;
 }) {
-  const { appliance, complaint, setComplaint, onBack, onStart } = props;
+  const { appliance, complaint, setComplaint, onBack, onStart, findings, setFindings } = props;
   const { listening, supported, toggle } = useDictation((t) =>
     setComplaint(complaint ? `${complaint} ${t}` : t),
   );
@@ -284,6 +314,7 @@ function Phase2(props: {
     <section className="space-y-5">
       <SectionHead step="STEP 2" title="Customer complaint" />
       <ApplianceChip appliance={appliance} />
+      <CurrentFindings findings={findings} setFindings={setFindings} />
       <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
         <Label htmlFor="complaint" className="text-sm">In the customer's words</Label>
         <Textarea
@@ -335,8 +366,15 @@ function Phase3(props: {
   history: QA[]; step: Step | null; thinking: boolean;
   freeText: string; setFreeText: (v: string) => void;
   answerWith: (a: string) => void;
+  findings: string[]; setFindings: (f: string[]) => void;
+  onReevaluate: () => void;
+  onPrevious: () => void;
+  onRewindTo: (index: number) => void;
 }) {
-  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith } = props;
+  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith, findings, setFindings, onReevaluate, onPrevious, onRewindTo } = props;
+  const failures = step?.mostLikelyFailures && step.mostLikelyFailures.length > 0
+    ? step.mostLikelyFailures
+    : step?.mostLikelyFailure ? [step.mostLikelyFailure] : [];
   return (
     <section className="space-y-5">
       <SectionHead step="STEP 3" title="Guided diagnosis" />
@@ -346,17 +384,67 @@ function Phase3(props: {
         <p className="mt-1 text-sm">{complaint}</p>
       </div>
 
+      <CurrentFindings findings={findings} setFindings={setFindings} onChange={onReevaluate} />
+
+      {history.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card/60 p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Questions Answered ({history.length})
+          </div>
+          <ol className="space-y-2 text-sm">
+            {history.map((h, i) => (
+              <li key={i} className="rounded-lg border border-border bg-background/40 p-3">
+                <div className="text-xs text-muted-foreground">Q{i + 1}: {h.question}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-primary">→ {h.answer}</div>
+                  <button
+                    onClick={() => onRewindTo(i)}
+                    className="text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                  >
+                    Change
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       {step && (
         <div className="grid grid-cols-1 gap-3">
-          <FindingCard label="Current Findings" value={step.currentFindings} accent="muted" />
-          <FindingCard label="Most Likely Failure" value={step.mostLikelyFailure || "Gathering evidence…"} accent="primary" />
+          <FindingCard label="Diagnostic Summary" value={step.currentFindings} accent="muted" />
+          <div className="rounded-xl border border-primary/50 bg-card p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-primary">Most Likely Failures</div>
+            {failures.length > 0 ? (
+              <ol className="mt-2 space-y-1.5">
+                {failures.map((f, i) => (
+                  <li key={i} className="flex gap-2 text-sm font-semibold leading-snug">
+                    <span className="text-primary">{i + 1}.</span>
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">Gathering evidence…</p>
+            )}
+          </div>
           <FindingCard label="Recommended Next Test" value={step.recommendedNextTest || "—"} accent="secondary" />
         </div>
       )}
 
       <div className="rounded-2xl border border-primary/40 bg-card p-5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-          {step?.done ? "Diagnosis Complete" : `Question ${history.length + 1}`}
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+            {step?.done ? "Diagnosis Complete" : `Question ${history.length + 1}`}
+          </div>
+          {history.length > 0 && !thinking && (
+            <button
+              onClick={onPrevious}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3 w-3" /> Previous Question
+            </button>
+          )}
         </div>
         {thinking ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
@@ -396,22 +484,6 @@ function Phase3(props: {
           </>
         ) : null}
       </div>
-
-      {history.length > 0 && (
-        <details className="rounded-2xl border border-border bg-card/60 p-4">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Questions Answered ({history.length})
-          </summary>
-          <ol className="mt-3 space-y-2 text-sm">
-            {history.map((h, i) => (
-              <li key={i} className="rounded-lg border border-border bg-background/40 p-3">
-                <div className="text-xs text-muted-foreground">Q{i + 1}: {h.question}</div>
-                <div className="font-semibold text-primary">→ {h.answer}</div>
-              </li>
-            ))}
-          </ol>
-        </details>
-      )}
     </section>
   );
 }
@@ -535,6 +607,211 @@ function ApplianceChip({ appliance }: { appliance: Appliance }) {
         <div className="text-muted-foreground">Model {appliance.modelNumber}{appliance.serialNumber ? ` · S/N ${appliance.serialNumber}` : ""}</div>
       </div>
       <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">{appliance.confidence}</span>
+    </div>
+  );
+}
+
+const FINDING_SUGGESTIONS = [
+  "120 VAC Verified",
+  "240 VAC Verified",
+  "Control Board Receiving Power",
+  "Drain Pump Runs",
+  "No Fault Codes Present",
+  "Lid Lock Tested Good",
+  "Thermistor Tested Good",
+  "Heater Tested Good",
+  "Compressor Running",
+  "Capacitor Tested Good",
+  "Motor Windings Test Good",
+];
+
+function CurrentFindings({
+  findings,
+  setFindings,
+  onChange,
+}: {
+  findings: string[];
+  setFindings: (f: string[]) => void;
+  onChange?: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+
+  function commitAdd(value: string) {
+    const v = value.trim();
+    if (!v) return;
+    if (findings.includes(v)) {
+      toast.error("Already in findings.");
+      return;
+    }
+    setFindings([...findings, v]);
+    setDraft("");
+    setAdding(false);
+  }
+
+  function remove(i: number) {
+    setFindings(findings.filter((_, idx) => idx !== i));
+    onChange?.();
+  }
+
+  function startEdit(i: number) {
+    setEditingIdx(i);
+    setEditText(findings[i]);
+  }
+
+  function commitEdit() {
+    if (editingIdx === null) return;
+    const v = editText.trim();
+    if (!v) return;
+    const copy = [...findings];
+    copy[editingIdx] = v;
+    setFindings(copy);
+    setEditingIdx(null);
+    setEditText("");
+    onChange?.();
+  }
+
+  const unusedSuggestions = FINDING_SUGGESTIONS.filter((s) => !findings.includes(s));
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-bold uppercase tracking-wide text-secondary">
+          Current Findings
+        </div>
+        <span className="text-[10px] uppercase text-muted-foreground">
+          {findings.length} verified
+        </span>
+      </div>
+
+      {findings.length === 0 && !adding && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Add anything you've already verified — voltage, fault codes, component tests.
+        </p>
+      )}
+
+      {findings.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {findings.map((f, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-2 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm"
+            >
+              {editingIdx === i ? (
+                <>
+                  <Input
+                    autoFocus
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitEdit();
+                      if (e.key === "Escape") {
+                        setEditingIdx(null);
+                        setEditText("");
+                      }
+                    }}
+                    className="h-9 flex-1"
+                  />
+                  <button
+                    onClick={commitEdit}
+                    className="text-xs font-semibold text-primary"
+                  >
+                    Save
+                  </button>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="flex-1 font-semibold">{f}</span>
+                  <button
+                    onClick={() => startEdit(i)}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Edit finding"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => remove(i)}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Remove finding"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding ? (
+        <div className="mt-3 space-y-2">
+          <div className="flex gap-2">
+            <Input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  commitAdd(draft);
+                  onChange?.();
+                }
+                if (e.key === "Escape") {
+                  setAdding(false);
+                  setDraft("");
+                }
+              }}
+              placeholder="e.g. F7E1 Fault Code Present"
+              className="h-10 flex-1"
+            />
+            <Button
+              onClick={() => {
+                commitAdd(draft);
+                onChange?.();
+              }}
+              disabled={!draft.trim()}
+              className="h-10"
+            >
+              Add
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setAdding(false);
+                setDraft("");
+              }}
+              className="h-10"
+            >
+              Cancel
+            </Button>
+          </div>
+          {unusedSuggestions.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {unusedSuggestions.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    commitAdd(s);
+                    onChange?.();
+                  }}
+                  className="rounded-full border border-border bg-background/40 px-2.5 py-1 text-[11px] hover:border-primary hover:text-primary"
+                >
+                  + {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Finding
+        </button>
+      )}
     </div>
   );
 }
