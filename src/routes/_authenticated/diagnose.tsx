@@ -1,10 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   CheckCircle2,
+  Cloud,
+  CloudOff,
   FileText,
   Loader2,
   Mic,
@@ -16,7 +18,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
+import { AppNav } from "@/components/app-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +28,13 @@ import {
   askDocumentQuestion,
 } from "@/lib/diagnostics.functions";
 import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
+import {
+  upsertSession,
+  getSession,
+  listSessions,
+  setSessionStatus,
+} from "@/lib/sessions.functions";
+import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/diagnose")({
   head: () => ({
@@ -34,6 +43,8 @@ export const Route = createFileRoute("/_authenticated/diagnose")({
       { name: "description", content: "Guided appliance diagnostic session." },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) =>
+    z.object({ session: z.string().uuid().optional() }).parse(s),
   component: DiagnosePage,
 });
 
