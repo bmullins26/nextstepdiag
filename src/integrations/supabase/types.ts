@@ -14,7 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      diagnostic_sessions: {
+        Row: {
+          age_years: number | null
+          appliance: Json
+          appliance_type: string
+          brand: string
+          complaint: string
+          created_at: string
+          current_findings_summary: string
+          findings: Json
+          history: Json
+          id: string
+          is_favorite: boolean
+          manufacture_year: number | null
+          model_number: string
+          most_likely_failure: string
+          most_likely_failures: Json
+          recommended_next_test: string
+          serial_number: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          age_years?: number | null
+          appliance?: Json
+          appliance_type?: string
+          brand?: string
+          complaint?: string
+          created_at?: string
+          current_findings_summary?: string
+          findings?: Json
+          history?: Json
+          id?: string
+          is_favorite?: boolean
+          manufacture_year?: number | null
+          model_number?: string
+          most_likely_failure?: string
+          most_likely_failures?: Json
+          recommended_next_test?: string
+          serial_number?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          age_years?: number | null
+          appliance?: Json
+          appliance_type?: string
+          brand?: string
+          complaint?: string
+          created_at?: string
+          current_findings_summary?: string
+          findings?: Json
+          history?: Json
+          id?: string
+          is_favorite?: boolean
+          manufacture_year?: number | null
+          model_number?: string
+          most_likely_failure?: string
+          most_likely_failures?: Json
+          recommended_next_test?: string
+          serial_number?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
