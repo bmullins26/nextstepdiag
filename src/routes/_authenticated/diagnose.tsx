@@ -44,7 +44,9 @@ export const Route = createFileRoute("/_authenticated/diagnose")({
     ],
   }),
   validateSearch: (s: Record<string, unknown>) =>
-    z.object({ session: z.string().uuid().optional() }).parse(s),
+    z
+      .object({ session: z.string().uuid().optional().catch(undefined) })
+      .parse(s),
   component: DiagnosePage,
 });
 
