@@ -9,9 +9,12 @@ import {
   Loader2,
   Mic,
   MicOff,
+  Pencil,
+  Plus,
   RotateCcw,
   Send,
   Upload,
+  X,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
@@ -42,6 +45,7 @@ type Step = {
   done: boolean;
   currentFindings: string;
   mostLikelyFailure: string;
+  mostLikelyFailures?: string[];
   recommendedNextTest: string;
   nextQuestion: { text: string; choices: string[]; allowFreeText: boolean };
 };
@@ -62,6 +66,9 @@ function DiagnosePage() {
   const [freeText, setFreeText] = useState("");
   const next = useServerFn(nextDiagnosticStep);
 
+  // Current Findings (things the tech has already verified before/during the call)
+  const [findings, setFindings] = useState<string[]>([]);
+
   // Document
   const [docText, setDocText] = useState("");
   const [docName, setDocName] = useState("");
@@ -78,10 +85,10 @@ function DiagnosePage() {
       return;
     }
     setPhase(3);
-    await advance([]);
+    await advance([], findings);
   }
 
-  async function advance(h: QA[]) {
+  async function advance(h: QA[], f: string[] = findings) {
     if (!appliance) return;
     setThinking(true);
     try {
@@ -98,6 +105,7 @@ function DiagnosePage() {
           complaint,
           history: h,
           documentExcerpt: docText,
+          currentFindings: f,
         },
       });
       setStep(r as Step);
@@ -116,6 +124,19 @@ function DiagnosePage() {
     await advance(h);
   }
 
+  async function goBackOneQuestion() {
+    if (history.length === 0) return;
+    const h = history.slice(0, -1);
+    setHistory(h);
+    await advance(h);
+  }
+
+  async function rewindTo(index: number) {
+    const h = history.slice(0, index);
+    setHistory(h);
+    await advance(h);
+  }
+
   function resetAll() {
     setPhase(1);
     setAppliance(null);
@@ -124,6 +145,7 @@ function DiagnosePage() {
     setStep(null);
     setDocText("");
     setDocName("");
+    setFindings([]);
   }
 
   async function onFile(file: File) {
@@ -201,6 +223,8 @@ function DiagnosePage() {
             setComplaint={setComplaint}
             onBack={() => setPhase(1)}
             onStart={startDiagnosis}
+            findings={findings}
+            setFindings={setFindings}
           />
         )}
 
@@ -214,6 +238,11 @@ function DiagnosePage() {
             freeText={freeText}
             setFreeText={setFreeText}
             answerWith={answerWith}
+            findings={findings}
+            setFindings={setFindings}
+            onReevaluate={() => advance(history)}
+            onPrevious={goBackOneQuestion}
+            onRewindTo={rewindTo}
           />
         )}
 
