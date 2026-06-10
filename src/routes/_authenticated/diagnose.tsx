@@ -1019,3 +1019,72 @@ function useDictation(onText: (t: string) => void) {
 
   return { listening, supported, toggle };
 }
+
+function SaveBadge({ state, at }: { state: "idle" | "saving" | "saved"; at: number | null }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 15000);
+    return () => clearInterval(t);
+  }, []);
+  if (state === "idle" && !at) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+        <CloudOff className="h-3 w-3" /> Not saved
+      </span>
+    );
+  }
+  if (state === "saving") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+      </span>
+    );
+  }
+  const ago = at ? Math.max(1, Math.round((Date.now() - at) / 1000)) : 0;
+  const label = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] text-primary">
+      <Cloud className="h-3 w-3" /> Auto Saved · {label}
+    </span>
+  );
+}
+
+function ResumePrompt({
+  rows,
+  onResume,
+  onStartNew,
+}: {
+  rows: ResumeRow[];
+  onResume: (r: ResumeRow) => void;
+  onStartNew: () => void;
+}) {
+  return (
+    <div className="mb-5 rounded-2xl border border-primary/40 bg-card p-5">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-primary">
+        Resume Previous Diagnosis?
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        You have {rows.length} unfinished {rows.length === 1 ? "diagnosis" : "diagnoses"}.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {rows.slice(0, 5).map((r) => (
+          <li key={r.id} className="rounded-xl border border-border bg-background/40 p-3">
+            <div className="text-sm font-bold">
+              {r.appliance_type || "Unspecified"} · {r.brand || "—"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {r.model_number || "no model"} · {new Date(r.updated_at).toLocaleString()}
+            </div>
+            {r.complaint && <p className="mt-1 line-clamp-2 text-xs">{r.complaint}</p>}
+            <Button onClick={() => onResume(r)} className="mt-2 h-8 w-full text-xs">
+              Resume Diagnosis
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <Button onClick={onStartNew} variant="outline" className="mt-3 h-10 w-full text-xs">
+        Start New Diagnosis
+      </Button>
+    </div>
+  );
+}
