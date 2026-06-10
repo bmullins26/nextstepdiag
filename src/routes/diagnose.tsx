@@ -299,8 +299,9 @@ function StepBar({ phase }: { phase: number }) {
 function Phase2(props: {
   appliance: Appliance; complaint: string; setComplaint: (v: string) => void;
   onBack: () => void; onStart: () => void;
+  findings: string[]; setFindings: (f: string[]) => void;
 }) {
-  const { appliance, complaint, setComplaint, onBack, onStart } = props;
+  const { appliance, complaint, setComplaint, onBack, onStart, findings, setFindings } = props;
   const { listening, supported, toggle } = useDictation((t) =>
     setComplaint(complaint ? `${complaint} ${t}` : t),
   );
@@ -313,6 +314,7 @@ function Phase2(props: {
     <section className="space-y-5">
       <SectionHead step="STEP 2" title="Customer complaint" />
       <ApplianceChip appliance={appliance} />
+      <CurrentFindings findings={findings} setFindings={setFindings} />
       <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
         <Label htmlFor="complaint" className="text-sm">In the customer's words</Label>
         <Textarea
@@ -364,8 +366,15 @@ function Phase3(props: {
   history: QA[]; step: Step | null; thinking: boolean;
   freeText: string; setFreeText: (v: string) => void;
   answerWith: (a: string) => void;
+  findings: string[]; setFindings: (f: string[]) => void;
+  onReevaluate: () => void;
+  onPrevious: () => void;
+  onRewindTo: (index: number) => void;
 }) {
-  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith } = props;
+  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith, findings, setFindings, onReevaluate, onPrevious, onRewindTo } = props;
+  const failures = step?.mostLikelyFailures && step.mostLikelyFailures.length > 0
+    ? step.mostLikelyFailures
+    : step?.mostLikelyFailure ? [step.mostLikelyFailure] : [];
   return (
     <section className="space-y-5">
       <SectionHead step="STEP 3" title="Guided diagnosis" />
@@ -375,17 +384,67 @@ function Phase3(props: {
         <p className="mt-1 text-sm">{complaint}</p>
       </div>
 
+      <CurrentFindings findings={findings} setFindings={setFindings} onChange={onReevaluate} />
+
+      {history.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card/60 p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Questions Answered ({history.length})
+          </div>
+          <ol className="space-y-2 text-sm">
+            {history.map((h, i) => (
+              <li key={i} className="rounded-lg border border-border bg-background/40 p-3">
+                <div className="text-xs text-muted-foreground">Q{i + 1}: {h.question}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-primary">→ {h.answer}</div>
+                  <button
+                    onClick={() => onRewindTo(i)}
+                    className="text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                  >
+                    Change
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       {step && (
         <div className="grid grid-cols-1 gap-3">
-          <FindingCard label="Current Findings" value={step.currentFindings} accent="muted" />
-          <FindingCard label="Most Likely Failure" value={step.mostLikelyFailure || "Gathering evidence…"} accent="primary" />
+          <FindingCard label="Diagnostic Summary" value={step.currentFindings} accent="muted" />
+          <div className="rounded-xl border border-primary/50 bg-card p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-primary">Most Likely Failures</div>
+            {failures.length > 0 ? (
+              <ol className="mt-2 space-y-1.5">
+                {failures.map((f, i) => (
+                  <li key={i} className="flex gap-2 text-sm font-semibold leading-snug">
+                    <span className="text-primary">{i + 1}.</span>
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">Gathering evidence…</p>
+            )}
+          </div>
           <FindingCard label="Recommended Next Test" value={step.recommendedNextTest || "—"} accent="secondary" />
         </div>
       )}
 
       <div className="rounded-2xl border border-primary/40 bg-card p-5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-          {step?.done ? "Diagnosis Complete" : `Question ${history.length + 1}`}
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+            {step?.done ? "Diagnosis Complete" : `Question ${history.length + 1}`}
+          </div>
+          {history.length > 0 && !thinking && (
+            <button
+              onClick={onPrevious}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3 w-3" /> Previous Question
+            </button>
+          )}
         </div>
         {thinking ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
@@ -425,22 +484,6 @@ function Phase3(props: {
           </>
         ) : null}
       </div>
-
-      {history.length > 0 && (
-        <details className="rounded-2xl border border-border bg-card/60 p-4">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Questions Answered ({history.length})
-          </summary>
-          <ol className="mt-3 space-y-2 text-sm">
-            {history.map((h, i) => (
-              <li key={i} className="rounded-lg border border-border bg-background/40 p-3">
-                <div className="text-xs text-muted-foreground">Q{i + 1}: {h.question}</div>
-                <div className="font-semibold text-primary">→ {h.answer}</div>
-              </li>
-            ))}
-          </ol>
-        </details>
-      )}
     </section>
   );
 }
