@@ -11,7 +11,7 @@ import {
   askDocumentFollowUp,
 } from "@/lib/document-assistant.functions";
 
-export const Route = createFileRoute("/documents")({
+export const Route = createFileRoute("/_authenticated/documents")({
   head: () => ({
     meta: [
       { title: "Document Assistant — NextStep Diagnostics" },

@@ -1,10 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   CheckCircle2,
+  Cloud,
+  CloudOff,
   FileText,
   Loader2,
   Mic,
@@ -16,7 +18,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
+import { AppNav } from "@/components/app-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,14 +28,25 @@ import {
   askDocumentQuestion,
 } from "@/lib/diagnostics.functions";
 import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
+import {
+  upsertSession,
+  getSession,
+  listSessions,
+  setSessionStatus,
+} from "@/lib/sessions.functions";
+import { z } from "zod";
 
-export const Route = createFileRoute("/diagnose")({
+export const Route = createFileRoute("/_authenticated/diagnose")({
   head: () => ({
     meta: [
       { title: "Diagnose — NextStep Diagnostics" },
       { name: "description", content: "Guided appliance diagnostic session." },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) =>
+    z
+      .object({ session: z.string().uuid().optional().catch(undefined) })
+      .parse(s),
   component: DiagnosePage,
 });
 
@@ -50,7 +63,30 @@ type Step = {
   nextQuestion: { text: string; choices: string[]; allowFreeText: boolean };
 };
 
+type ResumeRow = {
+  id: string;
+  status: "active" | "completed" | "abandoned";
+  brand: string;
+  appliance_type: string;
+  model_number: string;
+  serial_number: string;
+  manufacture_year: number | null;
+  age_years: number | null;
+  complaint: string;
+  findings: string[];
+  history: QA[];
+  most_likely_failures: string[];
+  most_likely_failure: string;
+  recommended_next_test: string;
+  current_findings_summary: string;
+  appliance: Record<string, unknown> | null;
+  updated_at: string;
+};
+
 function DiagnosePage() {
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+
   const [phase, setPhase] = useState<1 | 2 | 3>(1);
 
   // Step 1
@@ -78,6 +114,114 @@ function DiagnosePage() {
   const [docAsking, setDocAsking] = useState(false);
   const askDoc = useServerFn(askDocumentQuestion);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Session persistence
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [resumeCandidates, setResumeCandidates] = useState<ResumeRow[] | null>(null);
+  const [resumeDismissed, setResumeDismissed] = useState(false);
+  const hydrated = useRef(false);
+  const upsert = useServerFn(upsertSession);
+  const fetchSession = useServerFn(getSession);
+  const fetchList = useServerFn(listSessions);
+  const setStatus = useServerFn(setSessionStatus);
+
+  // Load from ?session= or show resume prompt for actives
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (search.session) {
+        try {
+          const r = (await fetchSession({ data: { id: search.session } })) as unknown as ResumeRow | null;
+          if (!cancelled && r) hydrateFrom(r);
+        } catch {/* ignore */}
+        return;
+      }
+      try {
+        const rows = (await fetchList({ data: { status: "active" } })) as unknown as ResumeRow[];
+        if (!cancelled) setResumeCandidates(rows);
+      } catch {/* ignore */}
+    })();
+    return () => { cancelled = true; };
+  }, [search.session]);
+
+  function hydrateFrom(r: ResumeRow) {
+    hydrated.current = false;
+    setSessionId(r.id);
+    if (r.brand || r.model_number) {
+      const a: Appliance = (r.appliance && Object.keys(r.appliance).length
+        ? r.appliance
+        : {
+            brand: r.brand,
+            modelNumber: r.model_number,
+            serialNumber: r.serial_number,
+            manufacturer: r.brand,
+            applianceType: r.appliance_type,
+            confidence: "Medium",
+            identified: true,
+            notes: "",
+            ageYears: r.age_years ?? undefined,
+          }) as Appliance;
+      setAppliance(a);
+    }
+    setComplaint(r.complaint ?? "");
+    setFindings(r.findings ?? []);
+    setHistory(r.history ?? []);
+    if (r.most_likely_failures?.length || r.most_likely_failure || r.recommended_next_test) {
+      setStep({
+        done: r.status === "completed",
+        currentFindings: r.current_findings_summary ?? "",
+        mostLikelyFailure: r.most_likely_failure ?? "",
+        mostLikelyFailures: r.most_likely_failures ?? [],
+        recommendedNextTest: r.recommended_next_test ?? "",
+        nextQuestion: { text: "", choices: [], allowFreeText: false },
+      });
+    }
+    setPhase(r.history?.length || r.complaint ? 3 : r.brand ? 2 : 1);
+    setResumeCandidates(null);
+    setResumeDismissed(true);
+    // Allow autosave after one tick
+    setTimeout(() => { hydrated.current = true; }, 100);
+  }
+
+  // Autosave (debounced)
+  useEffect(() => {
+    if (!appliance) return;
+    if (!hydrated.current && !sessionId) {
+      hydrated.current = true; // first user action after fresh start
+    }
+    setSaveState("saving");
+    const t = setTimeout(async () => {
+      try {
+        const payload = {
+          id: sessionId ?? undefined,
+          brand: appliance.brand ?? "",
+          appliance_type: appliance.applianceType ?? "",
+          model_number: appliance.modelNumber ?? "",
+          serial_number: appliance.serialNumber ?? "",
+          manufacture_year: appliance.manufactureDate?.year ?? null,
+          age_years: appliance.ageYears ?? null,
+          complaint,
+          findings,
+          history,
+          most_likely_failures: step?.mostLikelyFailures ?? [],
+          most_likely_failure: step?.mostLikelyFailure ?? "",
+          recommended_next_test: step?.recommendedNextTest ?? "",
+          current_findings_summary: step?.currentFindings ?? "",
+          appliance: appliance as unknown as Record<string, unknown>,
+        };
+        const saved = (await upsert({ data: payload })) as { id: string };
+        if (saved?.id && !sessionId) setSessionId(saved.id);
+        setSaveState("saved");
+        setLastSavedAt(Date.now());
+      } catch {
+        setSaveState("idle");
+      }
+    }, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliance, complaint, findings, history, step?.mostLikelyFailure, step?.recommendedNextTest, step?.currentFindings]);
 
   async function startDiagnosis() {
     if (!complaint.trim()) {
@@ -146,6 +290,25 @@ function DiagnosePage() {
     setDocText("");
     setDocName("");
     setFindings([]);
+    setSessionId(null);
+    setSaveState("idle");
+    setLastSavedAt(null);
+    setResumeDismissed(true);
+    hydrated.current = false;
+    navigate({ to: "/diagnose", search: {} });
+  }
+
+  async function markCompleted() {
+    if (!sessionId) return;
+    await setStatus({ data: { id: sessionId, status: "completed" } });
+    toast.success("Marked completed. Saved to History.");
+    resetAll();
+  }
+  async function markAbandoned() {
+    if (!sessionId) return;
+    await setStatus({ data: { id: sessionId, status: "abandoned" } });
+    toast.success("Marked abandoned.");
+    resetAll();
   }
 
   async function onFile(file: File) {
@@ -184,26 +347,34 @@ function DiagnosePage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
-          <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4" /> Home
-          </Link>
-          <div className="flex items-center gap-2">
-            <BrandLogo size={32} />
-            <span className="text-sm font-bold tracking-tight">NextStep</span>
-          </div>
-          <button
-            onClick={resetAll}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <RotateCcw className="h-3.5 w-3.5" /> Reset
+      <AppNav />
+      <div className="mx-auto flex max-w-md items-center justify-between gap-2 px-4 pt-3">
+        <SaveBadge state={saveState} at={lastSavedAt} />
+        <div className="flex items-center gap-2">
+          {sessionId && phase === 3 && (
+            <>
+              <button onClick={markCompleted} className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300">Mark Complete</button>
+              <span className="text-muted-foreground">·</span>
+              <button onClick={markAbandoned} className="text-[11px] font-semibold text-muted-foreground hover:text-foreground">Abandon</button>
+              <span className="text-muted-foreground">·</span>
+            </>
+          )}
+          <button onClick={resetAll} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+            <RotateCcw className="h-3 w-3" /> New
           </button>
         </div>
-        <StepBar phase={phase} />
-      </header>
+      </div>
+      <div className="mx-auto max-w-md px-4 pt-2"><StepBar phase={phase} /></div>
 
       <div className="mx-auto max-w-md px-4 pb-32 pt-5">
+        {!appliance && !resumeDismissed && resumeCandidates && resumeCandidates.length > 0 && (
+          <ResumePrompt
+            rows={resumeCandidates}
+            onResume={(r) => hydrateFrom(r)}
+            onStartNew={() => { setResumeDismissed(true); setResumeCandidates(null); }}
+          />
+        )}
+
         {phase === 1 && (
           <section className="space-y-5">
             <SectionHead step="STEP 1" title="Verify the appliance" />
@@ -849,4 +1020,73 @@ function useDictation(onText: (t: string) => void) {
   }
 
   return { listening, supported, toggle };
+}
+
+function SaveBadge({ state, at }: { state: "idle" | "saving" | "saved"; at: number | null }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 15000);
+    return () => clearInterval(t);
+  }, []);
+  if (state === "idle" && !at) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+        <CloudOff className="h-3 w-3" /> Not saved
+      </span>
+    );
+  }
+  if (state === "saving") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+      </span>
+    );
+  }
+  const ago = at ? Math.max(1, Math.round((Date.now() - at) / 1000)) : 0;
+  const label = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] text-primary">
+      <Cloud className="h-3 w-3" /> Auto Saved · {label}
+    </span>
+  );
+}
+
+function ResumePrompt({
+  rows,
+  onResume,
+  onStartNew,
+}: {
+  rows: ResumeRow[];
+  onResume: (r: ResumeRow) => void;
+  onStartNew: () => void;
+}) {
+  return (
+    <div className="mb-5 rounded-2xl border border-primary/40 bg-card p-5">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-primary">
+        Resume Previous Diagnosis?
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        You have {rows.length} unfinished {rows.length === 1 ? "diagnosis" : "diagnoses"}.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {rows.slice(0, 5).map((r) => (
+          <li key={r.id} className="rounded-xl border border-border bg-background/40 p-3">
+            <div className="text-sm font-bold">
+              {r.appliance_type || "Unspecified"} · {r.brand || "—"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {r.model_number || "no model"} · {new Date(r.updated_at).toLocaleString()}
+            </div>
+            {r.complaint && <p className="mt-1 line-clamp-2 text-xs">{r.complaint}</p>}
+            <Button onClick={() => onResume(r)} className="mt-2 h-8 w-full text-xs">
+              Resume Diagnosis
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <Button onClick={onStartNew} variant="outline" className="mt-3 h-10 w-full text-xs">
+        Start New Diagnosis
+      </Button>
+    </div>
+  );
 }

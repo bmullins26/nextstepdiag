@@ -1,60 +1,79 @@
-## Enhance Guided Diagnosis with Current Findings & Back-Navigation
+# Diagnostic History, Persistence & Resume
 
-Two-file change. Existing flow (Verify → Complaint → Diagnose) stays intact; new functionality slots into Phase 2 and Phase 3.
+Cloud + login was chosen, so sessions are stored in Lovable Cloud per authenticated user and sync across devices. Multiple parallel Active sessions are supported.
 
-### 1. `src/lib/diagnostics.functions.ts` (edit)
+## 1. Enable Lovable Cloud + Auth
 
-Extend `StepInput` schema with a new field:
+- Enable Lovable Cloud (provisions DB, auth, storage).
+- Add email/password + Google sign-in on a new `/auth` page.
+- No `profiles` table needed (no display name/avatar requested) — auth.users only.
+- Wrap the existing app under `src/routes/_authenticated/` so Dashboard, Diagnose, Documents, History all require login. The landing `/` and `/auth` stay public.
+
+## 2. Database (one migration)
+
+Table `public.diagnostic_sessions`:
+
 ```
-currentFindings: z.array(z.string()).default([])
+id uuid pk
+user_id uuid → auth.users (RLS scope)
+status text check in ('active','completed','abandoned')
+is_favorite boolean
+brand, appliance_type, model_number, serial_number text
+manufacture_year int, age_years numeric
+complaint text
+findings jsonb         -- string[]
+history jsonb          -- {question, answer}[]
+most_likely_failures jsonb  -- string[]
+most_likely_failure text
+recommended_next_test text
+current_findings_summary text
+appliance jsonb        -- full verifyAppliance result (manufacturer, confidence, notes)
+created_at, updated_at timestamptz
 ```
 
-Pass findings into the model prompt with a dedicated section:
-```
-Already verified by the technician (do NOT ask them to repeat these tests):
-- 120 VAC Verified
-- Drain Pump Runs
-- No Fault Codes Present
-```
+Indexes on `(user_id, updated_at desc)` and `(user_id, status)`.
 
-Tighten the system prompt:
-- "Treat Current Findings as ground truth. Never ask a question that re-tests anything in that list."
-- "Behave as a senior tech joining an active service call already in progress."
-- "Every recommendedNextTest must be specific — name the connector/pin, component, or measurement (e.g. 'Measure VAC at J16-4 during spin'). Reject generic advice like 'check the wiring'."
+RLS: owner-only SELECT/INSERT/UPDATE/DELETE via `auth.uid() = user_id`. Standard GRANTs to `authenticated` + `service_role`.
 
-Update the structured-output schema to return `mostLikelyFailures: string[]` (top 2–3) in addition to the existing single `mostLikelyFailure` — UI will show the list, engine fills both for backward compat.
+## 3. Server functions (`src/lib/sessions.functions.ts`)
 
-### 2. `src/routes/diagnose.tsx` (edit)
+All `.middleware([requireSupabaseAuth])`, RLS-scoped:
+- `listSessions({ search?, status?, favoritesOnly? })`
+- `getSession({ id })`
+- `upsertSession(payload)` — used by autosave; insert if no id, otherwise patch
+- `setSessionStatus({ id, status })`
+- `toggleFavorite({ id })`
+- `deleteSession({ id })`
 
-**Current Findings panel** — new component shown in Phase 2 (above complaint) and Phase 3 (above the question card):
-- Empty state: "Add anything you've already verified — voltage, fault codes, component tests."
-- List of findings as chips with edit (pencil) + remove (×) buttons.
-- "+ Add Finding" → inline input with quick-pick suggestions (the 12 examples from the prompt: "120 VAC Verified", "240 VAC Verified", "Control Board Receiving Power", "Drain Pump Runs", "No Fault Codes Present", "Lid Lock Tested Good", "Thermistor Tested Good", "Heater Tested Good", "Compressor Running", "Capacitor Tested Good", "Motor Windings Test Good", plus free-text for codes like "F7E1 Fault Code Present").
-- Findings persist across phases and are passed into every `advance()` call.
+## 4. Diagnose route changes (`src/routes/diagnose.tsx`)
 
-**State changes:**
-- `const [findings, setFindings] = useState<string[]>([])`
-- `advance(h)` → pass `currentFindings: findings`
-- When findings change mid-diagnosis (Phase 3), show a "Re-evaluate" button that re-runs `advance(history)` so the engine adapts.
+- On mount: load most recent `active` session for user. If found, show **Resume Previous Diagnosis?** card (Appliance / Complaint / Last Updated) with **Resume** + **Start New** buttons. With multiple actives, show a list.
+- Track current `sessionId` in state.
+- Add a debounced (~600ms) autosave effect: whenever appliance, complaint, findings, history, or engine output changes → call `upsertSession`. Show **✓ Auto Saved** indicator (states: Saving… / Saved · 2s ago).
+- "Mark Complete" and "Abandon" buttons set status. Reset = new session (old one stays Active until user marks it).
+- Previous Question + Current Findings already exist from prior turn — keep them; they now persist via autosave.
 
-**Previous Question button** — in Phase 3 question card:
-- `← Previous Question` button visible when `history.length > 0`.
-- Click: pops last QA from history, calls `advance(historyWithoutLast)` to regenerate that question (allows changing the answer).
-- Also add edit affordance on each row in the "Questions Answered" details list — clicking "Change answer" rewinds history to that point and re-advances.
+## 5. New History route (`src/routes/_authenticated/history.tsx`)
 
-**Diagnostic screen always displays** (Phase 3 layout, top-to-bottom):
-1. Verified Appliance chip (exists)
-2. Customer Complaint card (exists)
-3. **Current Findings** card (new, editable inline)
-4. Questions Answered (exists, made always-visible instead of collapsed, with per-row "Change" button)
-5. **Most Likely Failures** card (rendered from new `mostLikelyFailures[]`, falls back to single)
-6. Recommended Next Test card (exists, now guaranteed specific by prompt)
-7. Question card with `← Previous Question` + answer choices
+- Search bar (model/serial/type/brand/complaint — filtered server-side with `ilike`).
+- Tabs: All / Active / Completed / Abandoned.
+- **Favorites** row pinned at top.
+- Cards show Appliance Type · Brand · Model · Complaint · Date · Status badge · star icon.
+- Card actions: **Resume** (navigates `/diagnose?session=<id>`), **View Details**, **Delete** (confirm).
 
-### Out of scope
-No DB persistence (findings live in component state only — survives within a session, cleared on Reset). No schema migrations. No new files.
+## 6. View Details (`/history/$id`)
 
-### Removal
-Both changes are additive within existing files. Revert the two files to undo.
+Read-only layout: Verified Appliance, Complaint, Current Findings, Questions Answered (timeline), Most Likely Failures, Recommended Next Test, Status. "Resume" + "Delete" actions.
+
+## 7. Navigation
+
+Update top nav (in `__root.tsx` or shared header): Dashboard · Diagnose · Documents · History · Account. Account dropdown = email + Sign Out.
+
+## Out of scope
+- No team sharing, no PDF export, no offline queue (Cloud handles sync once online).
+- Documents route stays as-is; not tied to a session.
+
+## Removal
+Drop `_authenticated/history.tsx`, `history.$id.tsx`, `sessions.functions.ts`, revert diagnose.tsx, drop the migration. Auth/Cloud can stay enabled or be turned off separately.
 
 Approve to build.
