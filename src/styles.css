@@ -64,11 +64,11 @@
 :root {
   --radius: 0.75rem;
   /* NextStep brand — dark, premium field-service */
-  --background: oklch(0.252 0.063 250);          /* #102B44 */
+  --background: oklch(0.20 0.05 250);             /* deeper navy */
   --foreground: oklch(1 0 0);                     /* #FFFFFF */
-  --card: oklch(0.234 0.026 268);                 /* #1A1F2E */
+  --card: oklch(0.24 0.035 258);                  /* glass card surface */
   --card-foreground: oklch(1 0 0);
-  --popover: oklch(0.234 0.026 268);
+  --popover: oklch(0.22 0.035 258);
   --popover-foreground: oklch(1 0 0);
   --primary: oklch(0.78 0.13 195);                /* #1FC7C7 teal */
   --primary-foreground: oklch(0.18 0.04 250);
@@ -83,19 +83,24 @@
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 10%);
   --ring: oklch(0.78 0.13 195);
+  /* Glass surface tokens for the new SaaS shell */
+  --surface: oklch(0.24 0.035 258 / 0.6);
+  --surface-border: oklch(1 0 0 / 10%);
+  --glow-teal: 0 0 30px oklch(0.78 0.13 195 / 0.18);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  /* Sidebar uses the same dark navy palette as the app shell */
+  --sidebar: oklch(0.17 0.045 252);
+  --sidebar-foreground: oklch(0.96 0.005 250);
+  --sidebar-primary: oklch(0.78 0.13 195);
+  --sidebar-primary-foreground: oklch(0.18 0.04 250);
+  --sidebar-accent: oklch(0.24 0.04 255);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.78 0.13 195);
 }
 
 .dark {
@@ -142,4 +147,15 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+}
+
+@utility glass-card {
+  background-color: var(--surface);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: blur(14px);
+  border-radius: var(--radius-2xl);
+}
+
+@utility glow-teal {
+  box-shadow: var(--glow-teal);
 }

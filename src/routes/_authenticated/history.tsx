@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Search, Star, Trash2, ChevronRight, Loader2 } from "lucide-react";
-import { AppNav } from "@/components/app-nav";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,8 +87,7 @@ function HistoryPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <AppNav />
-      <div className="mx-auto max-w-md px-4 pb-20 pt-5">
+      <div className="mx-auto max-w-4xl px-4 pb-20 pt-6 md:px-8">
         <h1 className="text-2xl font-black tracking-tight">History</h1>
         <p className="mt-1 text-sm text-muted-foreground">Every service call you've worked on.</p>
 

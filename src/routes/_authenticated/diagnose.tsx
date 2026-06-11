@@ -18,7 +18,6 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { AppNav } from "@/components/app-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -347,7 +346,6 @@ function DiagnosePage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <AppNav />
       <div className="mx-auto flex max-w-md items-center justify-between gap-2 px-4 pt-3">
         <SaveBadge state={saveState} at={lastSavedAt} />
         <div className="flex items-center gap-2">
