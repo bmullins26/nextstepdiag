@@ -10,12 +10,15 @@ import {
   Loader2,
   History as HistoryIcon,
   Settings as SettingsIcon,
+  Shield,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listSessions } from "@/lib/sessions.functions";
 import { getMyProfile } from "@/lib/profile.functions";
+import { amOwner } from "@/lib/owner.functions";
 import { Button } from "@/components/ui/button";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
+import { OwnerPanels } from "@/components/owner-panels";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -67,6 +70,7 @@ const QUICK_ACTIONS = [
 function DashboardPage() {
   const list = useServerFn(listSessions);
   const profileFn = useServerFn(getMyProfile);
+  const ownerFn = useServerFn(amOwner);
   const [recent, setRecent] = useState<Row[] | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -82,6 +86,13 @@ function DashboardPage() {
     queryKey: ["my-profile"],
     queryFn: () => profileFn(),
   });
+
+  const { data: ownerCheck } = useQuery({
+    queryKey: ["am-owner"],
+    queryFn: () => ownerFn(),
+    staleTime: 60_000,
+  });
+  const isOwner = !!ownerCheck?.isOwner;
 
   const greetingName =
     (profile?.display_name && profile.display_name.trim()) ||
@@ -112,6 +123,18 @@ function DashboardPage() {
             Account
           </Button>
         </header>
+
+        {isOwner ? (
+          <section className="mt-6 rounded-2xl border border-primary/30 bg-primary/5 p-4 md:p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-primary">
+                Owner Dashboard
+              </h2>
+            </div>
+            <OwnerPanels />
+          </section>
+        ) : null}
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
           {QUICK_ACTIONS.map((a) => (
