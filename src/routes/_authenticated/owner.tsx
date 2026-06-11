@@ -12,6 +12,9 @@ import {
   Ban,
   CheckCircle2,
   MoreHorizontal,
+  Pencil,
+  Trash2,
+  KeyRound,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -21,9 +24,21 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +61,9 @@ import {
   listUsers,
   getUserDetail,
   setUserPlan,
+  setUserDisplayName,
+  deleteUser,
+  sendPasswordReset,
   setUserSuspended,
   setUserOwnerRole,
   listFeedback,
