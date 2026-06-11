@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listSessions } from "@/lib/sessions.functions";
-import { BrandLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -213,10 +212,6 @@ function DashboardPage() {
               </li>
             </ul>
           </aside>
-        </section>
-
-        <section className="mt-16 flex flex-col items-center text-center">
-          <BrandLogo width={420} height={240} className="max-w-full" />
         </section>
       </div>
     </main>
