@@ -216,13 +216,7 @@ function DashboardPage() {
         </section>
 
         <section className="mt-16 flex flex-col items-center text-center">
-          <BrandLogo size={120} />
-          <h2 className="mt-4 text-2xl font-black tracking-tight md:text-3xl">
-            NextStep Diagnostics
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            A technician in your pocket.
-          </p>
+          <BrandLogo width={420} height={240} className="max-w-full" />
         </section>
       </div>
     </main>

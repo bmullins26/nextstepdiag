@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
+import { Route as AuthenticatedErrorCodesRouteImport } from './routes/_authenticated/error-codes'
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
 import { Route as AuthenticatedDiagnoseRouteImport } from './routes/_authenticated/diagnose'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -35,6 +36,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedErrorCodesRoute = AuthenticatedErrorCodesRouteImport.update({
+  id: '/error-codes',
+  path: '/error-codes',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDocumentsRoute = AuthenticatedDocumentsRouteImport.update({
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/diagnose': typeof AuthenticatedDiagnoseRoute
   '/documents': typeof AuthenticatedDocumentsRoute
+  '/error-codes': typeof AuthenticatedErrorCodesRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/diagnose': typeof AuthenticatedDiagnoseRoute
   '/documents': typeof AuthenticatedDocumentsRoute
+  '/error-codes': typeof AuthenticatedErrorCodesRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/diagnose': typeof AuthenticatedDiagnoseRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
+  '/_authenticated/error-codes': typeof AuthenticatedErrorCodesRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
 }
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/diagnose'
     | '/documents'
+    | '/error-codes'
     | '/history'
     | '/history/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/diagnose'
     | '/documents'
+    | '/error-codes'
     | '/history'
     | '/history/$id'
   id:
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/diagnose'
     | '/_authenticated/documents'
+    | '/_authenticated/error-codes'
     | '/_authenticated/history'
     | '/_authenticated/history/$id'
   fileRoutesById: FileRoutesById
@@ -152,6 +164,13 @@ declare module '@tanstack/react-router' {
       path: '/history'
       fullPath: '/history'
       preLoaderRoute: typeof AuthenticatedHistoryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/error-codes': {
+      id: '/_authenticated/error-codes'
+      path: '/error-codes'
+      fullPath: '/error-codes'
+      preLoaderRoute: typeof AuthenticatedErrorCodesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/documents': {
@@ -200,6 +219,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDiagnoseRoute: typeof AuthenticatedDiagnoseRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
+  AuthenticatedErrorCodesRoute: typeof AuthenticatedErrorCodesRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
 }
 
@@ -207,6 +227,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDiagnoseRoute: AuthenticatedDiagnoseRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
+  AuthenticatedErrorCodesRoute: AuthenticatedErrorCodesRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
 }
 
