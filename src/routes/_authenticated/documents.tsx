@@ -1,10 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertCircle,
-  ArrowLeft,
   CheckCircle2,
   ExternalLink,
   FileText,
@@ -13,7 +12,6 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -213,23 +211,18 @@ function DocumentsPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Home
-          </Link>
-          <div className="flex items-center gap-2">
-            <BrandLogo size={32} />
-            <h1 className="text-sm font-semibold tracking-tight">
-              Document Assistant
-            </h1>
-          </div>
-          <div className="w-12" />
-        </div>
-      </header>
+      <div className="mx-auto max-w-7xl px-4 pt-6 md:px-8">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+          Document Assistant
+        </p>
+        <h1 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">
+          Analyze a tech sheet or wiring diagram
+        </h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Upload a PDF or photo of the data plate, schematic, or service bulletin.
+          NextStep reads the page and answers your follow-up questions.
+        </p>
+      </div>
 
       {/* Single hidden file input, mounted once, outside any clickable wrapper. */}
       <input
@@ -240,8 +233,8 @@ function DocumentsPage() {
         onChange={(e) => onPick(e.target.files?.[0])}
       />
 
-      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-2">
-        <section className="flex min-h-[60vh] flex-col rounded-2xl border border-border bg-card/50">
+      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-6 md:px-8 lg:grid-cols-2">
+        <section className="glass-card flex min-h-[60vh] flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
             <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
               <FileText className="h-4 w-4 text-primary" />
