@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import {
   Stethoscope,
   FileText,
@@ -8,9 +9,13 @@ import {
   ChevronRight,
   Loader2,
   History as HistoryIcon,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listSessions } from "@/lib/sessions.functions";
+import { getMyProfile } from "@/lib/profile.functions";
+import { Button } from "@/components/ui/button";
+import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -61,8 +66,10 @@ const QUICK_ACTIONS = [
 
 function DashboardPage() {
   const list = useServerFn(listSessions);
+  const profileFn = useServerFn(getMyProfile);
   const [recent, setRecent] = useState<Row[] | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
@@ -71,7 +78,16 @@ function DashboardPage() {
       .catch(() => setRecent([]));
   }, []);
 
-  const firstName = (email ?? "").split("@")[0] || "Technician";
+  const { data: profile } = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: () => profileFn(),
+  });
+
+  const greetingName =
+    (profile?.display_name && profile.display_name.trim()) ||
+    (profile?.full_name && profile.full_name.trim()) ||
+    (email ?? "").split("@")[0] ||
+    "Technician";
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -79,13 +95,22 @@ function DashboardPage() {
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-black tracking-tight md:text-3xl">
-              Welcome back, {firstName}.
+              Welcome back, {greetingName}.
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               A technician in your pocket — pick up where you left off, or start
               something new.
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSettingsOpen(true)}
+            className="shrink-0"
+          >
+            <SettingsIcon className="mr-1.5 h-4 w-4" />
+            Account
+          </Button>
         </header>
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
@@ -214,6 +239,13 @@ function DashboardPage() {
           </aside>
         </section>
       </div>
+      <AccountSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        email={email}
+        currentDisplayName={profile?.display_name ?? null}
+        plan={profile?.plan ?? null}
+      />
     </main>
   );
 }
