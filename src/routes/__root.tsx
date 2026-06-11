@@ -12,7 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
-import logoAsset from "@/assets/nextstep-logo.asset.json";
+import pocketLogoAsset from "@/assets/nextstep-pocket.asset.json";
 
 function NotFoundComponent() {
   return (
@@ -96,8 +96,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", type: "image/png", href: logoAsset.url },
-      { rel: "apple-touch-icon", href: logoAsset.url },
+      { rel: "icon", type: "image/png", href: pocketLogoAsset.url },
+      { rel: "apple-touch-icon", href: pocketLogoAsset.url },
     ],
   }),
   shellComponent: RootShell,
