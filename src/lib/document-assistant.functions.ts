@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateObject, generateText } from "ai";
 import { z } from "zod";
 import { getGateway, DEFAULT_MODEL } from "./ai-gateway.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { logAiUsage } from "./ai-usage-log.server";
 
 const FileInput = z.object({
   fileName: z.string().min(1),
@@ -54,10 +56,11 @@ function buildContent(file: z.infer<typeof FileInput>, text: string): Block[] {
 }
 
 export const analyzeDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => FileInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const gateway = getGateway();
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: AnalysisSchema,
       system: SYSTEM,
@@ -72,6 +75,7 @@ export const analyzeDocument = createServerFn({ method: "POST" })
         },
       ],
     });
+    await logAiUsage({ userId: context.userId, feature: "analyze_document", model: DEFAULT_MODEL, usage });
     return object;
   });
 
@@ -88,8 +92,9 @@ const FollowUpInput = z.object({
 });
 
 export const askDocumentFollowUp = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => FollowUpInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const gateway = getGateway();
     const historyText = data.history.length
       ? data.history
@@ -97,7 +102,7 @@ export const askDocumentFollowUp = createServerFn({ method: "POST" })
           .join("\n\n")
       : "(no prior questions)";
 
-    const { text } = await generateText({
+    const { text, usage } = await generateText({
       model: gateway(DEFAULT_MODEL),
       system: SYSTEM,
       messages: [
@@ -118,5 +123,6 @@ Answer based ONLY on what is visible on the attached document. If the answer is 
         },
       ],
     });
+    await logAiUsage({ userId: context.userId, feature: "ask_document_followup", model: DEFAULT_MODEL, usage });
     return { answer: text };
   });
