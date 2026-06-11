@@ -1,73 +1,90 @@
 ## Goal
 
-Make the Document Assistant upload + Q&A flow work reliably on Safari (iPhone/iPad/macOS) and Chrome (Android/Desktop). Root cause of current breakage: a `<label htmlFor>` wrapping a hidden file input + a textarea disabled until analysis completes. Safari frequently drops the label→hidden-input bridge, leaving users stuck with no picker and no way to type.
+Rebuild the app shell and add new pages to match the mockup: collapsible left sidebar with persistent NextStep branding, dark-navy/teal glass aesthetic, redesigned Document Assistant, plus new Dashboard and Error Codes pages — while preserving all existing functionality.
 
-All changes are confined to `src/routes/_authenticated/documents.tsx` (one file).
+**CRITICAL constraints (per user):**
+1. **Diagnose workflow is OFF LIMITS for logic changes.** Only restyle its presentation (Tailwind classes, card wrappers, spacing, layout grouping). No changes to state, refs, handlers, server-fn calls, effects, or conditional rendering that gates existing controls.
+2. **Do not delete `src/components/app-nav.tsx`.** Stop importing/using it, but leave the file in the repository until the new sidebar is verified across Desktop Chrome, Desktop Safari, iPhone Safari, and Android Chrome. Removal happens in a later turn after cross-browser verification.
 
-## 1. File picker — user-gesture-safe
+## 1. Global shell — collapsible sidebar
 
-- Keep a single `<input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png" hidden>` mounted once, outside any clickable wrapper.
-- Open it explicitly via `inputRef.current?.click()` from:
-  - The dropzone (`onClick`, `onKeyDown` for Enter/Space, `role="button"`, `tabIndex={0}`).
-  - A visible **Choose file** button inside the dropzone.
-  - A secondary **Replace file** button in the preview header (when a file is already loaded).
-- Remove the `<label htmlFor="doc-upload">` pattern entirely.
+New `src/components/app-sidebar.tsx` built on shadcn `Sidebar` (`collapsible="icon"`):
 
-## 2. Drag-and-drop (desktop only)
+- Collapsed (~64px): icon-only rail with compact NS pocket mark at top.
+- Expanded (~280px): `BrandLogo` + "NextStep Diagnostics" wordmark + "A technician in your pocket." tagline, nav labels, user block (avatar + email), Sign Out.
+- Nav items: Dashboard, Diagnose, Error Codes, Documents, History. Account/Settings stay out of nav (per prior decision).
+- Desktop: expand on hover via controlled `open` state. Mobile: hamburger `SidebarTrigger` in slim top bar; sidebar slides in as Sheet (shadcn default for mobile).
+- Active route highlight via `useRouterState` pathname.
 
-- Wire `onDragOver` (preventDefault + visual state), `onDragLeave`, `onDrop` (call `onPick(files[0])`) on the dropzone div.
-- Detect touch / coarse-pointer (`window.matchMedia('(hover: none)').matches`) and hide the "or drop a file here" copy on those devices. Tap/Choose-file path remains.
+Update `src/routes/_authenticated/route.tsx` layout to:
+```
+<SidebarProvider> <AppSidebar /> <SidebarInset> <MobileTopBar/> <Outlet/> </SidebarInset> </SidebarProvider>
+```
+**Remove the `<AppNav/>` import and usage from `route.tsx`.** Do NOT delete `src/components/app-nav.tsx` — file stays in the repo as a fallback until the new sidebar is verified on Desktop Chrome, Desktop Safari, iPhone Safari, and Android Chrome. A follow-up turn will delete it after verification.
 
-## 3. Upload state machine
+## 2. Design tokens
 
-Replace the boolean `analyzing` with a single status: `'idle' | 'reading' | 'analyzing' | 'ready' | 'error'`.
+`src/styles.css`: deeper navy background token, `--surface` + `--surface-border` glass tokens, teal glow shadow token, `.glass-card` utility (Tailwind v4 `@utility`). Reuse semantic tokens; no hex literals in components.
 
-- `idle` → "Ready — upload a tech sheet or diagram"
-- `reading` → "Reading file…" (during `FileReader.readAsDataURL`)
-- `analyzing` → "Analyzing document… this can take up to a minute on large PDFs" (with spinner, important for iPad)
-- `ready` → green check + "Analysis complete"
-- `error` → red inline message with the thrown text + a **Try again** button
+## 3. Document Assistant redesign (`_authenticated/documents.tsx`)
 
-Show the status pill in the preview card header and mirror it in the Analysis panel header so the tech always sees progress.
+Two-column desktop grid `grid-cols-[minmax(280px,30%)_1fr]`, single column mobile.
 
-## 4. PDF preview fallback (Safari-safe)
+Left rail: compact Upload card (~140px dropzone, Choose File button, accepted formats — preserves existing Safari-safe `inputRef.click()` + status state machine + drag-drop) and Current Document card (filename, page count, size, status pill, Replace, View opens dataUrl in new tab).
 
-- Try `<object data={dataUrl} type="application/pdf">` first.
-- Inside the `<object>` fallback slot (rendered when the plugin can't display), show a "PDF Loaded Successfully" card with:
-  - File name
-  - Human-readable file size (`(bytes/1024/1024).toFixed(2) MB`)
-  - **Open PDF** link (`<a href={dataUrl} target="_blank" rel="noopener" download={fileName}>`).
-- Additionally detect iOS Safari (`/iP(hone|ad|od)/.test(navigator.userAgent)` + not Chrome) and skip `<object>` entirely on those devices — render the fallback card directly, since iOS Safari frequently fails to render `<object>` PDFs.
-- Critical: preview rendering must never block analysis. Analysis is dispatched from `onPick` independent of preview.
+Right workspace:
+- `DocumentAnalysisCard`: header + status badge + "Analyzed HH:MM", stat tiles (Safety, Components, Diagnostics, Test Points, Error Codes) from existing analysis JSON, "Next Diagnostic Step" callout, "Key Areas Identified" chips.
+- `FollowUpChatCard`: dominant card `min-h-[600px]`, scrollable thread (user right-aligned, AI markdown left), suggested follow-up chips, sticky composer (Textarea + Send), disclaimer.
+- Existing `analyzeDocument` / `askDocumentFollowUp` server fns unchanged.
 
-## 5. Follow-up textarea
+## 4. Diagnose page — PRESENTATION ONLY (`_authenticated/diagnose.tsx`)
 
-- Drop `!analysis` from the textarea's `disabled` — only disable while `asking`.
-- Keep the Send button disabled until `status === 'ready' && question.trim() && !asking`.
-- Update placeholder: "Type your question — sends once analysis completes."
-- This lets techs compose the question while analysis is still running and removes the "input is broken" symptom.
+Allowed: wrap existing JSX in `<Card>`/glass-card containers, adjust Tailwind classes/spacing/grid, reorder sibling sections for hierarchy, swap bare inputs/buttons for shadcn equivalents only when a 1:1 visual swap with no behavior change.
 
-## 6. File validation + errors
+Forbidden: renaming/removing any state, ref, or handler; changing what/when server fns are called; splitting workflow across files in ways that alter mount order; new conditional rendering that gates existing controls.
 
-- Keep MIME allowlist + 15 MB limit.
-- On any error in `onPick` (read, validation, server), set `status='error'` and store the message — render it as a visible inline error in the preview card (not only a toast, since iOS Safari sometimes suppresses toasts behind keyboard).
-- Always reset the `<input>`'s `value` after pick so re-selecting the same file refires `onChange`.
+Target structure (purely visual grouping of existing sections): appliance verification top → appliance age + complaint row → current findings card `lg:sticky lg:top-4` right column → diagnostic progress + recommended next test + most likely failures stacked main column.
 
-## 7. Accessibility
+## 5. Error Codes page (NEW)
 
-- Dropzone: `role="button"`, `tabIndex={0}`, `aria-label="Upload a tech sheet or diagram"`, Enter/Space handler.
-- Status pill uses `aria-live="polite"`.
+Route `_authenticated/error-codes.tsx`. Static seed table per prior decision.
 
-## Out of scope
+Migration `error_codes(id, brand, code, meaning, common_causes jsonb, recommended_tests jsonb, timestamps, unique(brand,code))` with GRANT SELECT to authenticated, ALL to service_role, RLS enabled with select policy `USING (true)`. Seed ~25 common codes via supabase--insert across Whirlpool/GE/Samsung/LG/Bosch.
 
-- No changes to `analyzeDocument` / `askDocumentFollowUp` server functions (current ~20 MB JSON payload limit is fine within the 15 MB file cap; no chunked-base64 work needed).
-- No changes to auth, routing, or other pages.
-- No styling overhaul — reuse existing tokens and shadcn components.
+Server fn `src/lib/error-codes.functions.ts` → `lookupErrorCode({ brand, code })` with `requireSupabaseAuth`; case-insensitive match; returns row or `{ notFound: true }`.
+
+Page: left form (Brand select from `appliance-brands.ts`, code input, Lookup button); right result card (Meaning / Common Causes / Recommended Tests).
+
+## 6. Dashboard page (NEW)
+
+Route `_authenticated/dashboard.tsx`. Update `routes/index.tsx` redirect: signed-in → `/dashboard`. Content: greeting, 3 quick-action cards (Diagnose / Documents / Error Codes), Recent diagnostics list via existing `listSessions`.
+
+## 7. History page restyle
+
+Card grid (model, complaint, date, status badge, favorite star), client-side search filter on existing list, existing actions (Resume / View / Delete / favorite). No new server logic.
+
+## 8. Routing
+
+Add `dashboard.tsx` and `error-codes.tsx`; update `routes/index.tsx` redirect; `routeTree.gen.ts` regenerates automatically.
+
+## 9. Out of scope
+
+- Diagnose behavior/logic, prompts, server fns.
+- Auth flow, supabase client files, AI gateway wiring, `analyzeDocument`/`askDocumentFollowUp` internals.
+- Account/Settings pages.
+- Inline PDF preview.
+- AI-generated error code lookups.
+- **Deleting `app-nav.tsx`** — explicitly deferred to a post-verification turn.
+
+## Technical notes
+
+- All colors via semantic tokens.
+- Mobile `SidebarTrigger` lives in top bar (outside sidebar) so it stays visible.
+- Consistent `defaultOpen={false}` SSR/client to avoid hydration mismatch; hover-expand is a controlled-state effect (client-only).
+- Migration runs first, then code edits reference the new table.
 
 ## Files touched
 
-- `src/routes/_authenticated/documents.tsx` (only)
-
-## Verification (after build mode)
-
-- Manual: open `/documents` on Chrome desktop and on Safari (macOS sim via viewport) — upload PDF, watch status transitions, confirm fallback card appears on iOS UA, confirm typing in the textarea works during `analyzing`, confirm follow-up sends after `ready`.
+- New: `src/components/app-sidebar.tsx`, `src/routes/_authenticated/dashboard.tsx`, `src/routes/_authenticated/error-codes.tsx`, `src/lib/error-codes.functions.ts`, error_codes migration + seed.
+- Edited (UI only): `src/routes/_authenticated/route.tsx` (swap AppNav → sidebar shell), `src/routes/_authenticated/documents.tsx`, `src/routes/_authenticated/diagnose.tsx` (classes/wrappers only), `src/routes/_authenticated/history.tsx`, `src/routes/index.tsx`, `src/styles.css`.
+- **Kept as-is on disk:** `src/components/app-nav.tsx` (no longer imported; pending cross-browser verification of the new sidebar before deletion).
