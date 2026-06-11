@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getGateway, DEFAULT_MODEL } from "./ai-gateway.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { logAiUsage } from "./ai-usage-log.server";
 
 const ApplianceInput = z.object({
   brand: z.string().min(1),
@@ -10,10 +12,11 @@ const ApplianceInput = z.object({
 });
 
 export const verifyAppliance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ApplianceInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const gateway = getGateway();
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: z.object({
         identified: z.boolean().describe("True only if you can confidently identify the appliance type from brand + model."),
@@ -26,6 +29,7 @@ export const verifyAppliance = createServerFn({ method: "POST" })
         "You are a senior appliance technician verifying equipment from brand, model, and serial numbers. Never guess. If you cannot identify the appliance type confidently, set identified=false and put a clarifying question in notes (e.g. 'Is this a top-load or front-load washer?').",
       prompt: `Brand: ${data.brand}\nModel Number: ${data.modelNumber}\nSerial Number: ${data.serialNumber || "(not provided)"}`,
     });
+    await logAiUsage({ userId: context.userId, feature: "verify_appliance", model: DEFAULT_MODEL, usage });
     return { ...object, brand: data.brand, modelNumber: data.modelNumber, serialNumber: data.serialNumber };
   });
 
@@ -47,14 +51,15 @@ const StepInput = z.object({
 });
 
 export const nextDiagnosticStep = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => StepInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const gateway = getGateway();
     const historyText = data.history.length
       ? data.history.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join("\n")
       : "(no questions answered yet)";
 
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: z.object({
         done: z.boolean().describe("True only when you have enough evidence to name the most likely failure with confidence."),
@@ -94,16 +99,18 @@ ${historyText}
 ${data.documentExcerpt ? `Tech sheet / wiring diagram excerpt:\n${data.documentExcerpt.slice(0, 4000)}\n` : ""}
 Decide the single next diagnostic question, or finalize the call.`,
     });
+    await logAiUsage({ userId: context.userId, feature: "next_diagnostic_step", model: DEFAULT_MODEL, usage });
     return object;
   });
 
 const DocQInput = StepInput.extend({ question: z.string().min(1) });
 
 export const askDocumentQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => DocQInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const gateway = getGateway();
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: z.object({ answer: z.string() }),
       system:
@@ -116,5 +123,6 @@ ${(data.documentExcerpt || "").slice(0, 6000)}
 
 Technician question: ${data.question}`,
     });
+    await logAiUsage({ userId: context.userId, feature: "ask_document_question", model: DEFAULT_MODEL, usage });
     return object;
   });
