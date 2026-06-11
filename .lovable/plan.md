@@ -1,50 +1,22 @@
-## Goal
+I found your account is correctly marked as `owner` in the backend, but your screenshot is from the published domain (`nextstepdiag.lovable.app`), which may still be running the older frontend. I’ll make the dashboard more foolproof so owner access can’t fail silently.
 
-When an owner logs in, the normal **Dashboard** should become the owner dashboard area instead of relying on a separate hidden Owner sidebar link.
+Plan:
 
-## What will change
+1. Keep owner role as the source of truth
+   - Continue using the backend `user_roles` owner role check.
+   - No separate PIN/password flow.
 
-### 1. Dashboard detects owner status
-On `/dashboard`, check whether the signed-in user has the owner role.
+2. Make `/dashboard` wait for owner status
+   - Add a visible loading state while the owner check is running.
+   - Prevent the page from immediately looking like a regular free-tier technician dashboard before the owner role response returns.
 
-- Owner users see owner dashboard content
-- Regular users keep seeing the technician dashboard they have now
+3. Add owner error visibility
+   - If the owner check fails, show a small dashboard warning instead of hiding the Owner Dashboard with no explanation.
+   - This helps distinguish “not owner” from “role check failed.”
 
-### 2. Owner tools appear directly on Dashboard
-For owner accounts, add an **Owner Dashboard** section at the top of `/dashboard` with the existing owner tools:
+4. Place Owner Dashboard first
+   - Owner users will see the Owner Dashboard section directly under the welcome header, before Start Diagnosis, Document Assistant, and Error Code Lookup.
 
-- Overview
-- AI Usage
-- Users
-- Feedback
-- AI Cost
-
-This uses the owner functionality that already exists on `/owner`, but makes it visible from the main Dashboard experience.
-
-### 3. Keep technician tools available
-Owners should still be able to use normal technician tools.
-
-The Dashboard will keep the existing quick actions and recent diagnostics below or alongside the owner section, so owner access does not replace the app workflow.
-
-### 4. Keep `/owner` as a backup route
-The `/owner` page can remain for direct access, but it will no longer be the only way to see owner UI.
-
-### 5. Sidebar can stay simple
-Since the Dashboard will show owner tools automatically, the sidebar Owner link becomes less important. I can leave it in place for owners as a shortcut, but the critical owner UI will now be on `/dashboard`.
-
-## Technical details
-
-- Reuse the existing owner server functions from `src/lib/owner.functions.ts`.
-- Refactor the owner tab UI in `src/routes/_authenticated/owner.tsx` so the same owner panels can be imported and rendered by `src/routes/_authenticated/dashboard.tsx`.
-- Add an owner check on Dashboard using `amOwner`.
-- Render owner tabs only when `isOwner` is true.
-- No database changes are needed because your account already has the owner role.
-- No separate PIN/password flow will be added in this pass.
-
-## Verification
-
-- Sign in as `bmullins26@gmail.com`.
-- Go to `/dashboard`.
-- Confirm owner tabs/controls appear directly on Dashboard.
-- Confirm regular users still only see the normal technician dashboard.
-- Confirm `/owner` still works as a direct backup route.
+5. Verify deployment expectation
+   - After implementation, the preview should show the owner panels once you’re logged in.
+   - Since your screenshot is on the published domain, the frontend must be updated/published for the same change to appear at `nextstepdiag.lovable.app`.

@@ -87,10 +87,15 @@ function DashboardPage() {
     queryFn: () => profileFn(),
   });
 
-  const { data: ownerCheck } = useQuery({
+  const {
+    data: ownerCheck,
+    isLoading: ownerLoading,
+    error: ownerError,
+  } = useQuery({
     queryKey: ["am-owner"],
     queryFn: () => ownerFn(),
     staleTime: 60_000,
+    retry: 1,
   });
   const isOwner = !!ownerCheck?.isOwner;
 
@@ -124,7 +129,16 @@ function DashboardPage() {
           </Button>
         </header>
 
-        {isOwner ? (
+        {ownerLoading ? (
+          <section className="mt-6 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/40 p-4 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Checking owner access…
+          </section>
+        ) : ownerError ? (
+          <section className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+            Couldn't verify owner access: {(ownerError as Error).message}
+          </section>
+        ) : isOwner ? (
           <section className="mt-6 rounded-2xl border border-primary/30 bg-primary/5 p-4 md:p-5">
             <div className="mb-4 flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
