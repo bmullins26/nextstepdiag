@@ -39,6 +39,10 @@ export const upsertSession = createServerFn({ method: "POST" })
         .select()
         .single();
       if (error) throw new Error(error.message);
+      void context.supabase
+        .from("profiles")
+        .update({ last_activity_at: new Date().toISOString() })
+        .eq("id", context.userId);
       return r;
     }
     const { data: r, error } = await context.supabase
@@ -47,6 +51,10 @@ export const upsertSession = createServerFn({ method: "POST" })
       .select()
       .single();
     if (error) throw new Error(error.message);
+    void context.supabase
+      .from("profiles")
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq("id", context.userId);
     return r;
   });
 
