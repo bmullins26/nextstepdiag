@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, Loader2, Trash2 } from "lucide-react";
-import { AppNav } from "@/components/app-nav";
+
 import { Button } from "@/components/ui/button";
 import { getSession, deleteSession } from "@/lib/sessions.functions";
 
@@ -55,7 +55,7 @@ function DetailsPage() {
 
   if (row === undefined) {
     return (
-      <main className="min-h-screen bg-background"><AppNav />
+      <main className="min-h-screen bg-background">
         <div className="mx-auto max-w-md px-4 py-10 text-center text-muted-foreground">
           <Loader2 className="mx-auto h-5 w-5 animate-spin" />
         </div>
@@ -64,7 +64,7 @@ function DetailsPage() {
   }
   if (!row) {
     return (
-      <main className="min-h-screen bg-background"><AppNav />
+      <main className="min-h-screen bg-background">
         <div className="mx-auto max-w-md px-4 py-10 text-center">Not found.</div>
       </main>
     );
@@ -74,7 +74,7 @@ function DetailsPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <AppNav />
+      
       <div className="mx-auto max-w-md px-4 pb-20 pt-5 space-y-4">
         <Link to="/history" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to history
