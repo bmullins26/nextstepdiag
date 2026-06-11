@@ -175,7 +175,7 @@ export const listUsers = createServerFn({ method: "POST" })
 
     let q = supabaseAdmin
       .from("profiles")
-      .select("id, email, full_name, plan, is_suspended, last_login_at, last_activity_at, created_at")
+      .select("id, email, full_name, display_name, plan, is_suspended, last_login_at, last_activity_at, created_at")
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -223,7 +223,7 @@ export const getUserDetail = createServerFn({ method: "POST" })
     const [profile, sessions, usage, roleRow] = await Promise.all([
       supabaseAdmin
         .from("profiles")
-        .select("id, email, full_name, plan, is_suspended, last_login_at, last_activity_at, created_at")
+        .select("id, email, full_name, display_name, plan, is_suspended, last_login_at, last_activity_at, created_at")
         .eq("id", data.userId)
         .maybeSingle(),
       supabaseAdmin
@@ -288,6 +288,65 @@ export const setUserPlan = createServerFn({ method: "POST" })
       .eq("id", data.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+export const setUserDisplayName = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        userId: z.string().uuid(),
+        displayName: z.string().trim().max(80).nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const display_name = data.displayName && data.displayName.length > 0 ? data.displayName : null;
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({ display_name })
+      .eq("id", data.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const deleteUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ userId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    if (data.userId === context.userId) throw new Error("You cannot delete yourself.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const sendPasswordReset = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ userId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: prof, error: pErr } = await supabaseAdmin
+      .from("profiles")
+      .select("email")
+      .eq("id", data.userId)
+      .maybeSingle();
+    if (pErr) throw new Error(pErr.message);
+    if (!prof?.email) throw new Error("User has no email on file.");
+    const { data: link, error } = await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email: prof.email,
+    });
+    if (error) throw new Error(error.message);
+    return {
+      ok: true,
+      email: prof.email,
+      actionLink: link?.properties?.action_link ?? null,
+    };
   });
 
 export const setUserSuspended = createServerFn({ method: "POST" })

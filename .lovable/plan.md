@@ -1,86 +1,81 @@
+## What this plan covers
 
-# Owner Dashboard
+Two issues in one pass:
 
-A protected `/owner` area gated by `role = 'owner'` that surfaces user activity, plans, AI usage, feedback, and cost estimates. Owner-only sidebar entry. No changes to Diagnose, Documents, auth flow, or billing logic.
+1. **Owner sidebar item never appears** even though `bmullins26@gmail.com` has the `owner` role (verified in DB).
+2. **Owner needs a richer Users section** to manage accounts now, with room to manage subscriptions later, and to change a user's **displayed dashboard name**.
 
-## Data model (one migration)
+---
 
-Four new tables + one enum. RLS on all; GRANT to `authenticated` + `service_role`.
+## 1. Fix the Owner sidebar item
 
-**`app_role` enum:** `'owner' | 'user'`. Roles are stored separately from profile data per the user-roles security pattern (no role column on `profiles`).
+**Root cause:** `src/components/app-sidebar.tsx` reads the role once in a `useEffect` on mount. If the sidebar mounts before the Supabase session is hydrated (common right after Google OAuth redirect), `getUser()` returns `null`, the role query is skipped, and `isOwner` stays `false` until a full page reload. There's also no subscription to `onAuthStateChange`, so sign-in in the same tab never re-checks.
 
-**`public.user_roles`** — `(id, user_id → auth.users, role app_role, created_at)`. Unique on `(user_id, role)`.
-- Policy: a user can `SELECT` their own roles.
-- `SECURITY DEFINER` function `public.has_role(_user_id uuid, _role app_role)` returns boolean — used by every owner-only policy and by the sidebar/route gate.
-- Seed row: `INSERT INTO user_roles (user_id, role) SELECT id, 'owner' FROM auth.users WHERE lower(email) = 'bmullins26@gmail.com'`.
+**Fix:** rewrite the role check in `app-sidebar.tsx`:
+- Track `userId`/`email` from both `supabase.auth.getUser()` AND `supabase.auth.onAuthStateChange` (`SIGNED_IN`, `SIGNED_OUT`, `USER_UPDATED`, `INITIAL_SESSION`).
+- Use `useQuery({ queryKey: ['user-role', userId], enabled: !!userId })` so the result re-renders the sidebar the moment the role row arrives.
+- `isOwner = data === 'owner'`. Hide the Owner item while loading (no flash).
 
-**`public.profiles`** — `(id PK = auth.users.id, email, full_name, plan plan_tier default 'free', is_suspended bool default false, created_at, last_login_at, last_activity_at, updated_at)`.
-- Enum `plan_tier`: `'free' | 'pro' | 'master' | 'lifetime'`.
-- Policies: user can SELECT/UPDATE own row; owner can SELECT/UPDATE all via `has_role(auth.uid(),'owner')`.
-- Trigger `on_auth_user_created` (on `auth.users` AFTER INSERT) inserts a profile row with `email`/`full_name` from `raw_user_meta_data`. Backfill existing users in the same migration.
-- `last_login_at` updated by a server fn on first auth event per session; `last_activity_at` updated whenever `upsertSession` runs (cheap touch from the existing diagnose flow — single new line).
+No DB, RLS, route, or server-function changes needed for this part.
 
-**`public.ai_usage`** — `(id, user_id, feature text, model text, input_tokens int, output_tokens int, created_at)`.
-- `feature` is a free string with these recognized values: `next_diagnostic_step`, `decode_appliance`, `extract_tag_from_image`, `analyze_document`, `ask_document_question`, `error_code_research`.
-- Policies: user can SELECT own rows; owner can SELECT all. INSERT via service role only (server fns).
-- Index on `(created_at desc)` and `(user_id, created_at desc)`.
+---
 
-**`public.feedback`** — `(id, user_id, kind feedback_kind, subject text, body text, status feedback_status default 'open', created_at)`.
-- Enums: `feedback_kind` = `'bug' | 'feature' | 'general'`; `feedback_status` = `'open' | 'reviewed' | 'closed'`.
-- Policies: user can INSERT own and SELECT own; owner can SELECT/UPDATE all.
+## 2. Expand the Users section in `/owner`
 
-All tables follow the four-step pattern (CREATE → GRANT → ENABLE RLS → POLICY). All security-definer functions use `SET search_path = public`.
+### Schema additions (one migration)
 
-## Server functions
+Add to `profiles`:
+- `display_name TEXT` — what shows in the dashboard greeting / header. Falls back to `full_name` then email local part.
 
-New file **`src/lib/owner.functions.ts`** — every fn uses `requireSupabaseAuth` middleware and starts with a `has_role(userId,'owner')` check (throws `Forbidden` otherwise). Service-role admin client loaded inside handlers via `await import('@/integrations/supabase/client.server')`.
+Backfill `display_name = full_name` for existing rows. RLS:
+- Users may `UPDATE` their own `display_name` only (existing self-update policy already covers this if columns aren't restricted; otherwise add a policy scoped to `auth.uid() = id` for that column).
+- Owners may `UPDATE` any profile (already covered by existing owner policy).
 
-| Function | Purpose |
-|---|---|
-| `getOwnerOverview` | Returns counts: total users, active today/week/month (distinct `user_id` in `diagnostic_sessions` within window), plan counts (free/pro/master/lifetime). One SQL round-trip via a SQL function `public.owner_overview()` (security definer). |
-| `getAiUsageStats` | Today / week / month / total AI call counts + per-feature breakdown. Backed by `public.owner_ai_usage_stats()`. |
-| `getAiCostEstimate` | Today / month totals and per-user averages. Pricing constants in `src/lib/ai-cost.ts` (Gemini Flash rates: input $0.30 / output $2.50 per 1M tokens, labeled "estimate"). |
-| `listUsers` | Search by email/name with pagination. Returns profile + role + counts. |
-| `getUserDetail` | Single-user view: totals (diagnoses, documents, AI calls), last active, plan, per-feature AI breakdown. |
-| `setUserPlan` | `'free' \| 'pro' \| 'master' \| 'lifetime'` → updates `profiles.plan`. Covers Upgrade to Pro / Remove Pro / Grant Master / Grant Lifetime. |
-| `setUserSuspended` | Calls Supabase Admin `auth.admin.updateUserById(id, { ban_duration: '876000h' })` to block sign-in (≈100 yrs); `null` ban_duration to unsuspend. Also flips `profiles.is_suspended` for display. |
-| `grantOwnerRole` / `revokeOwnerRole` | Owner-only role management. |
-| `listFeedback` | Filter by kind/status. |
-| `updateFeedbackStatus` | Owner can mark reviewed/closed. |
+### Where the display name is used
+- The dashboard header / greeting reads `profile.display_name ?? full_name ?? email`.
+- A new self-serve **Account Settings** dialog on `/dashboard` (gear/avatar menu) lets any signed-in user change their own `display_name`. New server fn `updateMyProfile({ displayName })` using `requireSupabaseAuth`.
 
-New shared file **`src/lib/feedback.functions.ts`** — `submitFeedback({kind, subject, body})` available to any authenticated user (used by a future user-facing feedback form; out of scope to add a UI for it now per the request, but the server fn ships so feedback can flow in).
+### Owner → Users tab upgrade
 
-**`src/lib/diagnostics.functions.ts` / `serial-decode.functions.ts` / `document-assistant.functions.ts` / `error-codes.functions.ts`** — at the end of each AI handler, fire-and-forget insert into `ai_usage` using the admin client. Each call site already has `userId` (from `requireSupabaseAuth`) or is anonymous in the case of cached lookups — the cached error-code branch records nothing; only the AI research branch records. Token counts come from `result.usage` returned by `generateObject`. Failure to log never blocks the user response (wrapped in try/catch).
+Expand the existing Users table in `src/routes/_authenticated/owner.tsx`:
 
-**`src/lib/sessions.functions.ts`** — `upsertSession` adds `UPDATE profiles SET last_activity_at = now() WHERE id = userId` after the upsert.
+Columns: Email · Display name · Plan · Role · Status · Last activity · Actions
 
-## Routes
+Actions menu per user (owner-only server fns, all gated by `assertOwner`):
+- **Edit display name** — inline edit or small dialog. New: `setUserDisplayName({ userId, displayName })`.
+- **Change plan** — existing `setUserPlan` (free / pro / master / lifetime).
+- **Grant / revoke Owner** — existing `setUserOwnerRole`.
+- **Suspend / Unsuspend** — existing `setUserSuspended` (auth ban).
+- **Delete account** — new `deleteUser({ userId })` using `supabaseAdmin.auth.admin.deleteUser`. Confirms with a destructive AlertDialog. Self-delete blocked.
+- **Send password reset** — new `sendPasswordReset({ userId })` using `supabaseAdmin.auth.admin.generateLink({ type: 'recovery' })` and returning success (no email plumbing today; link is shown to the owner to share or copied to clipboard).
 
-**`src/routes/_authenticated/owner.tsx`** — single page with tabbed sections (shadcn `Tabs`):
-1. **Overview** — 8 stat cards (Total Users, Active Today/Week/Month, Free/Pro/Master/Lifetime) using existing glass-card style.
-2. **AI Usage** — 4 totals + a per-feature breakdown table.
-3. **Users** — search input (debounced), table with Email / Plan / Role / Signup / Last Login / Last Activity, action menu per row (Upgrade Pro, Remove Pro, Grant Master, Grant Lifetime, Suspend/Unsuspend, View Detail).
-4. **User Detail** — drawer/dialog opened from row action; shows totals + per-feature AI breakdown.
-5. **Feedback** — table with Kind/Status filters and inline status update.
-6. **AI Cost** — 3 cards (Today, This Month, Avg Per User).
+The User Detail dialog gets a new top section showing display name (editable) and a placeholder **Subscription** card stub:
+- Shows current `plan`, `is_suspended`, role.
+- A disabled "Manage subscription" button with helper text "Billing integration coming soon." This reserves the spot without building billing now.
 
-`beforeLoad` calls `getOwnerOverview` (which throws Forbidden if not owner); 403 redirects to `/dashboard` with a toast. Loader-fed reads use TanStack Query (`ensureQueryData` + `useSuspenseQuery`) per the standard pattern.
+### Out of scope for this turn
+- Real billing / Stripe / Paddle integration.
+- Emailing the password-reset link automatically (we surface the link to the owner instead).
+- Per-plan feature gating in the rest of the app.
+- Bulk actions.
 
-**`src/components/app-sidebar.tsx`** — read role via `supabase.from('user_roles').select('role').eq('user_id', user.id)` on mount; if `'owner'` is present, append `{ to: '/owner', label: 'Owner', icon: Shield }` to the rendered nav. No flicker for non-owners (default = hidden).
-
-## Out of scope
-
-- A user-facing feedback submission form (server fn exists; UI to be added in a follow-up).
-- Real billing integration (plan is a manual column).
-- Per-call cost displayed to end users (separate prior request).
-- Document Assistant logic changes — only an `ai_usage` insert is added.
-- Email notifications when feedback arrives.
+---
 
 ## Verification
 
-1. Sign in as `Bmullins26@gmail.com` → "Owner" appears in sidebar; `/owner` loads.
-2. Sign in as any other user → no Owner item; visiting `/owner` redirects to `/dashboard`.
-3. Run a Diagnose session as a non-owner user → AI Usage tab shows incremented counts and breakdown; Overview "Active Today" includes that user.
-4. Use the Users tab to flip a user to Pro, then to Lifetime → `profiles.plan` updates and stat cards re-count.
-5. Suspend a user → that user can no longer sign in (Supabase returns "User is banned").
-6. Insert a test feedback row → appears in Feedback tab; marking "closed" persists.
+- Sign in as `bmullins26@gmail.com` → Owner item appears in sidebar without a manual reload; `/owner` loads.
+- Sign out → Owner item disappears.
+- In `/owner` → Users: edit a user's display name → their dashboard greeting updates on next load.
+- Change plan, grant/revoke owner, suspend, delete, send password reset → each action succeeds and the row updates.
+- Non-owner navigating to `/owner` → owner-only server fns reject with Forbidden.
+
+---
+
+## Files touched
+
+- `src/components/app-sidebar.tsx` — role check via useQuery + auth listener.
+- `src/routes/_authenticated/owner.tsx` — Users tab upgrades, detail dialog updates, subscription stub card.
+- `src/routes/_authenticated/dashboard.tsx` — show `display_name`, add Account Settings dialog (or new small component).
+- `src/lib/owner.functions.ts` — add `setUserDisplayName`, `deleteUser`, `sendPasswordReset`.
+- `src/lib/profile.functions.ts` *(new)* — `getMyProfile`, `updateMyProfile`.
+- One new migration — add `profiles.display_name` + backfill.
