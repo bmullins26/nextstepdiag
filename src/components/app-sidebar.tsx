@@ -57,28 +57,30 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border">
-        <Link
-          to="/dashboard"
-          className="flex items-center gap-3 px-1 py-1"
-        >
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/15 ring-1 ring-primary/30">
-            <BrandLogo size={28} />
-          </div>
-          {!collapsed && (
+        {collapsed ? (
+          <Link
+            to="/dashboard"
+            aria-label="NextStep Diagnostics"
+            className="flex items-center justify-center py-2"
+          >
+            <BrandLogo size={44} />
+          </Link>
+        ) : (
+          <Link
+            to="/dashboard"
+            aria-label="NextStep Diagnostics"
+            className="flex flex-col items-start gap-2 px-1 py-3"
+          >
+            <BrandLogo size={56} />
             <div className="min-w-0">
-              <div className="truncate text-sm font-black tracking-tight">
-                NextStep
+              <div className="truncate text-base font-black leading-tight tracking-tight">
+                NextStep Diagnostics
               </div>
-              <div className="truncate text-[10px] uppercase tracking-wider text-primary">
-                Diagnostics
-              </div>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                A technician in your pocket.
+              </p>
             </div>
-          )}
-        </Link>
-        {!collapsed && (
-          <p className="px-1 pb-1 text-[11px] leading-snug text-muted-foreground">
-            A technician in your pocket.
-          </p>
+          </Link>
         )}
       </SidebarHeader>
 
