@@ -104,7 +104,7 @@ export const researchErrorCode = createServerFn({ method: "POST" })
 
     let researched: z.infer<typeof ResearchSchema>;
     try {
-      const { object } = await generateObject({
+      const { object, usage } = await generateObject({
         model,
         schema: ResearchSchema,
         system,
@@ -117,7 +117,7 @@ export const researchErrorCode = createServerFn({ method: "POST" })
           userId: context.userId,
           feature: "error_code_research",
           model: "google/gemini-3-flash-preview",
-          usage: undefined,
+          usage,
         });
       } catch {}
     } catch (err) {
