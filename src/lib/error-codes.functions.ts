@@ -104,13 +104,22 @@ export const researchErrorCode = createServerFn({ method: "POST" })
 
     let researched: z.infer<typeof ResearchSchema>;
     try {
-      const { object } = await generateObject({
+      const { object, usage } = await generateObject({
         model,
         schema: ResearchSchema,
         system,
         prompt: userPrompt,
       });
       researched = object;
+      try {
+        const { logAiUsage } = await import("./ai-usage-log.server");
+        await logAiUsage({
+          userId: context.userId,
+          feature: "error_code_research",
+          model: "google/gemini-3-flash-preview",
+          usage,
+        });
+      } catch {}
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (/429/.test(message)) {
