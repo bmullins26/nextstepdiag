@@ -83,47 +83,53 @@ export type Database = {
         }
         Relationships: []
       }
-      error_codes: {
+      error_code_cache: {
         Row: {
           affected_components: Json
           appliance_type: string
           brand: string
+          cached_at: string
           code: string
           common_causes: Json
-          created_at: string
+          confidence: string
           id: string
           meaning: string
           model_number: string
           recommended_tests: Json
           service_notes: string
+          sources: Json
           updated_at: string
         }
         Insert: {
           affected_components?: Json
           appliance_type?: string
           brand: string
+          cached_at?: string
           code: string
           common_causes?: Json
-          created_at?: string
+          confidence?: string
           id?: string
           meaning: string
           model_number?: string
           recommended_tests?: Json
           service_notes?: string
+          sources?: Json
           updated_at?: string
         }
         Update: {
           affected_components?: Json
           appliance_type?: string
           brand?: string
+          cached_at?: string
           code?: string
           common_causes?: Json
-          created_at?: string
+          confidence?: string
           id?: string
           meaning?: string
           model_number?: string
           recommended_tests?: Json
           service_notes?: string
+          sources?: Json
           updated_at?: string
         }
         Relationships: []
