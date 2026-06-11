@@ -3,6 +3,8 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { getGateway, DEFAULT_MODEL } from "./ai-gateway.server";
 import { decodeSerial } from "./serial-decode.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { logAiUsage } from "./ai-usage-log.server";
 
 const DecodeInput = z.object({
   brand: z.string().min(1),
@@ -18,8 +20,9 @@ const ManufactureDate = z.object({
 });
 
 export const decodeAppliance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => DecodeInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const ruleResult = decodeSerial(data.brand, data.serialNumber);
     const gateway = getGateway();
 
@@ -32,7 +35,7 @@ export const decodeAppliance = createServerFn({ method: "POST" })
           .join("\n")
       : "(no rule-based candidates — infer from model number knowledge)";
 
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: z.object({
         identified: z.boolean(),
@@ -67,6 +70,7 @@ ${candidateText}
 Decide manufacturer, appliance type/configuration, the single most likely manufacture date, and confidence.`,
     });
 
+    await logAiUsage({ userId: context.userId, feature: "decode_appliance", model: DEFAULT_MODEL, usage });
     return {
       ...object,
       brand: data.brand,
@@ -83,10 +87,11 @@ const OcrInput = z.object({
 });
 
 export const extractTagFromImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => OcrInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const gateway = getGateway();
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: z.object({
         brand: z.string(),
@@ -109,5 +114,6 @@ export const extractTagFromImage = createServerFn({ method: "POST" })
         },
       ],
     });
+    await logAiUsage({ userId: context.userId, feature: "extract_tag_from_image", model: DEFAULT_MODEL, usage });
     return object;
   });
