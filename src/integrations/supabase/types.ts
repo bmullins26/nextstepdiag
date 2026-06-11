@@ -83,6 +83,39 @@ export type Database = {
         }
         Relationships: []
       }
+      error_codes: {
+        Row: {
+          brand: string
+          code: string
+          common_causes: Json
+          created_at: string
+          id: string
+          meaning: string
+          recommended_tests: Json
+          updated_at: string
+        }
+        Insert: {
+          brand: string
+          code: string
+          common_causes?: Json
+          created_at?: string
+          id?: string
+          meaning: string
+          recommended_tests?: Json
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          code?: string
+          common_causes?: Json
+          created_at?: string
+          id?: string
+          meaning?: string
+          recommended_tests?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
