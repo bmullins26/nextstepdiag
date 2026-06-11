@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, isRedirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/_authenticated/owner")({
       const { isOwner } = await amOwner();
       if (!isOwner) throw redirect({ to: "/dashboard" });
     } catch (e) {
-      if (e && typeof e === "object" && "to" in e) throw e;
+      if (isRedirect(e)) throw e;
       throw redirect({ to: "/dashboard" });
     }
   },
