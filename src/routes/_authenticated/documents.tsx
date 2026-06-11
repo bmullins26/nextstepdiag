@@ -1,8 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, FileText, Loader2, Send, Upload, X } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Send,
+  Upload,
+  X,
+} from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,6 +69,8 @@ type UploadedFile = {
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
+type Status = "idle" | "reading" | "analyzing" | "ready" | "error";
+
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -68,17 +80,40 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2) } MB`;
+}
+
 function DocumentsPage() {
   const analyzeFn = useServerFn(analyzeDocument);
   const askFn = useServerFn(askDocumentFollowUp);
 
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [status, setStatus] = useState<Status>("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [isTouch, setIsTouch] = useState(false);
+  const [isIosSafari, setIsIosSafari] = useState(false);
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Client-only — avoids SSR hydration mismatch.
+  useEffect(() => {
+    try {
+      setIsTouch(window.matchMedia("(hover: none)").matches);
+      const ua = navigator.userAgent;
+      const iOS = /iP(hone|ad|od)/.test(ua);
+      const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|Chrome|Chromium/.test(ua);
+      setIsIosSafari(iOS && (isSafari || /iP(hone|ad|od)/.test(ua)));
+    } catch {
+      /* noop */
+    }
+  }, []);
 
   const summary = useMemo(() => {
     if (!analysis) return "";
@@ -91,16 +126,30 @@ function DocumentsPage() {
     ].join("\n");
   }, [analysis]);
 
+  function openPicker() {
+    // Must be called synchronously inside the user gesture handler — Safari
+    // rejects programmatic .click() that crosses an async boundary.
+    inputRef.current?.click();
+  }
+
   async function onPick(f: File | null | undefined) {
     if (!f) return;
     if (!ALLOWED.has(f.type)) {
+      setStatus("error");
+      setErrorMsg("Unsupported file type. Use PDF, JPG, or PNG.");
       toast.error("Unsupported file type. Use PDF, JPG, or PNG.");
       return;
     }
     if (f.size > MAX_BYTES) {
+      setStatus("error");
+      setErrorMsg("File too large. Maximum size is 15 MB.");
       toast.error("File too large. Maximum size is 15 MB.");
       return;
     }
+    setErrorMsg(null);
+    setAnalysis(null);
+    setChat([]);
+    setStatus("reading");
     try {
       const dataUrl = await readAsDataUrl(f);
       const uploaded: UploadedFile = {
@@ -110,22 +159,25 @@ function DocumentsPage() {
         size: f.size,
       };
       setFile(uploaded);
-      setAnalysis(null);
-      setChat([]);
-      setAnalyzing(true);
+      setStatus("analyzing");
       const result = (await analyzeFn({ data: uploaded })) as Analysis;
       setAnalysis(result);
+      setStatus("ready");
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : "Failed to analyze document");
+      const msg = e instanceof Error ? e.message : "Failed to analyze document";
+      setErrorMsg(msg);
+      setStatus("error");
+      toast.error(msg);
     } finally {
-      setAnalyzing(false);
+      // Allow re-selecting the same file
+      if (inputRef.current) inputRef.current.value = "";
     }
   }
 
   async function onAsk() {
     const q = question.trim();
-    if (!q || !file) return;
+    if (!q || !file || !analysis) return;
     setQuestion("");
     const next: ChatMsg[] = [...chat, { role: "user", content: q }];
     setChat(next);
@@ -154,6 +206,8 @@ function DocumentsPage() {
     setFile(null);
     setAnalysis(null);
     setChat([]);
+    setStatus("idle");
+    setErrorMsg(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -177,29 +231,71 @@ function DocumentsPage() {
         </div>
       </header>
 
+      {/* Single hidden file input, mounted once, outside any clickable wrapper. */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png"
+        hidden
+        onChange={(e) => onPick(e.target.files?.[0])}
+      />
+
       <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-cols-2">
         <section className="flex min-h-[60vh] flex-col rounded-2xl border border-border bg-card/50">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <div className="flex items-center gap-2 text-sm font-medium">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
               <FileText className="h-4 w-4 text-primary" />
-              {file ? file.fileName : "Document Preview"}
+              <span className="truncate">{file ? file.fileName : "Document Preview"}</span>
             </div>
-            {file && (
-              <button
-                onClick={clearFile}
-                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                aria-label="Remove document"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              <StatusPill status={status} />
+              {file && (
+                <>
+                  <Button size="sm" variant="outline" onClick={openPicker}>
+                    Replace
+                  </Button>
+                  <button
+                    onClick={clearFile}
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    aria-label="Remove document"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-1 items-stretch justify-center p-3">
             {!file ? (
-              <label
-                htmlFor="doc-upload"
-                className="flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-background/40 p-6 text-center transition-colors hover:border-primary/60 hover:bg-accent/30"
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Upload a tech sheet or diagram"
+                onClick={openPicker}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openPicker();
+                  }
+                }}
+                onDragOver={(e) => {
+                  if (isTouch) return;
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  if (isTouch) return;
+                  e.preventDefault();
+                  setDragOver(false);
+                  onPick(e.dataTransfer.files?.[0]);
+                }}
+                className={`flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+                  dragOver
+                    ? "border-primary bg-accent/40"
+                    : "border-border bg-background/40 hover:border-primary/60 hover:bg-accent/30"
+                }`}
               >
                 <Upload className="mb-3 h-8 w-8 text-primary" />
                 <p className="text-sm font-medium">
@@ -208,25 +304,39 @@ function DocumentsPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   PDF, JPG, or PNG · max 15 MB
                 </p>
-                <input
-                  id="doc-upload"
-                  ref={inputRef}
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png"
-                  className="hidden"
-                  onChange={(e) => onPick(e.target.files?.[0])}
-                />
-              </label>
+                <Button
+                  className="mt-4"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPicker();
+                  }}
+                >
+                  Choose file
+                </Button>
+                {!isTouch && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    or drop a file here
+                  </p>
+                )}
+                {errorMsg && (
+                  <p className="mt-4 flex items-center gap-1.5 text-xs text-destructive">
+                    <AlertCircle className="h-3.5 w-3.5" /> {errorMsg}
+                  </p>
+                )}
+              </div>
             ) : file.mimeType === "application/pdf" ? (
-              <object
-                data={file.dataUrl}
-                type="application/pdf"
-                className="h-[70vh] w-full rounded-lg"
-              >
-                <div className="p-6 text-sm text-muted-foreground">
-                  PDF preview unavailable in this browser.
-                </div>
-              </object>
+              isIosSafari ? (
+                <PdfFallback file={file} />
+              ) : (
+                <object
+                  data={file.dataUrl}
+                  type="application/pdf"
+                  className="h-[70vh] w-full rounded-lg"
+                >
+                  <PdfFallback file={file} />
+                </object>
+              )
             ) : (
               <img
                 src={file.dataUrl}
@@ -235,18 +345,32 @@ function DocumentsPage() {
               />
             )}
           </div>
+          {file && errorMsg && (
+            <div className="border-t border-border bg-destructive/10 px-4 py-2 text-xs text-destructive">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div className="flex-1">{errorMsg}</div>
+                <Button size="sm" variant="outline" onClick={openPicker}>
+                  Try again
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="flex min-h-[60vh] flex-col gap-3">
           <div className="flex-1 overflow-hidden rounded-2xl border border-border bg-card/50">
-            <div className="border-b border-border px-4 py-2.5 text-sm font-medium">
-              Analysis
+            <div className="flex items-center justify-between border-b border-border px-4 py-2.5 text-sm font-medium">
+              <span>Analysis</span>
+              <StatusPill status={status} />
             </div>
             <div className="max-h-[55vh] overflow-y-auto p-4">
-              {analyzing ? (
+              {status === "reading" || status === "analyzing" ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  Analyzing document…
+                  {status === "reading"
+                    ? "Reading file…"
+                    : "Analyzing document… this can take up to a minute on large PDFs."}
                 </div>
               ) : !analysis ? (
                 <p className="text-sm text-muted-foreground">
@@ -298,9 +422,11 @@ function DocumentsPage() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder={
-                  file ? "Ask about this document…" : "Upload a document first"
+                  analysis
+                    ? "Ask about this document…"
+                    : "Type your question — sends once analysis completes."
                 }
-                disabled={!analysis || asking}
+                disabled={asking}
                 rows={2}
                 className="min-h-[44px] resize-none"
                 onKeyDown={(e) => {
@@ -326,6 +452,72 @@ function DocumentsPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function StatusPill({ status }: { status: Status }) {
+  const map: Record<Status, { label: string; cls: string; icon: React.ReactNode }> = {
+    idle: {
+      label: "Ready",
+      cls: "bg-muted text-muted-foreground",
+      icon: <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />,
+    },
+    reading: {
+      label: "Reading…",
+      cls: "bg-primary/15 text-primary",
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    },
+    analyzing: {
+      label: "Analyzing…",
+      cls: "bg-primary/15 text-primary",
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    },
+    ready: {
+      label: "Analysis complete",
+      cls: "bg-emerald-500/15 text-emerald-500",
+      icon: <CheckCircle2 className="h-3 w-3" />,
+    },
+    error: {
+      label: "Error",
+      cls: "bg-destructive/15 text-destructive",
+      icon: <AlertCircle className="h-3 w-3" />,
+    },
+  };
+  const s = map[status];
+  return (
+    <span
+      aria-live="polite"
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}
+    >
+      {s.icon}
+      {s.label}
+    </span>
+  );
+}
+
+function PdfFallback({ file }: { file: UploadedFile }) {
+  return (
+    <div className="flex w-full flex-col items-center justify-center gap-3 rounded-lg border border-border bg-background/40 p-6 text-center">
+      <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+      <div>
+        <p className="text-sm font-medium">PDF loaded successfully</p>
+        <p className="mt-1 break-all text-xs text-muted-foreground">
+          {file.fileName} · {formatBytes(file.size)}
+        </p>
+      </div>
+      <a
+        href={file.dataUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        download={file.fileName}
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent"
+      >
+        <ExternalLink className="h-3.5 w-3.5" /> Open PDF
+      </a>
+      <p className="text-xs text-muted-foreground">
+        Inline preview isn't supported here, but analysis continues normally.
+      </p>
+    </div>
   );
 }
 

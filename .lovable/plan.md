@@ -1,79 +1,73 @@
-# Diagnostic History, Persistence & Resume
+## Goal
 
-Cloud + login was chosen, so sessions are stored in Lovable Cloud per authenticated user and sync across devices. Multiple parallel Active sessions are supported.
+Make the Document Assistant upload + Q&A flow work reliably on Safari (iPhone/iPad/macOS) and Chrome (Android/Desktop). Root cause of current breakage: a `<label htmlFor>` wrapping a hidden file input + a textarea disabled until analysis completes. Safari frequently drops the label→hidden-input bridge, leaving users stuck with no picker and no way to type.
 
-## 1. Enable Lovable Cloud + Auth
+All changes are confined to `src/routes/_authenticated/documents.tsx` (one file).
 
-- Enable Lovable Cloud (provisions DB, auth, storage).
-- Add email/password + Google sign-in on a new `/auth` page.
-- No `profiles` table needed (no display name/avatar requested) — auth.users only.
-- Wrap the existing app under `src/routes/_authenticated/` so Dashboard, Diagnose, Documents, History all require login. The landing `/` and `/auth` stay public.
+## 1. File picker — user-gesture-safe
 
-## 2. Database (one migration)
+- Keep a single `<input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png" hidden>` mounted once, outside any clickable wrapper.
+- Open it explicitly via `inputRef.current?.click()` from:
+  - The dropzone (`onClick`, `onKeyDown` for Enter/Space, `role="button"`, `tabIndex={0}`).
+  - A visible **Choose file** button inside the dropzone.
+  - A secondary **Replace file** button in the preview header (when a file is already loaded).
+- Remove the `<label htmlFor="doc-upload">` pattern entirely.
 
-Table `public.diagnostic_sessions`:
+## 2. Drag-and-drop (desktop only)
 
-```
-id uuid pk
-user_id uuid → auth.users (RLS scope)
-status text check in ('active','completed','abandoned')
-is_favorite boolean
-brand, appliance_type, model_number, serial_number text
-manufacture_year int, age_years numeric
-complaint text
-findings jsonb         -- string[]
-history jsonb          -- {question, answer}[]
-most_likely_failures jsonb  -- string[]
-most_likely_failure text
-recommended_next_test text
-current_findings_summary text
-appliance jsonb        -- full verifyAppliance result (manufacturer, confidence, notes)
-created_at, updated_at timestamptz
-```
+- Wire `onDragOver` (preventDefault + visual state), `onDragLeave`, `onDrop` (call `onPick(files[0])`) on the dropzone div.
+- Detect touch / coarse-pointer (`window.matchMedia('(hover: none)').matches`) and hide the "or drop a file here" copy on those devices. Tap/Choose-file path remains.
 
-Indexes on `(user_id, updated_at desc)` and `(user_id, status)`.
+## 3. Upload state machine
 
-RLS: owner-only SELECT/INSERT/UPDATE/DELETE via `auth.uid() = user_id`. Standard GRANTs to `authenticated` + `service_role`.
+Replace the boolean `analyzing` with a single status: `'idle' | 'reading' | 'analyzing' | 'ready' | 'error'`.
 
-## 3. Server functions (`src/lib/sessions.functions.ts`)
+- `idle` → "Ready — upload a tech sheet or diagram"
+- `reading` → "Reading file…" (during `FileReader.readAsDataURL`)
+- `analyzing` → "Analyzing document… this can take up to a minute on large PDFs" (with spinner, important for iPad)
+- `ready` → green check + "Analysis complete"
+- `error` → red inline message with the thrown text + a **Try again** button
 
-All `.middleware([requireSupabaseAuth])`, RLS-scoped:
-- `listSessions({ search?, status?, favoritesOnly? })`
-- `getSession({ id })`
-- `upsertSession(payload)` — used by autosave; insert if no id, otherwise patch
-- `setSessionStatus({ id, status })`
-- `toggleFavorite({ id })`
-- `deleteSession({ id })`
+Show the status pill in the preview card header and mirror it in the Analysis panel header so the tech always sees progress.
 
-## 4. Diagnose route changes (`src/routes/diagnose.tsx`)
+## 4. PDF preview fallback (Safari-safe)
 
-- On mount: load most recent `active` session for user. If found, show **Resume Previous Diagnosis?** card (Appliance / Complaint / Last Updated) with **Resume** + **Start New** buttons. With multiple actives, show a list.
-- Track current `sessionId` in state.
-- Add a debounced (~600ms) autosave effect: whenever appliance, complaint, findings, history, or engine output changes → call `upsertSession`. Show **✓ Auto Saved** indicator (states: Saving… / Saved · 2s ago).
-- "Mark Complete" and "Abandon" buttons set status. Reset = new session (old one stays Active until user marks it).
-- Previous Question + Current Findings already exist from prior turn — keep them; they now persist via autosave.
+- Try `<object data={dataUrl} type="application/pdf">` first.
+- Inside the `<object>` fallback slot (rendered when the plugin can't display), show a "PDF Loaded Successfully" card with:
+  - File name
+  - Human-readable file size (`(bytes/1024/1024).toFixed(2) MB`)
+  - **Open PDF** link (`<a href={dataUrl} target="_blank" rel="noopener" download={fileName}>`).
+- Additionally detect iOS Safari (`/iP(hone|ad|od)/.test(navigator.userAgent)` + not Chrome) and skip `<object>` entirely on those devices — render the fallback card directly, since iOS Safari frequently fails to render `<object>` PDFs.
+- Critical: preview rendering must never block analysis. Analysis is dispatched from `onPick` independent of preview.
 
-## 5. New History route (`src/routes/_authenticated/history.tsx`)
+## 5. Follow-up textarea
 
-- Search bar (model/serial/type/brand/complaint — filtered server-side with `ilike`).
-- Tabs: All / Active / Completed / Abandoned.
-- **Favorites** row pinned at top.
-- Cards show Appliance Type · Brand · Model · Complaint · Date · Status badge · star icon.
-- Card actions: **Resume** (navigates `/diagnose?session=<id>`), **View Details**, **Delete** (confirm).
+- Drop `!analysis` from the textarea's `disabled` — only disable while `asking`.
+- Keep the Send button disabled until `status === 'ready' && question.trim() && !asking`.
+- Update placeholder: "Type your question — sends once analysis completes."
+- This lets techs compose the question while analysis is still running and removes the "input is broken" symptom.
 
-## 6. View Details (`/history/$id`)
+## 6. File validation + errors
 
-Read-only layout: Verified Appliance, Complaint, Current Findings, Questions Answered (timeline), Most Likely Failures, Recommended Next Test, Status. "Resume" + "Delete" actions.
+- Keep MIME allowlist + 15 MB limit.
+- On any error in `onPick` (read, validation, server), set `status='error'` and store the message — render it as a visible inline error in the preview card (not only a toast, since iOS Safari sometimes suppresses toasts behind keyboard).
+- Always reset the `<input>`'s `value` after pick so re-selecting the same file refires `onChange`.
 
-## 7. Navigation
+## 7. Accessibility
 
-Update top nav (in `__root.tsx` or shared header): Dashboard · Diagnose · Documents · History · Account. Account dropdown = email + Sign Out.
+- Dropzone: `role="button"`, `tabIndex={0}`, `aria-label="Upload a tech sheet or diagram"`, Enter/Space handler.
+- Status pill uses `aria-live="polite"`.
 
 ## Out of scope
-- No team sharing, no PDF export, no offline queue (Cloud handles sync once online).
-- Documents route stays as-is; not tied to a session.
 
-## Removal
-Drop `_authenticated/history.tsx`, `history.$id.tsx`, `sessions.functions.ts`, revert diagnose.tsx, drop the migration. Auth/Cloud can stay enabled or be turned off separately.
+- No changes to `analyzeDocument` / `askDocumentFollowUp` server functions (current ~20 MB JSON payload limit is fine within the 15 MB file cap; no chunked-base64 work needed).
+- No changes to auth, routing, or other pages.
+- No styling overhaul — reuse existing tokens and shadcn components.
 
-Approve to build.
+## Files touched
+
+- `src/routes/_authenticated/documents.tsx` (only)
+
+## Verification (after build mode)
+
+- Manual: open `/documents` on Chrome desktop and on Safari (macOS sim via viewport) — upload PDF, watch status transitions, confirm fallback card appears on iOS UA, confirm typing in the textarea works during `analyzing`, confirm follow-up sends after `ready`.
