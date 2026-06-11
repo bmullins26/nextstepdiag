@@ -82,7 +82,7 @@ function AuthPage() {
           <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" /> Home
           </Link>
-          <BrandLogo size={32} />
+          <BrandLogo width={120} height={48} />
         </div>
       </header>
       <div className="mx-auto max-w-md px-4 py-10">

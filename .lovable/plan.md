@@ -1,69 +1,77 @@
-## 1. Branding refinement
+Two changes: brand the app with the new logo, and replace the static error-code table with an AI-researched lookup that caches results.
 
-### Sidebar (`src/components/app-sidebar.tsx`)
-- **Collapsed state (~64px rail):** Replace the small 36px icon tile with a larger 44px `BrandLogo` mark, no background tile, centered. Brand mark dominates the rail.
-- **Expanded state:** Replace the current tiny logo + small "NextStep / Diagnostics" stack with:
-  - `BrandLogo` at ~56px
-  - "NextStep Diagnostics" wordmark (bold, single-line where possible)
-  - Tagline "A technician in your pocket." directly underneath
-  - Slightly more vertical padding so the header feels like a real brand block, not a chip.
-- Keep nav, footer, and sign-out untouched.
+## 1. Logo
 
-### Dashboard signature footer (`src/routes/_authenticated/dashboard.tsx`)
-- Remove the small "NextStep Diagnostics" eyebrow above the greeting; greeting stays as the page H1.
-- Add a new centered branding section AFTER the Recent Diagnostics + Field Tips grid:
-  - Large `BrandLogo` (~120px)
-  - "NextStep Diagnostics" wordmark (large, tracking-tight)
-  - "A technician in your pocket." tagline (muted)
-  - Generous top margin (e.g. `mt-16`), centered, subtle divider or none.
+- Upload the new image to Lovable Assets, overwriting `src/assets/nextstep-logo.asset.json`:
+  `lovable-assets create --file /mnt/user-uploads/ChatGPT_Image_Jun_11_2026_02_16_06_PM-2.png --filename nextstep-logo.png > src/assets/nextstep-logo.asset.json`
+- `BrandLogo` already reads that pointer, so every consumer picks up the new artwork automatically. Adjust layouts since the new image already contains the wordmark + tagline:
+  - **Sidebar expanded header**: render the full logo only (wide, ~48px tall, fits header width); remove the duplicate "NextStep Diagnostics" wordmark and "A technician in your pocket." tagline lines.
+  - **Sidebar collapsed rail**: render the logo at 44px square with `object-contain` (the pocket-mark portion still reads).
+  - **Dashboard signature footer**: render the full logo centered, ~360px wide; remove the duplicate wordmark + tagline lines.
+  - **Auth page** (if it uses BrandLogo): same — logo only.
+- Favicon `<link rel="icon">` in `__root.tsx`: point at the new asset URL.
 
-### Consistency pass
-- Diagnose, Documents, Error Codes, History already share the `glass-card` / token system from the previous refactor. Verify each page's header uses the same eyebrow + H1 pattern and lives inside the sidebar shell. No structural rewrites — only spacing/typography normalization where they drift.
-
----
-
-## 2. Error Code Lookup redesign
+## 2. Error Code Lookup — AI-researched with cache
 
 ### Database (new migration)
-Add columns to `public.error_codes` so the table can hold brand-, appliance-, and model-specific entries without future migrations:
+Replace the static `error_codes` table with an `error_code_cache`:
 
-```text
-appliance_type  text  not null  default ''
-model_number    text  not null  default ''   -- '' = applies to all models
-affected_components  jsonb  not null  default '[]'
-service_notes        text   not null  default ''
+```sql
+create table public.error_code_cache (
+  id uuid primary key default gen_random_uuid(),
+  brand text not null,
+  appliance_type text not null default '',
+  model_number text not null default '',
+  code text not null,
+  meaning text not null,
+  common_causes jsonb not null default '[]',
+  affected_components jsonb not null default '[]',
+  recommended_tests jsonb not null default '[]',
+  service_notes text not null default '',
+  confidence text not null,        -- 'high' | 'medium' | 'low'
+  sources jsonb not null default '[]', -- [{ title, url }]
+  cached_at timestamptz not null default now(),
+  unique (brand, appliance_type, model_number, code)
+);
 ```
+GRANT SELECT to `authenticated`, GRANT ALL to `service_role`. RLS on, single policy: authenticated users may select. Inserts happen via the server function using `service_role` (no user-write policy needed). Drop the old `error_codes` table.
 
-- Drop the existing `unique(brand, code)` constraint; add `unique(brand, appliance_type, model_number, code)` so a code can repeat across appliance types and models.
-- Backfill existing rows with a best-guess `appliance_type` per brand (script will set sensible defaults; user can refine later) and `model_number = ''`.
-- Re-seed with a small expanded set covering Washer / Dryer / Dishwasher / Refrigerator / Range across the major brands, including a few model-specific examples so the priority logic is observable.
-- Keep RLS + GRANTs as-is (already authenticated read).
+### Server function — `researchErrorCode` (`src/lib/error-codes.functions.ts`)
+Input: `{ brand, applianceType?, modelNumber?, code }`.
 
-### Server fn (`src/lib/error-codes.functions.ts`)
-Rewrite `lookupErrorCode` input to `{ brand, applianceType, modelNumber?, code }`. Resolution order, first hit wins:
+Flow:
+1. **Cache hit** — query `error_code_cache` for exact `(brand, applianceType ?? '', modelNumber ?? '', code)`. If present and `cached_at` within 90 days, return it with `source: 'cache'`.
+2. **Research** — call Lovable AI (`google/gemini-3-flash-preview`) with `streamText` not needed → use `generateText` + structured `Output.object` schema:
+   ```
+   { meaning, common_causes[], affected_components[], recommended_tests[], service_notes, confidence: 'high'|'medium'|'low', sources: [{title,url}] }
+   ```
+   System prompt: "You are an appliance repair reference. Research the given fault code from manufacturer service manuals and reputable repair sources (ApplianceJunk, RepairClinic, manufacturer tech sheets). Prefer model-specific meaning when a model number is provided. Set confidence='high' only when sourced from an OEM tech sheet or manufacturer doc; 'medium' for reputable repair sites; 'low' when uncertain or inferred. If the code cannot be confirmed, return meaning='Unknown' and confidence='low'. Output JSON only."
+   User prompt builds from brand/appliance/model/code.
+3. **Persist** — `supabaseAdmin` upsert into `error_code_cache` (unique key handles dedupe). Lazy-load `client.server` inside handler.
+4. Return `{ row, confidence, sources, source: 'fresh' }`.
 
-1. **Exact model match** — `brand` + `appliance_type` + `model_number` + `code` (only if user supplied a model).
-2. **Brand + appliance type** — `brand` + `appliance_type` + `model_number = ''` + `code`.
-3. **Brand only** — `brand` + `appliance_type = ''` + `model_number = ''` + `code`.
+Errors: rate-limit (429) and credit-exhausted (402) from the gateway surface as user-readable messages; cache misses on AI failure return `{ notFound: true, reason }` without writing.
 
-Return `{ notFound: false, row, confidence: 'exact-model' | 'brand-appliance' | 'brand' }` or `{ notFound: true }`. `confidence` drives a badge in the UI.
+Remove `lookupErrorCode` and `listErrorCodesByBrand` exports.
 
-### UI (`src/routes/_authenticated/error-codes.tsx`)
-- Left form gains **Appliance Type** (required, select) and **Model Number** (optional text) between Brand and Code.
-- Right result panel adds:
-  - Confidence badge ("Exact model match" / "Brand + appliance" / "Brand-level — verify for your model").
-  - **Affected Components** section (chips).
-  - **Service Notes** section (prose, only when present).
-- Keep Common Causes + Recommended Tests sections.
+### UI — `src/routes/_authenticated/error-codes.tsx`
+- Form: Brand (required), Appliance Type (optional select), Model Number (required — bolded label), Error Code (required). Helper copy under the heading: "Researches your code from manufacturer service docs. Cached for faster future lookups."
+- Submit triggers `useServerFn(researchErrorCode)`; show "Researching…" state with model spinner (this can take a few seconds on cache miss).
+- Result panel adds:
+  - Confidence badge ("High / Medium / Low confidence").
+  - Existing sections: Meaning (H2), Common Causes, Affected Components, Recommended Tests, Service Notes.
+  - **Sources** section at the bottom — list `{title, url}` as outbound links.
+  - Tiny footer line: "Cached" or "Freshly researched · just now" using the returned `source`.
 
 ### Types
-After the migration runs, the regenerated `types.ts` will include the new columns; update `ErrorCodeRow` accordingly.
-
----
+After migration, regenerated `types.ts` will pick up `error_code_cache`. Update `ErrorCodeRow` to read from the new table.
 
 ## Files
 
-**New:** migration adding columns + new unique constraint + reseed.
-**Edited:** `app-sidebar.tsx`, `dashboard.tsx`, `error-codes.functions.ts`, `error-codes.tsx`. Light touch-ups on `diagnose.tsx` / `documents.tsx` / `history.tsx` headers only if they drift from the shared pattern.
+- New migration: drop `error_codes`, create `error_code_cache` with GRANTs + RLS.
+- Asset: overwrite `src/assets/nextstep-logo.asset.json`.
+- Edited: `src/components/app-sidebar.tsx`, `src/routes/_authenticated/dashboard.tsx`, `src/routes/_authenticated/route.tsx` (auth/header logo), `src/routes/auth.tsx` (if it shows BrandLogo), `src/routes/__root.tsx` (favicon), `src/lib/error-codes.functions.ts`, `src/routes/_authenticated/error-codes.tsx`.
 
-**Out of scope:** Diagnose workflow logic, auth, AI gateway, Documents assistant internals, Account/Settings, AI-generated error codes.
+## Out of scope
+
+Diagnose workflow logic, Documents assistant, History, brand/appliance lists. The Diagnose flow's own error-code inference (if any) is untouched.

@@ -1,14 +1,26 @@
 import logoAsset from "@/assets/nextstep-logo.asset.json";
 
-export function BrandLogo({ className = "", size = 96 }: { className?: string; size?: number }) {
+type BrandLogoProps = {
+  className?: string;
+  /** Convenience: sets both width and height (square box, image fits inside). */
+  size?: number;
+  /** Explicit width in px. Overrides `size`. */
+  width?: number;
+  /** Explicit height in px. Overrides `size`. */
+  height?: number;
+};
+
+export function BrandLogo({ className = "", size = 96, width, height }: BrandLogoProps) {
+  const w = width ?? size;
+  const h = height ?? size;
   return (
     <img
       src={logoAsset.url}
-      alt="NextStep Diagnostics"
-      width={size}
-      height={size}
+      alt="NextStep Diagnostics — A technician in your pocket"
+      width={w}
+      height={h}
       className={className}
-      style={{ width: size, height: size, objectFit: "contain" }}
+      style={{ width: w, height: h, objectFit: "contain" }}
     />
   );
 }

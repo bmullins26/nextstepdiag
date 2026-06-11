@@ -68,18 +68,10 @@ export function AppSidebar() {
         ) : (
           <Link
             to="/dashboard"
-            aria-label="NextStep Diagnostics"
-            className="flex flex-col items-start gap-2 px-1 py-3"
+            aria-label="NextStep Diagnostics — A technician in your pocket"
+            className="flex w-full items-center justify-center px-1 py-3"
           >
-            <BrandLogo size={56} />
-            <div className="min-w-0">
-              <div className="truncate text-base font-black leading-tight tracking-tight">
-                NextStep Diagnostics
-              </div>
-              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                A technician in your pocket.
-              </p>
-            </div>
+            <BrandLogo width={220} height={86} className="max-w-full" />
           </Link>
         )}
       </SidebarHeader>
