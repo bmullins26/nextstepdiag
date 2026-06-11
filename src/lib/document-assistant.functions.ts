@@ -37,14 +37,19 @@ Goal: help the technician decide the next diagnostic step.`;
 
 type Block =
   | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } }
-  | { type: "file"; file: { filename: string; file_data: string } };
+  | { type: "image"; image: string }
+  | { type: "file"; data: string; mediaType: string; filename?: string };
 
 function buildContent(file: z.infer<typeof FileInput>, text: string): Block[] {
   const media: Block =
     file.mimeType === "application/pdf"
-      ? { type: "file", file: { filename: file.fileName, file_data: file.dataUrl } }
-      : { type: "image_url", image_url: { url: file.dataUrl } };
+      ? {
+          type: "file",
+          data: file.dataUrl,
+          mediaType: "application/pdf",
+          filename: file.fileName,
+        }
+      : { type: "image", image: file.dataUrl };
   return [{ type: "text", text }, media];
 }
 
