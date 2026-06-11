@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listSessions } from "@/lib/sessions.functions";
+import { BrandLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -78,10 +79,7 @@ function DashboardPage() {
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
-              NextStep Diagnostics
-            </p>
-            <h1 className="mt-1 truncate text-2xl font-black tracking-tight md:text-3xl">
+            <h1 className="truncate text-2xl font-black tracking-tight md:text-3xl">
               Welcome back, {firstName}.
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -215,6 +213,16 @@ function DashboardPage() {
               </li>
             </ul>
           </aside>
+        </section>
+
+        <section className="mt-16 flex flex-col items-center text-center">
+          <BrandLogo size={120} />
+          <h2 className="mt-4 text-2xl font-black tracking-tight md:text-3xl">
+            NextStep Diagnostics
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            A technician in your pocket.
+          </p>
         </section>
       </div>
     </main>
