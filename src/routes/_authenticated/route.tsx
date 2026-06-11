@@ -25,10 +25,7 @@ function AuthenticatedLayout() {
       <SidebarInset className="bg-background">
         <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border bg-background/85 px-3 backdrop-blur md:hidden">
           <SidebarTrigger />
-          <div className="flex items-center gap-2">
-            <BrandLogo size={22} />
-            <span className="text-sm font-bold tracking-tight">NextStep</span>
-          </div>
+          <BrandLogo variant="pocket" size={32} />
         </header>
         <Outlet />
       </SidebarInset>
