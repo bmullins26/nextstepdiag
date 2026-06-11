@@ -27,7 +27,19 @@ function AuthenticatedLayout() {
           <SidebarTrigger />
           <BrandLogo variant="pocket" size={32} />
         </header>
-        <Outlet />
+        <div className="flex min-h-svh flex-col">
+          <div className="flex-1">
+            <Outlet />
+          </div>
+          <footer className="flex items-center justify-center px-4 py-12">
+            <BrandLogo
+              variant="full"
+              width={500}
+              height={280}
+              className="block h-auto w-auto max-w-full opacity-90"
+            />
+          </footer>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
