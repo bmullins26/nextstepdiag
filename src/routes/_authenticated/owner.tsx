@@ -212,8 +212,14 @@ function UsersTab() {
   const planFn = useServerFn(setUserPlan);
   const suspendFn = useServerFn(setUserSuspended);
   const roleFn = useServerFn(setUserOwnerRole);
+  const nameFn = useServerFn(setUserDisplayName);
+  const deleteFn = useServerFn(deleteUser);
+  const resetFn = useServerFn(sendPasswordReset);
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; current: string | null } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; email: string } | null>(null);
+  const [resetLink, setResetLink] = useState<{ email: string; link: string | null } | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["owner", "users", search],
@@ -241,6 +247,21 @@ function UsersTab() {
     onSuccess: () => { toast.success("Role updated."); invalidate(); },
     onError: (e) => toast.error((e as Error).message),
   });
+  const nameMut = useMutation({
+    mutationFn: (args: { userId: string; displayName: string | null }) => nameFn({ data: args }),
+    onSuccess: () => { toast.success("Display name updated."); setRenameTarget(null); invalidate(); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (userId: string) => deleteFn({ data: { userId } }),
+    onSuccess: () => { toast.success("User deleted."); setDeleteTarget(null); invalidate(); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const resetMut = useMutation({
+    mutationFn: (userId: string) => resetFn({ data: { userId } }),
+    onSuccess: (res) => { setResetLink({ email: res.email, link: res.actionLink }); },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   return (
     <div className="space-y-4">
@@ -263,6 +284,7 @@ function UsersTab() {
             <thead className="text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Display name</th>
                 <th className="px-3 py-2">Plan</th>
                 <th className="px-3 py-2">Role</th>
                 <th className="px-3 py-2">Signup</th>
@@ -278,6 +300,18 @@ function UsersTab() {
                     <div className="font-medium">{u.email || "—"}</div>
                     {u.full_name ? <div className="text-xs text-muted-foreground">{u.full_name}</div> : null}
                     {u.is_suspended ? <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-destructive"><Ban className="h-3 w-3"/>Suspended</div> : null}
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setRenameTarget({ id: u.id, current: u.display_name ?? null })}
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm hover:bg-muted/50"
+                    >
+                      <span className={u.display_name ? "" : "italic text-muted-foreground"}>
+                        {u.display_name || "—"}
+                      </span>
+                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                    </button>
                   </td>
                   <td className="px-3 py-2 capitalize">
                     <Select
@@ -304,11 +338,18 @@ function UsersTab() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => setDetailId(u.id)}>View detail</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setRenameTarget({ id: u.id, current: u.display_name ?? null })}>
+                          <Pencil className="mr-2 h-4 w-4"/>Edit display name
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {u.plan !== "pro" && <DropdownMenuItem onClick={() => planMut.mutate({ userId: u.id, plan: "pro" })}>Upgrade to Pro</DropdownMenuItem>}
                         {u.plan === "pro" && <DropdownMenuItem onClick={() => planMut.mutate({ userId: u.id, plan: "free" })}>Remove Pro</DropdownMenuItem>}
                         {u.plan !== "master" && <DropdownMenuItem onClick={() => planMut.mutate({ userId: u.id, plan: "master" })}>Grant Master</DropdownMenuItem>}
                         {u.plan !== "lifetime" && <DropdownMenuItem onClick={() => planMut.mutate({ userId: u.id, plan: "lifetime" })}>Grant Lifetime</DropdownMenuItem>}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => resetMut.mutate(u.id)}>
+                          <KeyRound className="mr-2 h-4 w-4"/>Send password reset
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {u.role === "owner" ? (
                           <DropdownMenuItem onClick={() => roleMut.mutate({ userId: u.id, grant: false })} className="text-destructive"><ShieldOff className="mr-2 h-4 w-4"/>Revoke Owner</DropdownMenuItem>
@@ -321,13 +362,20 @@ function UsersTab() {
                         ) : (
                           <DropdownMenuItem onClick={() => suspendMut.mutate({ userId: u.id, suspended: true })} className="text-destructive"><Ban className="mr-2 h-4 w-4"/>Suspend</DropdownMenuItem>
                         )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => setDeleteTarget({ id: u.id, email: u.email || "this user" })}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4"/>Delete account
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
                 </tr>
               ))}
               {(data ?? []).length === 0 && (
-                <tr><td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground">No users.</td></tr>
+                <tr><td colSpan={8} className="px-3 py-8 text-center text-sm text-muted-foreground">No users.</td></tr>
               )}
             </tbody>
           </table>
@@ -335,7 +383,121 @@ function UsersTab() {
       )}
 
       <UserDetailDialog userId={detailId} onClose={() => setDetailId(null)} />
+      <RenameDialog
+        target={renameTarget}
+        onClose={() => setRenameTarget(null)}
+        onSave={(displayName) =>
+          renameTarget && nameMut.mutate({ userId: renameTarget.id, displayName })
+        }
+        saving={nameMut.isPending}
+      />
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes <span className="font-semibold">{deleteTarget?.email}</span> and all their data. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Dialog open={!!resetLink} onOpenChange={(o) => !o && setResetLink(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Password reset link</DialogTitle>
+            <DialogDescription>
+              Share this link with {resetLink?.email}. It will let them set a new password.
+            </DialogDescription>
+          </DialogHeader>
+          {resetLink?.link ? (
+            <div className="space-y-2">
+              <Input readOnly value={resetLink.link} onFocus={(e) => e.currentTarget.select()} />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(resetLink.link!);
+                  toast.success("Link copied.");
+                }}
+              >
+                Copy link
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Reset email has been queued.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function RenameDialog({
+  target,
+  onClose,
+  onSave,
+  saving,
+}: {
+  target: { id: string; current: string | null } | null;
+  onClose: () => void;
+  onSave: (displayName: string | null) => void;
+  saving: boolean;
+}) {
+  const [val, setVal] = useState("");
+  // re-sync when target changes
+  if (target && val === "" && target.current) {
+    // only set on first open
+  }
+  return (
+    <Dialog
+      open={!!target}
+      onOpenChange={(o) => {
+        if (!o) {
+          setVal("");
+          onClose();
+        } else if (target) {
+          setVal(target.current ?? "");
+        }
+      }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit display name</DialogTitle>
+          <DialogDescription>
+            This is how the user is greeted on their dashboard.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="rename-input">Dashboard name</Label>
+          <Input
+            id="rename-input"
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            maxLength={80}
+            placeholder="Leave blank to clear"
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => { setVal(""); onClose(); }}>Cancel</Button>
+          <Button
+            onClick={() => onSave(val.trim() || null)}
+            disabled={saving}
+          >
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
