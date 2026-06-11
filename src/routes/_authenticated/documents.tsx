@@ -350,7 +350,6 @@ function DocumentsPage() {
               <div className="flex items-start gap-2">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <div className="flex-1">{errorMsg}</div>
-                <Button size="sm" variant="outline" onClick={() => file && onPick(new File([], ""))} className="hidden" />
                 <Button size="sm" variant="outline" onClick={openPicker}>
                   Try again
                 </Button>
