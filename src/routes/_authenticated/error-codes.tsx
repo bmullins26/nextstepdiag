@@ -17,7 +17,19 @@ import { APPLIANCE_BRANDS } from "@/lib/appliance-brands";
 import {
   lookupErrorCode,
   type ErrorCodeRow,
+  type LookupConfidence,
 } from "@/lib/error-codes.functions";
+
+const APPLIANCE_TYPES = [
+  "Washer",
+  "Dryer",
+  "Dishwasher",
+  "Refrigerator",
+  "Range",
+  "Oven",
+  "Microwave",
+  "Freezer",
+] as const;
 
 export const Route = createFileRoute("/_authenticated/error-codes")({
   head: () => ({
@@ -36,12 +48,14 @@ export const Route = createFileRoute("/_authenticated/error-codes")({
 type Result =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "found"; row: ErrorCodeRow }
-  | { kind: "missing"; brand: string; code: string };
+  | { kind: "found"; row: ErrorCodeRow; confidence: LookupConfidence }
+  | { kind: "missing"; brand: string; applianceType: string; code: string };
 
 function ErrorCodesPage() {
   const lookupFn = useServerFn(lookupErrorCode);
   const [brand, setBrand] = useState<string>("Whirlpool");
+  const [applianceType, setApplianceType] = useState<string>("Washer");
+  const [modelNumber, setModelNumber] = useState("");
   const [code, setCode] = useState("");
   const [result, setResult] = useState<Result>({ kind: "idle" });
 
@@ -54,9 +68,17 @@ function ErrorCodesPage() {
     }
     setResult({ kind: "loading" });
     try {
-      const r = await lookupFn({ data: { brand, code: c } });
-      if (r.notFound) setResult({ kind: "missing", brand, code: c });
-      else setResult({ kind: "found", row: r.row });
+      const r = await lookupFn({
+        data: {
+          brand,
+          applianceType,
+          modelNumber: modelNumber.trim(),
+          code: c,
+        },
+      });
+      if (r.notFound)
+        setResult({ kind: "missing", brand, applianceType, code: c });
+      else setResult({ kind: "found", row: r.row, confidence: r.confidence });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Lookup failed.");
       setResult({ kind: "idle" });
@@ -95,6 +117,40 @@ function ErrorCodesPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="appliance-type">Appliance Type</Label>
+              <Select value={applianceType} onValueChange={setApplianceType}>
+                <SelectTrigger id="appliance-type" className="h-11">
+                  <SelectValue placeholder="Select an appliance type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {APPLIANCE_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="model">
+                Model Number{" "}
+                <span className="text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="model"
+                value={modelNumber}
+                onChange={(e) => setModelNumber(e.target.value)}
+                placeholder="e.g. WTW8127LW"
+                className="h-11 font-mono uppercase tracking-wide"
+                autoComplete="off"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Improves match precision when provided.
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -163,7 +219,8 @@ function ResultView({ state }: { state: Result }) {
           <AlertTriangle className="h-6 w-6" />
         </div>
         <h3 className="mt-3 text-base font-bold">
-          No match for {state.brand} · {state.code.toUpperCase()}
+          No match for {state.brand} · {state.applianceType} ·{" "}
+          {state.code.toUpperCase()}
         </h3>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
           We don't have this code in the reference yet. Try a related code, or
@@ -174,11 +231,33 @@ function ResultView({ state }: { state: Result }) {
   }
 
   const r = state.row;
+  const confidenceMeta = {
+    "exact-model": {
+      label: "Exact model match",
+      className: "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30",
+    },
+    "brand-appliance": {
+      label: "Brand + appliance match",
+      className: "bg-primary/15 text-primary ring-primary/30",
+    },
+    brand: {
+      label: "Brand-level — verify for your model",
+      className: "bg-amber-500/15 text-amber-400 ring-amber-500/30",
+    },
+  }[state.confidence];
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
         <span className="rounded-full bg-primary/15 px-3 py-1 font-mono text-xs font-bold uppercase tracking-wider text-primary">
-          {r.brand} · {r.code}
+          {r.brand}
+          {r.appliance_type ? ` · ${r.appliance_type}` : ""}
+          {r.model_number ? ` · ${r.model_number}` : ""} · {r.code}
+        </span>
+        <span
+          className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 ${confidenceMeta.className}`}
+        >
+          {confidenceMeta.label}
         </span>
       </div>
       <div>
@@ -213,6 +292,33 @@ function ResultView({ state }: { state: Result }) {
           </ul>
         </div>
       </div>
+
+      {(r.affected_components ?? []).length > 0 && (
+        <div className="rounded-xl border border-border bg-background/40 p-4">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Affected Components
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {r.affected_components.map((c, i) => (
+              <span
+                key={i}
+                className="rounded-full border border-border bg-background/60 px-2.5 py-1 text-xs"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {r.service_notes && (
+        <div className="rounded-xl border border-secondary/40 bg-secondary/5 p-4">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-secondary">
+            Service Notes
+          </div>
+          <p className="mt-2 text-sm leading-relaxed">{r.service_notes}</p>
+        </div>
+      )}
     </div>
   );
 }

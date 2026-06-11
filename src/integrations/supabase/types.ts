@@ -85,33 +85,45 @@ export type Database = {
       }
       error_codes: {
         Row: {
+          affected_components: Json
+          appliance_type: string
           brand: string
           code: string
           common_causes: Json
           created_at: string
           id: string
           meaning: string
+          model_number: string
           recommended_tests: Json
+          service_notes: string
           updated_at: string
         }
         Insert: {
+          affected_components?: Json
+          appliance_type?: string
           brand: string
           code: string
           common_causes?: Json
           created_at?: string
           id?: string
           meaning: string
+          model_number?: string
           recommended_tests?: Json
+          service_notes?: string
           updated_at?: string
         }
         Update: {
+          affected_components?: Json
+          appliance_type?: string
           brand?: string
           code?: string
           common_causes?: Json
           created_at?: string
           id?: string
           meaning?: string
+          model_number?: string
           recommended_tests?: Json
+          service_notes?: string
           updated_at?: string
         }
         Relationships: []
