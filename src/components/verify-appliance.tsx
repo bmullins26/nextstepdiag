@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { APPLIANCE_BRANDS, findBrand } from "@/lib/appliance-brands";
 import { decodeAppliance, extractTagFromImage } from "@/lib/serial-decode.functions";
+import { RepairInsightsCard } from "@/components/repair-insights-card";
 
 export type DecodedAppliance = {
   identified: boolean;
@@ -274,6 +275,10 @@ export function VerifyAppliance({
           </div>
         </div>
       )}
+
+      {result?.modelNumber ? (
+        <RepairInsightsCard model={result.modelNumber} />
+      ) : null}
     </div>
   );
 }
