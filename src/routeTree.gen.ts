@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRepairInsightsTestRouteImport } from './routes/_authenticated/repair-insights-test'
 import { Route as AuthenticatedOwnerRouteImport } from './routes/_authenticated/owner'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedErrorCodesRouteImport } from './routes/_authenticated/error-codes'
@@ -34,6 +35,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedRepairInsightsTestRoute =
+  AuthenticatedRepairInsightsTestRouteImport.update({
+    id: '/repair-insights-test',
+    path: '/repair-insights-test',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOwnerRoute = AuthenticatedOwnerRouteImport.update({
   id: '/owner',
   path: '/owner',
@@ -79,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/error-codes': typeof AuthenticatedErrorCodesRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/owner': typeof AuthenticatedOwnerRoute
+  '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRoutesByTo {
@@ -90,6 +98,7 @@ export interface FileRoutesByTo {
   '/error-codes': typeof AuthenticatedErrorCodesRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/owner': typeof AuthenticatedOwnerRoute
+  '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRoutesById {
@@ -103,6 +112,7 @@ export interface FileRoutesById {
   '/_authenticated/error-codes': typeof AuthenticatedErrorCodesRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
   '/_authenticated/owner': typeof AuthenticatedOwnerRoute
+  '/_authenticated/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
 }
 export interface FileRouteTypes {
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/error-codes'
     | '/history'
     | '/owner'
+    | '/repair-insights-test'
     | '/history/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/error-codes'
     | '/history'
     | '/owner'
+    | '/repair-insights-test'
     | '/history/$id'
   id:
     | '__root__'
@@ -139,6 +151,7 @@ export interface FileRouteTypes {
     | '/_authenticated/error-codes'
     | '/_authenticated/history'
     | '/_authenticated/owner'
+    | '/_authenticated/repair-insights-test'
     | '/_authenticated/history/$id'
   fileRoutesById: FileRoutesById
 }
@@ -170,6 +183,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/repair-insights-test': {
+      id: '/_authenticated/repair-insights-test'
+      path: '/repair-insights-test'
+      fullPath: '/repair-insights-test'
+      preLoaderRoute: typeof AuthenticatedRepairInsightsTestRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/owner': {
       id: '/_authenticated/owner'
@@ -241,6 +261,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedErrorCodesRoute: typeof AuthenticatedErrorCodesRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
   AuthenticatedOwnerRoute: typeof AuthenticatedOwnerRoute
+  AuthenticatedRepairInsightsTestRoute: typeof AuthenticatedRepairInsightsTestRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -250,6 +271,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedErrorCodesRoute: AuthenticatedErrorCodesRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
   AuthenticatedOwnerRoute: AuthenticatedOwnerRoute,
+  AuthenticatedRepairInsightsTestRoute: AuthenticatedRepairInsightsTestRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -263,3 +285,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
