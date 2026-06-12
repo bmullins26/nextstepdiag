@@ -120,6 +120,15 @@ export function OwnerPanels() {
       <TabsContent value="users" className="mt-6"><UsersTab /></TabsContent>
       <TabsContent value="feedback" className="mt-6"><FeedbackTab /></TabsContent>
       <TabsContent value="cost" className="mt-6"><CostTab /></TabsContent>
+
+      <div className="mt-6 flex flex-wrap items-center gap-3 text-xs">
+        <a
+          href="/repair-insights-test"
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-card/60 px-3 py-1.5 font-semibold text-foreground/80 hover:bg-muted/50"
+        >
+          Repair Insights Test →
+        </a>
+      </div>
     </Tabs>
   );
 }
