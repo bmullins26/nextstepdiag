@@ -284,8 +284,6 @@ function DiagnosePage() {
     setComplaint("");
     setHistory([]);
     setStep(null);
-    setDocText("");
-    setDocName("");
     setFindings([]);
     setSessionId(null);
     setSaveState("idle");
@@ -306,40 +304,6 @@ function DiagnosePage() {
     await setStatus({ data: { id: sessionId, status: "abandoned" } });
     toast.success("Marked abandoned.");
     resetAll();
-  }
-
-  async function onFile(file: File) {
-    const text = await file.text().catch(() => "");
-    setDocText(text.slice(0, 20000));
-    setDocName(file.name);
-    toast.success(`Loaded ${file.name}`);
-  }
-
-  async function handleAskDoc() {
-    if (!docQ.trim() || !appliance) return;
-    setDocAsking(true);
-    setDocA("");
-    try {
-      const r = await askDoc({
-        data: {
-          appliance: {
-            manufacturer: appliance.manufacturer || appliance.brand,
-            applianceType: appliance.applianceType,
-            modelNumber: appliance.modelNumber,
-            serialNumber: appliance.serialNumber,
-          },
-          complaint: complaint || "(none yet)",
-          history,
-          documentExcerpt: docText,
-          question: docQ,
-        },
-      });
-      setDocA(r.answer);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Document question failed.");
-    } finally {
-      setDocAsking(false);
-    }
   }
 
   return (
