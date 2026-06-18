@@ -378,19 +378,13 @@ function DiagnosePage() {
         )}
 
         {phase >= 2 && appliance && (
-          <DocPanel
-            open={docOpen}
-            setOpen={setDocOpen}
-            docName={docName}
-            docText={docText}
-            fileRef={fileRef}
-            onFile={onFile}
-            docQ={docQ}
-            setDocQ={setDocQ}
-            docA={docA}
-            docAsking={docAsking}
-            handleAskDoc={handleAskDoc}
-          />
+          <div className="mt-6 rounded-2xl border border-border bg-card/60 px-4 py-3 text-sm">
+            <FileText className="mr-2 inline h-4 w-4 text-primary" />
+            Need help reading a wiring diagram?{" "}
+            <Link to="/documents" className="font-semibold text-primary underline-offset-4 hover:underline">
+              Open Document Assistant →
+            </Link>
+          </div>
         )}
       </div>
     </main>
