@@ -37,9 +37,9 @@ const QAItem = z.object({ question: z.string(), answer: z.string() });
 
 const StepInput = z.object({
   appliance: z.object({
-    manufacturer: z.string(),
-    applianceType: z.string(),
-    modelNumber: z.string(),
+    manufacturer: z.string().min(1, "Manufacturer is required for diagnostics."),
+    applianceType: z.string().min(1, "Appliance type is required for diagnostics."),
+    modelNumber: z.string().min(1, "Model number is required for diagnostics."),
     serialNumber: z.string().optional().default(""),
     manufactureYear: z.number().int().optional(),
     ageYears: z.number().optional(),
@@ -59,6 +59,10 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
       ? data.history.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join("\n")
       : "(no questions answered yet)";
 
+    console.log(
+      `[diagnose] mfg=${data.appliance.manufacturer} type=${data.appliance.applianceType} model=${data.appliance.modelNumber} brandSentToAI=${data.appliance.manufacturer}`,
+    );
+
     const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: z.object({
@@ -75,6 +79,11 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
       }),
       system: `You are a senior appliance repair technician guiding a junior tech on-site. The product question is always: "What should I test next?"
 
+MANUFACTURER LOCK (CRITICAL):
+- The appliance is a ${data.appliance.manufacturer} ${data.appliance.applianceType} (model ${data.appliance.modelNumber}).
+- Every recommended test, terminal name (e.g. J-numbers), fault code, component reference, and service procedure MUST match ${data.appliance.manufacturer}'s service literature for this model family.
+- NEVER apply procedures from another manufacturer. Do NOT cite Whirlpool VMW/Direct-Drive procedures on a GE appliance. Do NOT cite Samsung error codes on an LG appliance. Do NOT cite GE Triton procedures on a Whirlpool dishwasher. When in doubt, ask a clarifying question instead of guessing across brands.
+
 Rules:
 - You are JOINING an active service call already in progress. The technician has likely already performed tests — those are listed under "Already verified".
 - Treat "Already verified" findings as ground truth. NEVER ask a question that re-tests anything in that list (no asking about voltage if voltage is verified, no asking if the pump runs if pump operation is verified, no asking about fault codes if codes are listed).
@@ -86,7 +95,9 @@ Rules:
 - Set done=true only when the failure is conclusively isolated; then leave nextQuestion fields empty.
 - If a tech sheet excerpt is provided, ground your reasoning in it.
 - Never guess wildly; if the appliance type is too vague to proceed, ask a clarifying question first.`,
-      prompt: `Appliance: ${data.appliance.manufacturer} ${data.appliance.applianceType} (Model ${data.appliance.modelNumber}${data.appliance.serialNumber ? `, S/N ${data.appliance.serialNumber}` : ""})${data.appliance.manufactureYear ? `\nManufactured: ${data.appliance.manufactureYear}${data.appliance.ageYears != null ? ` (~${Math.round(data.appliance.ageYears)} yr old — factor wear-related failures accordingly)` : ""}` : ""}
+      prompt: `MANUFACTURER: ${data.appliance.manufacturer}
+APPLIANCE: ${data.appliance.applianceType}
+MODEL: ${data.appliance.modelNumber}${data.appliance.serialNumber ? `\nSERIAL: ${data.appliance.serialNumber}` : ""}${data.appliance.manufactureYear ? `\nMANUFACTURED: ${data.appliance.manufactureYear}${data.appliance.ageYears != null ? ` (~${Math.round(data.appliance.ageYears)} yr old — factor wear-related failures accordingly)` : ""}` : ""}
 
 Customer Complaint: ${data.complaint}
 
@@ -97,7 +108,7 @@ Q&A so far:
 ${historyText}
 
 ${data.documentExcerpt ? `Tech sheet / wiring diagram excerpt:\n${data.documentExcerpt.slice(0, 4000)}\n` : ""}
-Decide the single next diagnostic question, or finalize the call.`,
+Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.`,
     });
     await logAiUsage({ userId: context.userId, feature: "next_diagnostic_step", model: DEFAULT_MODEL, usage });
     return object;

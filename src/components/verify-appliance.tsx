@@ -25,8 +25,8 @@ export type DecodedAppliance = {
   platform: string;
   modelNumber: string;
   serialNumber: string;
-  manufactureDate: { year: number; month?: number | null; rangeStart: string; rangeEnd: string };
-  ageYears: number;
+  manufactureDate: { year: number; month?: number | null; rangeStart: string; rangeEnd: string } | null;
+  ageYears: number | null;
   confidence: string;
   decodedBreakdown: string;
   ruleFamily: string;
@@ -238,8 +238,25 @@ export function VerifyAppliance({
                 : "Unknown"
             }
           />
-          <KV k="Age" v={`${Math.max(0, Math.round(result.ageYears))} yr`} />
+          <KV k="Age" v={result.ageYears != null ? `${Math.max(0, Math.round(result.ageYears))} yr` : "Unknown"} />
           <KV k="Confidence" v={result.confidence} />
+
+          {import.meta.env.DEV && (
+            <div className="rounded-lg border border-dashed border-secondary/60 bg-background/40 p-3 text-[11px] font-mono text-muted-foreground">
+              <div>Manufacturer: {result.manufacturer || result.brand}</div>
+              <div>Serial: {result.serialNumber}</div>
+              <div>Applied Rule: {result.ruleFamily}</div>
+              <div>
+                Manufacture Date:{" "}
+                {result.manufactureDate?.year
+                  ? `${result.manufactureDate.year}-${String(result.manufactureDate.month ?? "??").padStart(2, "0")}`
+                  : "unknown"}
+              </div>
+              <div>
+                Calculated Age: {result.ageYears != null ? `${result.ageYears.toFixed(2)} yr` : "unknown"}
+              </div>
+            </div>
+          )}
 
           <details className="rounded-lg border border-border bg-background/40 p-3">
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
