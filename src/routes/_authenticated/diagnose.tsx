@@ -103,14 +103,7 @@ function DiagnosePage() {
   const [findings, setFindings] = useState<string[]>([]);
 
   // Document
-  const [docText, setDocText] = useState("");
-  const [docName, setDocName] = useState("");
-  const [docOpen, setDocOpen] = useState(false);
-  const [docQ, setDocQ] = useState("");
-  const [docA, setDocA] = useState("");
-  const [docAsking, setDocAsking] = useState(false);
-  const askDoc = useServerFn(askDocumentQuestion);
-  const fileRef = useRef<HTMLInputElement>(null);
+  // Document analysis removed from Diagnose — lives in /documents now.
 
   // Session persistence
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -231,21 +224,28 @@ function DiagnosePage() {
 
   async function advance(h: QA[], f: string[] = findings) {
     if (!appliance) return;
+    const mfg = (appliance.manufacturer || appliance.brand || "").trim();
+    const type = (appliance.applianceType || "").trim();
+    const model = (appliance.modelNumber || "").trim();
+    if (!mfg || !type || !model) {
+      toast.error("Manufacturer, appliance type, and model are required. Please re-verify the appliance.");
+      setPhase(1);
+      return;
+    }
     setThinking(true);
     try {
       const r = await next({
         data: {
           appliance: {
-            manufacturer: appliance.manufacturer || appliance.brand,
-            applianceType: appliance.applianceType,
-            modelNumber: appliance.modelNumber,
+            manufacturer: mfg,
+            applianceType: type,
+            modelNumber: model,
             serialNumber: appliance.serialNumber,
             manufactureYear: appliance.manufactureDate?.year,
-            ageYears: appliance.ageYears,
+            ageYears: appliance.ageYears ?? undefined,
           },
           complaint,
           history: h,
-          documentExcerpt: docText,
           currentFindings: f,
         },
       });
