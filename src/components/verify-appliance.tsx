@@ -38,6 +38,23 @@ export type DecodedAppliance = {
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+function humanReason(r: string): string {
+  switch (r) {
+    case "unsupported_manufacturer":
+      return "we don't have a decoder for this manufacturer yet.";
+    case "invalid_serial_format":
+      return "the serial number doesn't match this brand's known formats.";
+    case "missing_date_code":
+      return "this serial doesn't contain a date code (some brands print it elsewhere on the data plate).";
+    case "ambiguous_year_cycle":
+      return "the year code repeats on a cycle and we couldn't pick one confidently.";
+    case "insufficient_information":
+      return "not enough information was provided.";
+    default:
+      return r;
+  }
+}
+
 export function VerifyAppliance({
   onConfirm,
 }: {
