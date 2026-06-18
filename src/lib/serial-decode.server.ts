@@ -17,6 +17,12 @@ export type DecodeResult = {
   breakdown: string; // human-readable explanation of decoded fields
 };
 
+export type AppliedRule = {
+  family: string;
+  ruleId: string;
+  breakdown: string;
+};
+
 const WHIRLPOOL_FAMILY = new Set([
   "whirlpool", "kitchenaid", "maytag", "amana", "jenn-air", "jennair",
   "roper", "estate", "inglis", "magic chef", "magicchef", "admiral",
@@ -221,4 +227,33 @@ export function decodeSerial(brand: string, serial: string): DecodeResult {
     candidates: [],
     breakdown: "Serial format not in rules table — relying on AI inference from model + serial.",
   };
+}
+
+/**
+ * Deterministically pick the best date candidate. No AI.
+ * Strategy: if only one candidate, take it. Otherwise prefer the one closest
+ * to (but not after) today, since most appliances under service are <25yr old.
+ * Returns null if no candidates.
+ */
+export function pickBestCandidate(candidates: DateCandidate[]): DateCandidate | null {
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0];
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  // Filter out future-dated candidates (>1 yr ahead = impossible).
+  const valid = candidates.filter((c) => c.year <= nowYear + 1);
+  if (!valid.length) return candidates[0];
+  // Pick the most recent candidate <= today (typical service-call appliance).
+  valid.sort((a, b) => b.year - a.year);
+  return valid[0];
+}
+
+/**
+ * Compute age in years from a manufacture date. Deterministic — no AI.
+ */
+export function computeAgeYears(year: number, month?: number): number {
+  const refMonth = month && month >= 1 && month <= 12 ? month : 6; // mid-year if unknown
+  const date = new Date(year, refMonth - 1, 1);
+  const ms = Date.now() - date.getTime();
+  return Math.max(0, ms / (365.25 * 24 * 3600 * 1000));
 }
