@@ -1,107 +1,134 @@
-# Critical Accuracy Fixes — Plan
+## Professional Appliance Age Decoder — Final Plan
 
-## Root cause findings
+Deterministic rule-engine that replaces AI-driven age inference. AI is restricted to explanatory text only. Legacy decoder retained for comparison until validated.
 
-### 1. Age Finder returns incorrect ages
+### 1. Rule engine layout
 
-`src/lib/serial-decode.functions.ts` runs the rules-based decoder (`decodeSerial`) only to produce **candidate years**. It then hands those candidates to the AI (`generateObject`) and asks the AI to return `manufactureDate` AND `ageYears`. So:
+```text
+src/lib/age-decoder/
+  types.ts            // DateCandidate, Rule, DecodeOutcome, Confidence, UnknownReason
+  registry.ts         // brand → Rule[]; brand-family aliases; register() for new mfrs
+  scoring.ts          // pickBestCandidate(candidates, modelHints, now)
+  decode.ts           // decodeAge({ brand, model, serial }) — pure, no AI, no I/O
+  rules/
+    whirlpool.ts      // covers Whirlpool, Maytag, Amana, JennAir, KitchenAid, Roper,
+                      // Estate, Inglis, Magic Chef, Admiral, Crosley, Kenmore
+    ge.ts             // GE, Hotpoint, Cafe, Haier, Profile, Monogram
+    frigidaire.ts     // Frigidaire, Electrolux, Gibson, Tappan, Kelvinator, Westinghouse
+    lg.ts             // LG, Kenmore-LG
+    samsung.ts        // Samsung
+    bosch.ts          // Bosch, Thermador, Gaggenau, Siemens
+    fisherpaykel.ts   // Fisher & Paykel — stub w/ pattern + Unknown reason for now
+    miele.ts          // Miele — stub
+  tests/
+    fixtures.ts       // representative serials per brand w/ expected year/month/week/conf/rule
+    decoder.test.ts   // vitest — runs decodeAge over fixtures, no AI
+```
 
-- `ageYears` is **AI-generated**, not computed from the chosen date.
-- When the rules table produces no candidates (Bosch with no FD code, unknown families), the system prompt explicitly tells the AI to "infer from your knowledge" — pure guessing.
-- Several rules in `src/lib/serial-decode.server.ts` are wrong or fragile:
-  - Whirlpool uses a non-standard letter table and looks for the year letter at index 1; modern WP serials encode year differently per plant.
-  - LG path parses the first 3 chars as an integer (`parseInt(s.slice(0,3))`) — silently breaks when char 1 is a letter (common).
-  - Frigidaire matches *any* `\d{2}\d{2}` anywhere in the serial — first hit may not be YYWW.
-  - GE's 12-year cycle is correct in shape but never narrowed by model number on the server; AI is left to pick.
-- "Age" displayed in `verify-appliance.tsx` is `Math.round(result.ageYears)` straight from the AI.
+Each `Rule`:
+```ts
+type Rule = {
+  id: string;           // "whirlpool.year-letter-week"
+  name: string;         // "Whirlpool Year-Letter / Week Decoder"
+  family: string;       // "Whirlpool"
+  pattern: RegExp;
+  weight: number;       // 0..1 base confidence
+  extract: (serial: string, model?: string) => DateCandidate[];
+  explain: (serial: string, candidate: DateCandidate) => string;
+};
+```
 
-### 2. GE appliances get Whirlpool diagnostic steps
+### 2. Confidence + scoring
 
-`nextDiagnosticStep` (`src/lib/diagnostics.functions.ts`) does include `manufacturer` in the prompt, but:
+- **High** — single rule matched, single candidate, model-compatible.
+- **Medium** — one candidate dominates by ≥ 0.3 score.
+- **Low** — partial match (year only or ambiguous cycle).
+- **Unknown** — `status="unknown"`.
 
-- The **system prompt never tells the model to stay brand-specific** ("never apply Whirlpool procedures to a GE appliance"). With a generic system prompt the model defaults to the most-trained brand (Whirlpool).
-- `manufacturer`/`applianceType` are not enforced as non-empty — an empty string slips through Zod (`z.string()` with no `.min(1)`), so a resumed session with missing brand data still calls the AI.
-- On resume (`hydrateFrom` in `diagnose.tsx`) the appliance is rebuilt from row columns with `manufacturer: r.brand`; that's fine, but there is no log to confirm what was actually sent.
-- No server-side logging of `{manufacturer, model, brand sent to AI}` makes contamination invisible.
+`UnknownReason`: `unsupported_manufacturer | invalid_serial_format | missing_date_code | ambiguous_year_cycle | insufficient_information`.
 
-### 3. Document panel on Diagnose
+### 3. Extensibility
 
-`DocPanel` in `src/routes/_authenticated/diagnose.tsx` duplicates `/documents` and adds noise; needs to be removed and replaced with a single link.
+Adding Maytag/Amana/JennAir/KitchenAid/Fisher & Paykel/Miele/Haier requires only:
+1. Add a file in `rules/`.
+2. `registerRule(brand, rule)` in `registry.ts`.
 
----
+Core `decode.ts` and `scoring.ts` never change.
 
-## Changes
+### 4. Legacy retention + comparison mode
 
-### A. Deterministic age (no AI)
-
-**`src/lib/serial-decode.server.ts`**
-- Tighten brand rules:
-  - Whirlpool: anchor on the documented year-letter position per format; if ambiguous, return multiple candidates but never a single guess.
-  - LG: parse Y/Y/M as characters with the documented map (digit→year, A–C→month) instead of `parseInt`.
-  - Frigidaire/Electrolux: only match YYWW at the documented offset (after the alpha prefix), not anywhere in the string.
-  - GE: keep month+year letter map; add explicit "needs model to disambiguate" flag.
-  - Bosch FD: keep formula but require the literal `FD` token.
-- Add a new exported helper `pickBestCandidate(candidates, modelHints)` that returns either a single date or `null` (deterministic — no AI).
-
-**`src/lib/serial-decode.functions.ts` — `decodeAppliance`**
-- Remove `ageYears` from the AI schema. Keep AI only for: `manufacturer`, `applianceType`, `platform`, `confidence`, `decodedBreakdown`, `notes`, and selecting one of the rule candidates (`selectedCandidateIndex: number | null`).
-- After AI returns, compute `ageYears` on the server from the chosen candidate's year/month: `(today - date) / 365.25`, rounded.
-- If `selectedCandidateIndex === null` OR no rule candidates exist → return `manufactureDate: null`, `ageYears: null`, `confidence: "Unknown"`, and a `notes` value asking the tech to read the date code on the plate. Never fabricate.
-- Add a server-side log line for every call:
+- Rename `src/lib/serial-decode.server.ts` → `src/lib/serial-decode.legacy.ts` (no imports reference it after migration).
+- `decodeAppliance` server fn imports both engines. In production it returns the new engine's result. When `process.env.NODE_ENV !== "production"` (server) **or** when called from a DEV client, also run the legacy decoder and `console.log` differences:
   ```
-  [age-finder] manufacturer=... model=... serial=... rule=... date=YYYY-MM age=Nyr
+  [age-decoder/compare] brand=Whirlpool serial=CX4812345 legacy=2018 new=2024 ruleId=whirlpool.year-letter-week
   ```
+- The returned payload always uses the new engine.
 
-**`src/components/verify-appliance.tsx`**
-- Handle `manufactureDate: null` / `ageYears: null` — show "Unknown" instead of "0 yr".
-- Render a small debug strip (gated on `import.meta.env.DEV`) showing: Manufacturer / Serial / Applied Rule / Manufacture Date / Calculated Age — matches the required output format.
+### 5. AI guardrails
 
-### B. Manufacturer-strict diagnostics
+`decodeAppliance` AI call schema is reduced to:
+```ts
+{ applianceType: string, platform: string, notes: string }
+```
+No date/year/age/candidate-index fields. System prompt: "Never state a year or age. The engine decides dates. Describe the appliance only."
 
-**`src/lib/diagnostics.functions.ts` — `nextDiagnosticStep`**
-- Make `manufacturer` and `applianceType` required and non-empty (`z.string().min(1)`); reject the call otherwise with a clear error.
-- Rewrite the system prompt to lead with manufacturer lock:
-  > "The appliance is a **{manufacturer} {applianceType}** (model {model}). Every recommended test, terminal name, fault code, and component reference MUST match this manufacturer's service literature. NEVER apply procedures from another manufacturer (e.g. do not use Whirlpool VMW procedures on a GE appliance, do not cite Samsung error codes on an LG)."
-- Echo manufacturer/model at the top of the user prompt in a single anchored line:
-  ```
-  MANUFACTURER: GE
-  APPLIANCE: Dishwasher
-  MODEL: GDT550PGRWW
-  ```
-- Add a server log: `[diagnose] mfg=... type=... model=... brandSentToAI=...` so contamination is traceable.
+### 6. Database
 
-**`src/routes/_authenticated/diagnose.tsx`**
-- Before calling `advance()`, assert `appliance.manufacturer || appliance.brand` and `appliance.applianceType` are present; if not, send the tech back to Phase 1 with a toast instead of calling the AI.
-- In `hydrateFrom`, prefer the stored `appliance` JSON's `manufacturer` over the column-level `brand` when both exist (already does this — keep, just document).
-- "Re-evaluate" and "Previous Question" already pass the same `appliance` ref — no change needed once the assertion is added.
+Migration creates `public.age_decode_attempts`:
 
-### C. Remove document panel from Diagnose
+| column | type | notes |
+|---|---|---|
+| id | uuid PK | default gen_random_uuid() |
+| user_id | uuid | FK auth.users ON DELETE SET NULL |
+| decoder_version | text NOT NULL | `v1-legacy` or `v2-rule-engine` |
+| manufacturer | text NOT NULL | |
+| appliance_type | text | |
+| model_number | text NOT NULL | |
+| serial_number | text NOT NULL | |
+| status | text NOT NULL CHECK in ('ok','unknown') | |
+| confidence | text | |
+| rule_id | text | |
+| manufacture_year | int | |
+| manufacture_month | int | |
+| unknown_reason | text | |
+| created_at | timestamptz | default now() |
 
-**`src/routes/_authenticated/diagnose.tsx`**
-- Delete `DocPanel`, the doc state (`docText`, `docName`, `docOpen`, `docQ`, `docA`, `docAsking`, `fileRef`, `onFile`, `handleAskDoc`), and the `askDocumentQuestion` import/call.
-- Stop sending `documentExcerpt` from the diagnose page.
-- Add a single inline link above `CurrentFindings` on Phase 2/3:
-  > "Need help reading a wiring diagram? **Open Document Assistant →**" (links to `/documents`)
+Index on `(created_at desc)` and `(manufacturer, status)`.
+GRANTs: `authenticated INSERT/SELECT own row`; owners SELECT all via `has_role(uid,'owner')`; `service_role ALL`. RLS enabled.
 
-**`src/lib/diagnostics.functions.ts`**
-- Leave `askDocumentQuestion` and the `documentExcerpt` field intact (still used by `/documents`); only the diagnose page stops sending it.
+Every decode (success and unknown) writes one row with `decoder_version='v2-rule-engine'` from inside the server fn. In DEV comparison mode a second row with `decoder_version='v1-legacy'` is also written for the legacy result, enabling cross-version success-rate comparison.
 
----
+### 7. Owner dashboard
 
-## Files changed
+New `AgeDecoderAnalyticsPanel` in `src/components/owner-panels.tsx`, mounted on `/owner`:
+- Totals (last 30d): Lookups / Successful / Unknown / Success Rate %
+- **Success Rate Trend** (last 30d, daily) — sparkline
+- **Unknown Rate Trend** (last 30d, daily) — sparkline
+- Per-manufacturer table (Whirlpool, GE, Frigidaire, LG, Samsung, Bosch, Other): lookups, success rate, broken down by `decoder_version`
+- Top 5 unknown reasons
+- Last 20 unknown serials (mfr, model, serial, reason)
 
-- `src/lib/serial-decode.server.ts` — tightened brand rules, `pickBestCandidate` helper
-- `src/lib/serial-decode.functions.ts` — deterministic age computation, logging, schema change
-- `src/components/verify-appliance.tsx` — handle null date/age, dev debug strip
-- `src/lib/diagnostics.functions.ts` — manufacturer-lock system prompt, required fields, logging
-- `src/routes/_authenticated/diagnose.tsx` — remove DocPanel, add `/documents` link, guard against missing manufacturer
+Data via owner-gated server fn `getAgeDecoderStats` (verifies `has_role(uid,'owner')`).
 
-## Example before / after
+### 8. UI updates
 
-**Age Finder — LG washer, serial `409KW...`**
-- Before: AI returns `ageYears: 7` (guessed).
-- After: rule decodes `4`=2024, `0`=invalid month → single candidate `{year:2024}`; age computed = `2 yr`; if rule fails → "Unknown — please read date code on plate."
+`verify-appliance.tsx`:
+- Show `Applied Rule` (rule.name).
+- On Unknown: show human-readable reason; "Built" stays `Unknown` — no AI fallback.
 
-**Diagnose — GE dishwasher, complaint "won't drain"**
-- Before: prompt is generic; AI returns Whirlpool steps ("check P1 connector at VMW board"). Log shows nothing.
-- After: system prompt forces GE-specific guidance; AI returns "GE Triton/GDT series — check J1300-2 on the main control for drain pump command." Server log: `[diagnose] mfg=GE type=Dishwasher model=GDT550PGRWW brandSentToAI=GE`.
+### 9. Tests
+
+`bunx vitest run src/lib/age-decoder` — pure functions, no AI, no network. Fixtures cover all 6 priority brands with known-good serials and expected `{ year, month?, week?, confidence, ruleId }`.
+
+### Files changed
+- **new**: `src/lib/age-decoder/{types,registry,scoring,decode}.ts`, `rules/{whirlpool,ge,frigidaire,lg,samsung,bosch,fisherpaykel,miele}.ts`, `tests/{fixtures.ts,decoder.test.ts}`
+- **rename**: `src/lib/serial-decode.server.ts` → `src/lib/serial-decode.legacy.ts`
+- **edit**: `src/lib/serial-decode.functions.ts` (uses new engine + DEV comparison), `src/components/verify-appliance.tsx`, `src/components/owner-panels.tsx`, `src/routes/_authenticated/owner.tsx`
+- **new migration**: `age_decode_attempts` + RLS + grants
+- **new server fn**: `getAgeDecoderStats` (owner-only)
+
+### Safety invariants enforced in code
+- Date/age never present in AI response schema.
+- `decodeAge` is a pure function — no `generateObject`, no `fetch`.
+- `manufactureDate`/`ageYears` in the response are computed only from `decodeAge` output.
+- Unknown is the default outcome whenever no rule matches.
