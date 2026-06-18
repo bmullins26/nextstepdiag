@@ -2,9 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getGateway, DEFAULT_MODEL } from "./ai-gateway.server";
-import { decodeSerial, pickBestCandidate, computeAgeYears } from "./serial-decode.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { logAiUsage } from "./ai-usage-log.server";
+import { decodeAge } from "./age-decoder";
+import type { DecodeOutcome } from "./age-decoder";
+import { decodeSerial as legacyDecodeSerial, pickBestCandidate as legacyPick } from "./serial-decode.legacy";
 
 const DecodeInput = z.object({
   brand: z.string().min(1),
@@ -12,22 +14,53 @@ const DecodeInput = z.object({
   serialNumber: z.string().min(1),
 });
 
+const DECODER_VERSION = "v2-rule-engine";
+
+async function logAttempt(opts: {
+  supabase: any;
+  userId: string;
+  decoderVersion: string;
+  manufacturer: string;
+  applianceType?: string | null;
+  modelNumber: string;
+  serialNumber: string;
+  outcome:
+    | { status: "ok"; ruleId: string; confidence: string; year: number; month: number | null }
+    | { status: "unknown"; ruleId?: string | null; unknownReason: string };
+}) {
+  try {
+    await opts.supabase.from("age_decode_attempts").insert({
+      user_id: opts.userId,
+      decoder_version: opts.decoderVersion,
+      manufacturer: opts.manufacturer,
+      appliance_type: opts.applianceType ?? null,
+      model_number: opts.modelNumber,
+      serial_number: opts.serialNumber,
+      status: opts.outcome.status,
+      confidence: opts.outcome.status === "ok" ? opts.outcome.confidence : null,
+      rule_id: opts.outcome.status === "ok" ? opts.outcome.ruleId : opts.outcome.ruleId ?? null,
+      manufacture_year: opts.outcome.status === "ok" ? opts.outcome.year : null,
+      manufacture_month: opts.outcome.status === "ok" ? opts.outcome.month : null,
+      unknown_reason: opts.outcome.status === "unknown" ? opts.outcome.unknownReason : null,
+    });
+  } catch (e) {
+    console.warn("[age-finder] failed to log decode attempt:", e);
+  }
+}
+
 export const decodeAppliance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => DecodeInput.parse(d))
   .handler(async ({ data, context }) => {
-    const ruleResult = decodeSerial(data.brand, data.serialNumber);
+    // 1) Deterministic age (no AI).
+    const outcome: DecodeOutcome = decodeAge({
+      brand: data.brand,
+      model: data.modelNumber,
+      serial: data.serialNumber,
+    });
+
+    // 2) AI only describes the appliance — never sees or returns dates/ages.
     const gateway = getGateway();
-
-    const candidateText = ruleResult.candidates.length
-      ? ruleResult.candidates
-          .map(
-            (c, i) =>
-              `[${i}] year=${c.year}${c.month ? `, month=${c.month}` : ""}${c.week ? `, week=${c.week}` : ""}`,
-          )
-          .join("\n")
-      : "(no rule-based candidates available)";
-
     const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: z.object({
@@ -35,65 +68,97 @@ export const decodeAppliance = createServerFn({ method: "POST" })
         manufacturer: z.string(),
         applianceType: z.string().describe("e.g. Top-Load Washer, Side-by-Side Refrigerator."),
         platform: z.string().describe("Manufacturer's platform/family name if known (e.g. VMW, Direct Drive). Empty if unknown."),
-        selectedCandidateIndex: z
-          .number()
-          .int()
-          .nullable()
-          .describe(
-            "Index into the candidate list that best matches the model number's known production years. null if no candidates or you cannot decide.",
-          ),
-        confidence: z.enum(["High", "Medium", "Low", "Unknown"]),
-        decodedBreakdown: z.string().describe("Plain-English explanation of how the serial was decoded."),
-        notes: z.string().describe("Configuration notes or clarifying question for the technician if confidence is Low."),
+        notes: z.string().describe("Configuration notes or clarifying question for the technician."),
       }),
-      system: `You are a senior appliance technician decoding an appliance's data plate. Your ONLY job for the date is to pick the best candidate index from the rules-based decoder. NEVER invent a date or age — if no candidate fits, return selectedCandidateIndex=null.
+      system: `You are a senior appliance technician describing an appliance from its data plate.
 
-Rules:
-- The MODEL NUMBER is the strongest signal for appliance type and platform.
-- selectedCandidateIndex MUST be an index into the provided candidate list, or null. Do not invent year values.
-- If the candidate list is empty, set selectedCandidateIndex=null. Age will be reported as Unknown.
-- Set confidence=High only when both the model is recognized AND a single candidate is unambiguous.
-- If you cannot identify the appliance, set identified=false and ask a clarifying question in notes.
-- Today's year is ${new Date().getFullYear()}.`,
+SAFETY RULE: You MUST NOT state, guess, infer, or imply a manufacture year, manufacture date, or appliance age. The age decoder is a separate deterministic system. Never include a year or age in any field. If asked about age, write: "see age decoder result".
+
+Identify the manufacturer (normalize the brand name), appliance type, and platform/family. If you cannot identify the appliance, set identified=false and ask a clarifying question in notes.`,
       prompt: `Brand: ${data.brand}
 Model Number: ${data.modelNumber}
 Serial Number: ${data.serialNumber}
 
-Rule-based decode (${ruleResult.family}):
-${ruleResult.breakdown}
-
-Candidate manufacture dates:
-${candidateText}
-
-Decide manufacturer, appliance type/configuration, and the index of the best candidate (or null).`,
+Identify the appliance. Do not state any date or age.`,
     });
-
     await logAiUsage({ userId: context.userId, feature: "decode_appliance", model: DEFAULT_MODEL, usage });
 
-    // Deterministic age computation — never AI-generated.
-    let chosen = null as null | { year: number; month?: number };
-    const idx = object.selectedCandidateIndex;
-    if (idx != null && idx >= 0 && idx < ruleResult.candidates.length) {
-      const c = ruleResult.candidates[idx];
-      chosen = { year: c.year, month: c.month };
-    } else if (ruleResult.candidates.length) {
-      const c = pickBestCandidate(ruleResult.candidates);
-      if (c) chosen = { year: c.year, month: c.month };
+    // 3) DEV comparison mode: run legacy decoder and log differences.
+    if (process.env.NODE_ENV !== "production") {
+      try {
+        const legacy = legacyDecodeSerial(data.brand, data.serialNumber);
+        const legacyChosen = legacyPick(legacy.candidates);
+        const legacyYear = legacyChosen?.year ?? null;
+        const newYear = outcome.status === "ok" ? outcome.manufactureYear : null;
+        if (legacyYear !== newYear) {
+          console.log(
+            `[age-decoder/compare] brand=${data.brand} serial=${data.serialNumber} legacy=${legacyYear ?? "unknown"} new=${newYear ?? "unknown"} ruleId=${outcome.status === "ok" ? outcome.appliedRule.id : "n/a"}`,
+          );
+        }
+        // Also log the legacy result row so success-rate-per-version can be charted.
+        await logAttempt({
+          supabase: context.supabase,
+          userId: context.userId,
+          decoderVersion: "v1-legacy",
+          manufacturer: object.manufacturer || data.brand,
+          applianceType: object.applianceType,
+          modelNumber: data.modelNumber,
+          serialNumber: data.serialNumber,
+          outcome: legacyChosen
+            ? {
+                status: "ok",
+                ruleId: legacy.family,
+                confidence: "Legacy",
+                year: legacyChosen.year,
+                month: legacyChosen.month ?? null,
+              }
+            : { status: "unknown", unknownReason: "invalid_serial_format" },
+        });
+      } catch (e) {
+        console.warn("[age-decoder/compare] legacy decoder threw:", e);
+      }
     }
 
-    const manufactureDate = chosen
-      ? {
-          year: chosen.year,
-          month: chosen.month ?? null,
-          rangeStart: `${chosen.year}-${String(chosen.month ?? 1).padStart(2, "0")}`,
-          rangeEnd: `${chosen.year}-${String(chosen.month ?? 12).padStart(2, "0")}`,
-        }
-      : null;
-    const ageYears = chosen ? computeAgeYears(chosen.year, chosen.month) : null;
+    // 4) Persist the v2 attempt.
+    await logAttempt({
+      supabase: context.supabase,
+      userId: context.userId,
+      decoderVersion: DECODER_VERSION,
+      manufacturer: object.manufacturer || data.brand,
+      applianceType: object.applianceType,
+      modelNumber: data.modelNumber,
+      serialNumber: data.serialNumber,
+      outcome:
+        outcome.status === "ok"
+          ? {
+              status: "ok",
+              ruleId: outcome.appliedRule.id,
+              confidence: outcome.confidence,
+              year: outcome.manufactureYear,
+              month: outcome.manufactureMonth,
+            }
+          : {
+              status: "unknown",
+              ruleId: outcome.appliedRule?.id ?? null,
+              unknownReason: outcome.unknownReason,
+            },
+    });
 
-    // Server log for traceability.
+    // 5) Build the response.
+    const manufactureDate =
+      outcome.status === "ok"
+        ? {
+            year: outcome.manufactureYear,
+            month: outcome.manufactureMonth,
+            rangeStart: `${outcome.manufactureYear}-${String(outcome.manufactureMonth ?? 1).padStart(2, "0")}`,
+            rangeEnd: `${outcome.manufactureYear}-${String(outcome.manufactureMonth ?? 12).padStart(2, "0")}`,
+          }
+        : null;
+    const ageYears = outcome.status === "ok" ? outcome.ageYears : null;
+    const appliedRule = outcome.appliedRule;
+
     console.log(
-      `[age-finder] manufacturer=${object.manufacturer || data.brand} model=${data.modelNumber} serial=${data.serialNumber} rule=${ruleResult.family} date=${manufactureDate ? `${manufactureDate.year}-${String(manufactureDate.month ?? "??").padStart(2, "0")}` : "unknown"} age=${ageYears != null ? `${ageYears.toFixed(1)}yr` : "unknown"}`,
+      `[age-finder] decoder=${DECODER_VERSION} manufacturer=${object.manufacturer || data.brand} model=${data.modelNumber} serial=${data.serialNumber} rule=${appliedRule?.id ?? "none"} status=${outcome.status} date=${manufactureDate ? `${manufactureDate.year}-${String(manufactureDate.month ?? "??").padStart(2, "0")}` : "unknown"} age=${ageYears != null ? `${ageYears.toFixed(1)}yr` : "unknown"}`,
     );
 
     return {
@@ -101,10 +166,10 @@ Decide manufacturer, appliance type/configuration, and the index of the best can
       manufacturer: object.manufacturer,
       applianceType: object.applianceType,
       platform: object.platform,
-      confidence: chosen ? object.confidence : "Unknown",
-      decodedBreakdown: object.decodedBreakdown,
+      confidence: outcome.confidence,
+      decodedBreakdown: outcome.breakdown,
       notes:
-        chosen
+        outcome.status === "ok"
           ? object.notes
           : object.notes ||
             "Could not decode a manufacture date from this serial. Please read the date code directly from the data plate.",
@@ -113,8 +178,10 @@ Decide manufacturer, appliance type/configuration, and the index of the best can
       brand: data.brand,
       modelNumber: data.modelNumber,
       serialNumber: data.serialNumber,
-      ruleFamily: ruleResult.family,
-      ruleBreakdown: ruleResult.breakdown,
+      ruleFamily: appliedRule?.family ?? "Unknown",
+      ruleName: appliedRule?.name ?? "No rule matched",
+      ruleBreakdown: outcome.breakdown,
+      unknownReason: outcome.status === "unknown" ? outcome.unknownReason : null,
     };
   });
 
