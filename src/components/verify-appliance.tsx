@@ -242,12 +242,18 @@ export function VerifyAppliance({
           />
           <KV k="Age" v={result.ageYears != null ? `${Math.max(0, Math.round(result.ageYears))} yr` : "Unknown"} />
           <KV k="Confidence" v={result.confidence} />
+          <KV k="Applied Rule" v={result.ruleName || result.ruleFamily || "—"} />
+          {result.ageYears == null && result.unknownReason ? (
+            <p className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              Age unknown — {humanReason(result.unknownReason)}
+            </p>
+          ) : null}
 
           {import.meta.env.DEV && (
             <div className="rounded-lg border border-dashed border-secondary/60 bg-background/40 p-3 text-[11px] font-mono text-muted-foreground">
               <div>Manufacturer: {result.manufacturer || result.brand}</div>
               <div>Serial: {result.serialNumber}</div>
-              <div>Applied Rule: {result.ruleFamily}</div>
+              <div>Applied Rule: {result.ruleName || result.ruleFamily}</div>
               <div>
                 Manufacture Date:{" "}
                 {result.manufactureDate?.year
@@ -257,6 +263,7 @@ export function VerifyAppliance({
               <div>
                 Calculated Age: {result.ageYears != null ? `${result.ageYears.toFixed(2)} yr` : "unknown"}
               </div>
+              {result.unknownReason ? <div>Unknown Reason: {result.unknownReason}</div> : null}
             </div>
           )}
 
