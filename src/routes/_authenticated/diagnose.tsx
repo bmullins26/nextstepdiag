@@ -563,6 +563,7 @@ function Phase3(props: {
             )}
           </div>
           <FindingCard label="Recommended Next Test" value={step.recommendedNextTest || "—"} accent="secondary" />
+          {step.groundingSource && <GroundingCaption source={step.groundingSource} />}
         </div>
       )}
 
