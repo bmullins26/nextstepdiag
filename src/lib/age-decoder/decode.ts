@@ -2,7 +2,6 @@ import type {
   DecodeInput,
   DecodeOutcome,
   AppliedRule,
-  Confidence,
   DateCandidate,
   Rule,
   Corroboration,
