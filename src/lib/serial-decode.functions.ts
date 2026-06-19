@@ -8,6 +8,7 @@ import { decodeAge } from "./age-decoder";
 import type { DecodeOutcome, Corroboration } from "./age-decoder";
 import { resolveBrand } from "./age-decoder";
 import { decodeSerial as legacyDecodeSerial, pickBestCandidate as legacyPick } from "./serial-decode.legacy";
+import { lookupApplianceAgeWithCache } from "./appliance-age.functions";
 
 const DecodeInput = z.object({
   brand: z.string().min(1),
@@ -113,6 +114,17 @@ export const decodeAppliance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => DecodeInput.parse(d))
   .handler(async ({ data, context }) => {
+    // === Primary provider: Appliance Age Finder API (cache-first) ===
+    const brandKeyForApi = resolveBrand(data.brand) ?? data.brand.toLowerCase();
+    const apiLookup = await lookupApplianceAgeWithCache({
+      supabase: context.supabase,
+      userId: context.userId,
+      brand: data.brand,
+      brandKey: brandKeyForApi,
+      modelNumber: data.modelNumber,
+      serialNumber: data.serialNumber,
+    });
+
     // 1) First pass: deterministic decode with no corroboration.
     let outcome: DecodeOutcome = decodeAge({
       brand: data.brand,
@@ -240,8 +252,9 @@ Identify the appliance. Do not state any date or age.`,
             },
     });
 
-    // 5) Build the response.
-    const manufactureDate =
+    // 5) Build the response. PRIMARY provider = Appliance Age Finder API.
+    //    Local decoder result is used only when the API failed (fallback).
+    const localManufactureDate =
       outcome.status === "ok"
         ? {
             year: outcome.manufactureYear,
@@ -250,7 +263,20 @@ Identify the appliance. Do not state any date or age.`,
             rangeEnd: `${outcome.manufactureYear}-${String(outcome.manufactureMonth ?? 12).padStart(2, "0")}`,
           }
         : null;
-    const ageYears = outcome.status === "ok" ? outcome.ageYears : null;
+    const localAgeYears = outcome.status === "ok" ? outcome.ageYears : null;
+
+    const manufactureDate = apiLookup.ok && apiLookup.manufactureYear
+      ? {
+          year: apiLookup.manufactureYear,
+          month: apiLookup.manufactureMonth,
+          rangeStart: `${apiLookup.manufactureYear}-${String(apiLookup.manufactureMonth ?? 1).padStart(2, "0")}`,
+          rangeEnd: `${apiLookup.manufactureYear}-${String(apiLookup.manufactureMonth ?? 12).padStart(2, "0")}`,
+        }
+      : localManufactureDate;
+    const ageYears = apiLookup.ok && apiLookup.manufactureYear
+      ? (Date.now() - new Date(apiLookup.manufactureYear, (apiLookup.manufactureMonth ?? 1) - 1, 1).getTime()) /
+        (365.25 * 24 * 3600 * 1000)
+      : localAgeYears;
     const appliedRule = outcome.appliedRule;
 
     console.log(
@@ -262,8 +288,12 @@ Identify the appliance. Do not state any date or age.`,
       manufacturer: object.manufacturer,
       applianceType: object.applianceType,
       platform: object.platform,
-      confidence: outcome.confidence,
-      confidencePercent: outcome.confidencePercent,
+      confidence: apiLookup.ok && apiLookup.confidencePercent != null
+        ? (apiLookup.confidencePercent >= 70 ? "High" : apiLookup.confidencePercent >= 40 ? "Medium" : "Low")
+        : outcome.confidence,
+      confidencePercent: apiLookup.ok && apiLookup.confidencePercent != null
+        ? apiLookup.confidencePercent
+        : outcome.confidencePercent,
       decodedBreakdown: outcome.breakdown,
       notes:
         outcome.status === "ok"
@@ -272,6 +302,28 @@ Identify the appliance. Do not state any date or age.`,
             "Could not decode a manufacture date from this serial. Please read the date code directly from the data plate.",
       manufactureDate,
       ageYears,
+      ageProvider: apiLookup.ok
+        ? {
+            source: apiLookup.source ?? "appliance_age_api",
+            cached: apiLookup.cached,
+            manufactureYear: apiLookup.manufactureYear,
+            manufactureMonth: apiLookup.manufactureMonth,
+            confidencePercent: apiLookup.confidencePercent,
+            alternativeYears: apiLookup.alternativeYears,
+            description: apiLookup.description,
+            responseTimeMs: apiLookup.responseTimeMs,
+          }
+        : {
+            source: "local_fallback" as const,
+            cached: false,
+            manufactureYear: null,
+            manufactureMonth: null,
+            confidencePercent: null,
+            alternativeYears: [],
+            description: null,
+            responseTimeMs: apiLookup.responseTimeMs,
+            error: apiLookup.error ?? null,
+          },
       brand: data.brand,
       modelNumber: data.modelNumber,
       serialNumber: data.serialNumber,
