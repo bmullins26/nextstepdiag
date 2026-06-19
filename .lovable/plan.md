@@ -1,98 +1,54 @@
-# Remove camera + rebuild accuracy pipeline (homespy-style)
+## Goal
 
-Two scopes in one plan: a small UI cleanup, then the larger accuracy rebuild.
+1. Stop returning "unknown" when we actually have candidates — show the top-scoring year as a best guess (with a clear "best guess" label and the confidence percent).
+2. Add a "Submit known year" flow so users can tell us the actual manufacture year, building a ground-truth dataset we can later use to tune the decoder.
 
----
+## Part A — Show best-guess year instead of "unknown"
 
-## Part A — Remove the camera / tag-photo option
+**`src/lib/age-decoder/decode.ts`**
+- Remove the `confidence === "Low"` → `unknown` branch. Always return `status: "ok"` when a rule matched and a candidate was chosen.
+- Keep `unknown` only for the genuine no-signal cases: `unsupported_manufacturer`, `invalid_serial_format`, `missing_date_code`, `insufficient_information`, `ambiguous_year_cycle` (no chosen candidate).
+- Drop `"low_confidence"` from the active reason set (leave it in the type for back-compat, just never emit it).
+
+**`src/lib/age-decoder/scoring.ts`**
+- Keep three confidence labels but add a `"Low"` pass-through (was previously demoted to Unknown). Threshold stays 65/40.
 
 **`src/components/verify-appliance.tsx`**
-- Drop the `Camera` icon import and the `extractTagFromImage` import.
-- Remove `ocrBusy` state, the `ocr` server-fn binding, `ocrEnabled`, and the file handler that calls `ocr(...)`.
-- Remove the camera badge next to brand entries in the brand picker.
-- Remove the "Tag photo available / Photo unsupported" sublabel and the camera `<button>` beside the serial input — the serial field becomes full-width.
-- Remove the now-unused `compressImage` helper.
+- When `confidence === "Low"`, render the year with a "Best guess" badge and a one-liner: "Multiple candidates — confirm on the data plate." Show the candidate list inline.
+- High/Medium render unchanged.
 
-**`src/lib/serial-decode.functions.ts`**
-- Remove the `extractTagFromImage` server function (no remaining callers).
-- Leave `decodeAppliance` untouched here; rebuilt in Part B.
+**Out of scope:** rewriting the scoring math, changing the 80% cap, or removing the data-plate suggestion.
 
-**Out of scope:** removing the `ocrSupported` field from the brand registry (harmless to keep).
+## Part B — Capture known year (ground-truth dataset)
 
----
-
-## Part B — Build the homespy-style accuracy pipeline
-
-Goal: close most of the gap to homespy without their API by replicating their algorithmic shell — typed multi-source corroboration, weighted aggregation, feedback-driven retraining — on top of our existing serial decoder.
-
-Honest expectation: meaningfully more accurate than today, but won't match homespy's numbers exactly because they have years of feedback tuning we don't. The feedback loop (B3) closes that gap over time.
-
-### B1. Expand serial-rule coverage
-
-Add rules from electrical-forensics for high-volume brands homespy supports and we don't:
-
-Amana, Maytag (Whirlpool variants), KitchenAid, Jenn-Air, Magic Chef, Admiral, Speed Queen / Alliance Laundry, Asko, Haier, Hisense, Sub-Zero, Viking, Thermador.
-
-Each rule returns **all plausible year candidates** with a per-candidate prior (recency-decayed; month/week bonus when encoded). HVAC + water-heater rules deferred.
-
-### B2. Multi-source corroboration (biggest accuracy lever)
-
-Replace today's single Firecrawl query with **4 parallel typed searches**, each with its own template and trust weight. Each source produces year mentions; we aggregate per-year scores, combine with the serial-rule prior, take the argmax.
-
-```text
-ManufacturerData  weight 1.00  site:{oem-domain} "{model}" (manual OR specifications OR "date of manufacture")
-RetailerData      weight 0.70  "{model}" (site:homedepot.com OR site:lowes.com OR site:bestbuy.com OR site:ajmadison.com)
-                               signals: "discontinued" / "no longer available" → year ≤ now-2
-                                        "in stock" / current listing          → year ≥ now-5
-ReviewData        weight 0.50  "{model}" review (site:consumerreports.org OR site:amazon.com OR site:reddit.com)
-                               extract: "bought in YYYY" / "purchased YYYY" / review dates
-GeneralData       weight 0.20  today's generic web sweep (lowest priority)
+**New table `public.age_decode_ground_truth`** (migration):
 ```
+id uuid pk, user_id uuid, manufacturer text, model_number text,
+serial_number text not null, known_year int not null,
+known_month int null, source text,   -- 'data_plate' | 'receipt' | 'owner_manual' | 'other'
+notes text, decoder_year int null,    -- what we guessed at submit time
+decoder_confidence text null, created_at timestamptz default now()
+unique (user_id, serial_number, manufacturer)
+```
+- GRANTs: `SELECT, INSERT, UPDATE, DELETE` to `authenticated`; `ALL` to `service_role`; no anon.
+- RLS: users can `SELECT/INSERT/UPDATE/DELETE` their own rows; admins (`has_role(auth.uid(),'admin')`) can `SELECT` all.
 
-Per-source results cached 90 days. Uncached decode = ~4 Firecrawl searches; cached = 0. Skipped entirely when the serial yields a single high-confidence year.
+**New `src/lib/age-ground-truth.functions.ts`**
+- `submitKnownYear` — `createServerFn({method:'POST'}).middleware([requireSupabaseAuth])`, Zod-validates `{brand, model?, serial, knownYear, knownMonth?, source?, notes?, decoderYear?, decoderConfidence?}`, upserts on `(user_id, serial_number, manufacturer)`.
 
-### B3. Feedback-driven weight tuning
+**`src/components/verify-appliance.tsx`**
+- Under the result card, add a collapsed "Know the actual year? Help us improve" section with:
+  - year input (number, 1970..currentYear)
+  - optional month select
+  - source select (data plate / receipt / manual / other)
+  - optional notes
+  - Submit button → calls `submitKnownYear`, toasts on success, disables after submit.
+- Shown for every successful or best-guess decode (not for `unsupported_manufacturer`/`invalid_serial_format`).
 
-The `feedback` table already records correct/incorrect. Add a nightly recompute that stores rolling weights in a new `age_decoder_weights` table keyed by `(brand, source_type)`. Scoring reads these dynamic weights instead of the hardcoded ones in B2. Starts neutral; gets smarter every week.
+**Out of scope:** an admin UI for browsing ground truth, automatic weight re-tuning from this dataset (still future work), and bulk import.
 
-### B4. Confidence scoring upgrades
+## Verification
 
-- Keep the 80% cap.
-- Penalize single-source agreement (one OEM hit alone ≠ high).
-- Reward cross-source agreement (OEM + retailer + review aligned → high).
-- Penalize wide candidate spread that survives corroboration.
-
-### B5. UI — show the evidence
-
-On the result, show:
-- Each candidate year with the sources that voted for it.
-- "Searched N sources across manufacturer, retailer, reviews."
-- "Still sold / Discontinued" badge when the retailer signal is clear.
-
-Makes it obvious *why* we picked a year, gives users a clear "this is wrong" target, and fuels B3.
-
----
-
-## Files
-
-**Part A**
-- Edit: `src/components/verify-appliance.tsx`
-- Edit: `src/lib/serial-decode.functions.ts`
-
-**Part B**
-- New: `src/lib/age-decoder/sources/{manufacturer,retailer,review,general}.server.ts`
-- New: `src/lib/age-decoder/feedback-weights.server.ts` + migration for `age_decoder_weights`
-- Rewrite: `src/lib/age-decoder/corroborate.server.ts` to orchestrate the 4 sources in parallel
-- Update: `src/lib/age-decoder/scoring.ts` — cross-source agreement bonus
-- New rule files in `src/lib/age-decoder/rules/` for the B1 brands
-- Migration: add `source_type` column to `age_decode_corroborations`
-- Update: `src/components/verify-appliance.tsx` — per-source evidence UI
-
-## Out of scope
-- Image / OCR (being removed in Part A)
-- HVAC + water-heater rules
-- Homespy API proxy (no token)
-
-## Two choices before I build
-1. **Brand expansion scope:** all 13 brands listed in B1, or top 5 only (Amana, Maytag, KitchenAid, Speed Queen, Sub-Zero)?
-2. **Firecrawl cost:** up to 4 searches per uncached decode (cached = 0), or cap at 2?
+- Decode a known-low-confidence Whirlpool serial → result card shows the top-scored year with a "Best guess" badge instead of "Unknown".
+- Submit a known year → row appears in `age_decode_ground_truth` for the user; second submit for same serial updates the row.
+- Decoder unit tests updated so previously `unknown/low_confidence` fixtures now expect `ok` + `Low` confidence.
