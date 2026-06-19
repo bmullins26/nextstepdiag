@@ -107,6 +107,54 @@ export type Database = {
         }
         Relationships: []
       }
+      age_decode_ground_truth: {
+        Row: {
+          created_at: string
+          decoder_confidence: string | null
+          decoder_year: number | null
+          id: string
+          known_month: number | null
+          known_year: number
+          manufacturer: string
+          model_number: string | null
+          notes: string | null
+          serial_number: string
+          source: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          decoder_confidence?: string | null
+          decoder_year?: number | null
+          id?: string
+          known_month?: number | null
+          known_year: number
+          manufacturer: string
+          model_number?: string | null
+          notes?: string | null
+          serial_number: string
+          source?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          decoder_confidence?: string | null
+          decoder_year?: number | null
+          id?: string
+          known_month?: number | null
+          known_year?: number
+          manufacturer?: string
+          model_number?: string | null
+          notes?: string | null
+          serial_number?: string
+          source?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ai_usage: {
         Row: {
           created_at: string
