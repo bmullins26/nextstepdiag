@@ -65,6 +65,48 @@ export type Database = {
         }
         Relationships: []
       }
+      age_decode_corroborations: {
+        Row: {
+          best_trust: string | null
+          brand_key: string
+          created_at: string
+          expires_at: string
+          hits: Json
+          id: string
+          model_number: string
+          query: string
+          source_count: number
+          updated_at: string
+          year_scores: Json
+        }
+        Insert: {
+          best_trust?: string | null
+          brand_key: string
+          created_at?: string
+          expires_at?: string
+          hits?: Json
+          id?: string
+          model_number: string
+          query: string
+          source_count?: number
+          updated_at?: string
+          year_scores?: Json
+        }
+        Update: {
+          best_trust?: string | null
+          brand_key?: string
+          created_at?: string
+          expires_at?: string
+          hits?: Json
+          id?: string
+          model_number?: string
+          query?: string
+          source_count?: number
+          updated_at?: string
+          year_scores?: Json
+        }
+        Relationships: []
+      }
       ai_usage: {
         Row: {
           created_at: string
