@@ -67,6 +67,7 @@ import {
   listFeedback,
   updateFeedbackStatus,
   getAgeDecoderStats,
+  getTechSheetCoverageStats,
 } from "@/lib/owner.functions";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
 
@@ -115,6 +116,7 @@ export function OwnerPanels() {
         <TabsTrigger value="feedback">Feedback</TabsTrigger>
         <TabsTrigger value="cost">AI Cost</TabsTrigger>
         <TabsTrigger value="age-decoder">Age Decoder</TabsTrigger>
+        <TabsTrigger value="tech-sheets">Tech Sheets</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
@@ -123,6 +125,7 @@ export function OwnerPanels() {
       <TabsContent value="feedback" className="mt-6"><FeedbackTab /></TabsContent>
       <TabsContent value="cost" className="mt-6"><CostTab /></TabsContent>
       <TabsContent value="age-decoder" className="mt-6"><AgeDecoderTab /></TabsContent>
+      <TabsContent value="tech-sheets" className="mt-6"><TechSheetCoverageTab /></TabsContent>
 
       <div className="mt-6 flex flex-wrap items-center gap-3 text-xs">
         <a
