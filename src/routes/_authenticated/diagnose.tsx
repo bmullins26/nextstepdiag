@@ -58,6 +58,15 @@ type Step = {
   mostLikelyFailures?: string[];
   recommendedNextTest: string;
   nextQuestion: { text: string; choices: string[]; allowFreeText: boolean };
+  groundingSource?: {
+    url: string | null;
+    confidence: "exact_model" | "platform_family" | "manufacturer_family" | "low";
+    sourceType: string;
+    sourceTrust: "oem" | "trusted_reference" | "community" | null;
+    platformFamily: string | null;
+    displayLabel: string;
+    trustLabel: string;
+  } | null;
 };
 
 type ResumeRow = {
