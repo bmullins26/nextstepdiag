@@ -51,13 +51,14 @@ export const fixtures: Fixture[] = [
     expect: { status: "ok", year: 2024, month: 12, confidence: "High", ruleId: "lg.yym" },
   },
   {
-    label: "LG legacy Y+MM (909... → Sept 2009, multi-candidate → low_confidence without corroboration)",
+    label: "LG legacy Y+MM (909... → Sept 2009, multi-candidate → best-guess Low confidence without corroboration)",
     brand: "LG",
     model: "WM0642HW/02",
     serial: "909KWAT04496",
     now: NOW,
-    // Without corroboration, three candidates (1999/2009/2019) → low → unknown.
-    expect: { status: "unknown", unknownReason: "low_confidence" },
+    // Without corroboration, three candidates (1999/2009/2019) → Low. We now
+    // surface the most recent (2019) as a best guess instead of unknown.
+    expect: { status: "ok", year: 2019, month: 9, confidence: "Low", ruleId: "lg.ymm" },
   },
   {
     label: "Kenmore Whirlpool-built (model 110…) routes to Whirlpool rules",

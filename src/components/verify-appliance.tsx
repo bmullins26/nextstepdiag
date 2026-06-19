@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { APPLIANCE_BRANDS } from "@/lib/appliance-brands";
 import { decodeAppliance } from "@/lib/serial-decode.functions";
+import { submitKnownYear } from "@/lib/age-ground-truth.functions";
 import { RepairInsightsCard } from "@/components/repair-insights-card";
 
 export type DecodedAppliance = {
@@ -80,6 +81,15 @@ export function VerifyAppliance({
   const [query, setQuery] = useState("");
 
   const decode = useServerFn(decodeAppliance);
+  const submitTruth = useServerFn(submitKnownYear);
+
+  // Ground-truth form state
+  const [truthYear, setTruthYear] = useState<string>("");
+  const [truthMonth, setTruthMonth] = useState<string>("");
+  const [truthSource, setTruthSource] = useState<string>("data_plate");
+  const [truthNotes, setTruthNotes] = useState<string>("");
+  const [truthSubmitting, setTruthSubmitting] = useState(false);
+  const [truthSubmitted, setTruthSubmitted] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -94,6 +104,10 @@ export function VerifyAppliance({
     }
     setDecoding(true);
     setResult(null);
+    setTruthSubmitted(false);
+    setTruthYear("");
+    setTruthMonth("");
+    setTruthNotes("");
     try {
       const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial } });
       setResult(r as DecodedAppliance);
@@ -101,6 +115,38 @@ export function VerifyAppliance({
       toast.error(e instanceof Error ? e.message : "Decode failed.");
     } finally {
       setDecoding(false);
+    }
+  }
+
+  async function handleSubmitTruth() {
+    if (!result) return;
+    const year = Number(truthYear);
+    const currentYear = new Date().getFullYear();
+    if (!Number.isInteger(year) || year < 1950 || year > currentYear + 1) {
+      toast.error(`Enter a year between 1950 and ${currentYear + 1}.`);
+      return;
+    }
+    setTruthSubmitting(true);
+    try {
+      await submitTruth({
+        data: {
+          brand: result.brand,
+          modelNumber: result.modelNumber || null,
+          serial: result.serialNumber,
+          knownYear: year,
+          knownMonth: truthMonth ? Number(truthMonth) : null,
+          source: (truthSource as "data_plate" | "receipt" | "owner_manual" | "other") || null,
+          notes: truthNotes.trim() || null,
+          decoderYear: result.manufactureDate?.year ?? null,
+          decoderConfidence: result.confidence ?? null,
+        },
+      });
+      setTruthSubmitted(true);
+      toast.success("Thanks — your known year is saved.");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to submit.");
+    } finally {
+      setTruthSubmitting(false);
     }
   }
 
@@ -219,6 +265,16 @@ export function VerifyAppliance({
                 : result.confidence
             }
           />
+          {result.manufactureDate?.year && result.confidence === "Low" ? (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              <span className="rounded-full border border-amber-400/60 bg-amber-400/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+                Best guess
+              </span>
+              <span>
+                Multiple candidate years — confirm on the data plate if it matters.
+              </span>
+            </div>
+          ) : null}
           <KV k="Applied Rule" v={result.ruleName || result.ruleFamily || "—"} />
 
           {result.candidates && result.candidates.length > 1 ? (
@@ -336,6 +392,81 @@ export function VerifyAppliance({
               {result.notes}
             </p>
           )}
+
+          {result.manufactureDate?.year ? (
+            <details className="rounded-lg border border-border bg-background/40 p-3">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Know the actual year? Help us improve
+              </summary>
+              {truthSubmitted ? (
+                <p className="mt-2 text-xs text-emerald-300">
+                  Saved — thanks for helping train the decoder.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Year</Label>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="2018"
+                        value={truthYear}
+                        onChange={(e) => setTruthYear(e.target.value)}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Month (optional)</Label>
+                      <select
+                        value={truthMonth}
+                        onChange={(e) => setTruthMonth(e.target.value)}
+                        className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="">—</option>
+                        {MONTHS.slice(1).map((m, i) => (
+                          <option key={m} value={i + 1}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Source</Label>
+                    <select
+                      value={truthSource}
+                      onChange={(e) => setTruthSource(e.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value="data_plate">Data plate</option>
+                      <option value="receipt">Receipt / invoice</option>
+                      <option value="owner_manual">Owner manual</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Notes (optional)</Label>
+                    <Input
+                      placeholder="e.g. data plate reads 04/2018"
+                      value={truthNotes}
+                      onChange={(e) => setTruthNotes(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleSubmitTruth}
+                    disabled={truthSubmitting || !truthYear}
+                    className="h-10 w-full"
+                  >
+                    {truthSubmitting ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting…</>
+                    ) : (
+                      "Submit known year"
+                    )}
+                  </Button>
+                </div>
+              )}
+            </details>
+          ) : null}
 
           <div className="flex gap-2 pt-1">
             <Button

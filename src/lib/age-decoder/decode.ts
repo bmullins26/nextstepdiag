@@ -2,7 +2,6 @@ import type {
   DecodeInput,
   DecodeOutcome,
   AppliedRule,
-  Confidence,
   DateCandidate,
   Rule,
   Corroboration,
@@ -113,22 +112,8 @@ export function decodeAge(input: DecodeInput): DecodeOutcome {
     corroboration,
   });
 
-  // Low confidence → unknown (matches v1.1 grounding contract: don't guess).
-  if (confidence === "Low") {
-    return {
-      status: "unknown",
-      appliedRule: { id: appliedRule.id, name: appliedRule.name, family: appliedRule.family },
-      confidence: "Unknown",
-      confidencePercent: percent,
-      unknownReason: "low_confidence",
-      breakdown:
-        `Decoded multiple possible years (${candidates.map((c) => c.year).join(", ")}) ` +
-        `but couldn't corroborate one confidently. Please confirm the manufacture date on the data plate.`,
-      candidates,
-      corroboration,
-    };
-  }
-
+  // Note: Low confidence is no longer demoted to "unknown" — we surface the
+  // top-scored candidate as a best guess and let the UI label it accordingly.
   const ageYears = computeAgeYears(chosen.year, chosen.month, input.now);
   const applied: AppliedRule = {
     id: appliedRule.id,
