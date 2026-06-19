@@ -1,134 +1,98 @@
-## Professional Appliance Age Decoder — Final Plan
+## Diagnostic Grounding Engine v1.1 — Source Trust Ranking
 
-Deterministic rule-engine that replaces AI-driven age inference. AI is restricted to explanatory text only. Legacy decoder retained for comparison until validated.
+Adds a `SourceTrust` axis (`oem` / `trusted_reference` / `community`) on top of the v1 confidence hierarchy (`exact_model` / `platform_family` / `manufacturer_family` / `low`). Confidence answers *"how specific is this to the model?"*; trust answers *"how authoritative is the source?"*. Both flow into prompts, UI badges, and owner analytics.
 
-### 1. Rule engine layout
+## Database
 
-```text
-src/lib/age-decoder/
-  types.ts            // DateCandidate, Rule, DecodeOutcome, Confidence, UnknownReason
-  registry.ts         // brand → Rule[]; brand-family aliases; register() for new mfrs
-  scoring.ts          // pickBestCandidate(candidates, modelHints, now)
-  decode.ts           // decodeAge({ brand, model, serial }) — pure, no AI, no I/O
-  rules/
-    whirlpool.ts      // covers Whirlpool, Maytag, Amana, JennAir, KitchenAid, Roper,
-                      // Estate, Inglis, Magic Chef, Admiral, Crosley, Kenmore
-    ge.ts             // GE, Hotpoint, Cafe, Haier, Profile, Monogram
-    frigidaire.ts     // Frigidaire, Electrolux, Gibson, Tappan, Kelvinator, Westinghouse
-    lg.ts             // LG, Kenmore-LG
-    samsung.ts        // Samsung
-    bosch.ts          // Bosch, Thermador, Gaggenau, Siemens
-    fisherpaykel.ts   // Fisher & Paykel — stub w/ pattern + Unknown reason for now
-    miele.ts          // Miele — stub
-  tests/
-    fixtures.ts       // representative serials per brand w/ expected year/month/week/conf/rule
-    decoder.test.ts   // vitest — runs decodeAge over fixtures, no AI
+Migration on `public.tech_sheets`:
+
+```sql
+ALTER TABLE public.tech_sheets
+  ADD COLUMN source_trust text NOT NULL DEFAULT 'community'
+  CHECK (source_trust IN ('oem','trusted_reference','community'));
+
+-- Backfill existing rows from source_url hostname
+UPDATE public.tech_sheets SET source_trust = CASE
+  WHEN source_url ~* '(whirlpool|maytag|kitchenaid|jennair|ge\.com|geappliances|samsung|lg\.com|frigidaire|electrolux|bosch-home|boschappliances|fisherpaykel|miele|haier|amana)\.' THEN 'oem'
+  WHEN source_url ~* '(appliantology\.org|applianceblog\.com|manualslib\.com)' THEN 'trusted_reference'
+  ELSE 'community'
+END;
 ```
 
-Each `Rule`:
+The same classifier lives in code (see `classifySourceTrust` below) so new fetches set it correctly without relying on the default.
+
+## Module updates: `src/lib/tech-sheets/`
+
+- `types.ts` — add `SourceTrust = "oem" | "trusted_reference" | "community"`; extend `TechSheet` and `GroundingResult` with `sourceTrust`. Reserve numeric trust rank for future tiers (Fred's data slotting between OEM and trusted_reference) via a `TRUST_RANK` map.
+- `source-trust.ts` (new) — `classifySourceTrust(url: string): SourceTrust` using a small hostname → trust map (OEM domains per brand, trusted reference domains, fallback `community`). Plus `pickBestSource(candidates)` that sorts by `TRUST_RANK` then by `confidence` rank.
+- `fetch.server.ts`:
+  - `findSourceWithPerplexity` now returns an **array** of candidate `{url, platformFamily}` (Perplexity citations + best match), each classified via `classifySourceTrust`. Pipeline picks highest-trust candidate before scraping.
+  - Persists `source_trust` on upsert.
+- `lookup.functions.ts` — when reading cache, surface `sourceTrust` in the returned `GroundingResult`.
+- `platform-families.ts` / `manufacturer-families.ts` — static entries marked `sourceTrust: 'trusted_reference'` (these are curated by us, not OEM PDFs).
+
+## Diagnostics integration (`src/lib/diagnostics.functions.ts`)
+
+`groundingSource` returned to client now:
+
 ```ts
-type Rule = {
-  id: string;           // "whirlpool.year-letter-week"
-  name: string;         // "Whirlpool Year-Letter / Week Decoder"
-  family: string;       // "Whirlpool"
-  pattern: RegExp;
-  weight: number;       // 0..1 base confidence
-  extract: (serial: string, model?: string) => DateCandidate[];
-  explain: (serial: string, candidate: DateCandidate) => string;
-};
+{ url, confidence, sourceType, sourceTrust, platformFamily, displayLabel, trustLabel }
 ```
 
-### 2. Confidence + scoring
+System prompt appended (verbatim from spec):
 
-- **High** — single rule matched, single candidate, model-compatible.
-- **Medium** — one candidate dominates by ≥ 0.3 score.
-- **Low** — partial match (year only or ambiguous cycle).
-- **Unknown** — `status="unknown"`.
+> The provided grounding data may come from OEM documentation, trusted technical references, or community sources. When sources conflict: OEM documentation takes precedence over all other sources. Trusted technical references take precedence over community sources. Community sources should be treated as advisory information only.
 
-`UnknownReason`: `unsupported_manufacturer | invalid_serial_format | missing_date_code | ambiguous_year_cycle | insufficient_information`.
+The v1 confidence rules (no inventing pins/voltages/codes; low → no test) remain unchanged.
 
-### 3. Extensibility
+## UI (`src/routes/_authenticated/diagnose.tsx`)
 
-Adding Maytag/Amana/JennAir/KitchenAid/Fisher & Paykel/Miele/Haier requires only:
-1. Add a file in `rules/`.
-2. `registerRule(brand, rule)` in `registry.ts`.
+Add a small trust badge next to the existing `Grounded in:` caption:
 
-Core `decode.ts` and `scoring.ts` never change.
+- `oem` → green badge `OEM Source`
+- `trusted_reference` → blue badge `Trusted Technical Reference`
+- `community` → gray badge `Community Source`
 
-### 4. Legacy retention + comparison mode
+No layout changes. Uses existing shadcn `Badge`.
 
-- Rename `src/lib/serial-decode.server.ts` → `src/lib/serial-decode.legacy.ts` (no imports reference it after migration).
-- `decodeAppliance` server fn imports both engines. In production it returns the new engine's result. When `process.env.NODE_ENV !== "production"` (server) **or** when called from a DEV client, also run the legacy decoder and `console.log` differences:
-  ```
-  [age-decoder/compare] brand=Whirlpool serial=CX4812345 legacy=2018 new=2024 ruleId=whirlpool.year-letter-week
-  ```
-- The returned payload always uses the new engine.
+## Owner dashboard
 
-### 5. AI guardrails
+Extend `getTechSheetCoverageStats` (`src/lib/owner.functions.ts`) and the Tech Sheet Coverage panel (`src/components/owner-panels.tsx`) with **Source Trust Breakdown**: count + % for OEM / Trusted Reference / Community across cached sheets. Keep existing confidence breakdown.
 
-`decodeAppliance` AI call schema is reduced to:
+## Future compatibility
+
+`TRUST_RANK` is a numeric map so future tiers slot in without touching diagnostics code:
+
 ```ts
-{ applianceType: string, platform: string, notes: string }
+export const TRUST_RANK = {
+  oem: 100,
+  fred_historical: 80,        // reserved
+  trusted_reference: 60,
+  community: 20,
+} as const;
 ```
-No date/year/age/candidate-index fields. System prompt: "Never state a year or age. The engine decides dates. Describe the appliance only."
 
-### 6. Database
+Only `SourceTrust` union and DB CHECK constraint need updating to register a new tier.
 
-Migration creates `public.age_decode_attempts`:
+## Files
 
-| column | type | notes |
-|---|---|---|
-| id | uuid PK | default gen_random_uuid() |
-| user_id | uuid | FK auth.users ON DELETE SET NULL |
-| decoder_version | text NOT NULL | `v1-legacy` or `v2-rule-engine` |
-| manufacturer | text NOT NULL | |
-| appliance_type | text | |
-| model_number | text NOT NULL | |
-| serial_number | text NOT NULL | |
-| status | text NOT NULL CHECK in ('ok','unknown') | |
-| confidence | text | |
-| rule_id | text | |
-| manufacture_year | int | |
-| manufacture_month | int | |
-| unknown_reason | text | |
-| created_at | timestamptz | default now() |
+Migration:
+- `supabase/migrations/<ts>_tech_sheets_source_trust.sql`
 
-Index on `(created_at desc)` and `(manufacturer, status)`.
-GRANTs: `authenticated INSERT/SELECT own row`; owners SELECT all via `has_role(uid,'owner')`; `service_role ALL`. RLS enabled.
+New:
+- `src/lib/tech-sheets/source-trust.ts`
 
-Every decode (success and unknown) writes one row with `decoder_version='v2-rule-engine'` from inside the server fn. In DEV comparison mode a second row with `decoder_version='v1-legacy'` is also written for the legacy result, enabling cross-version success-rate comparison.
+Edited:
+- `src/lib/tech-sheets/types.ts`
+- `src/lib/tech-sheets/fetch.server.ts`
+- `src/lib/tech-sheets/lookup.functions.ts`
+- `src/lib/tech-sheets/platform-families.ts`
+- `src/lib/tech-sheets/manufacturer-families.ts`
+- `src/lib/diagnostics.functions.ts` (prompt + return shape)
+- `src/routes/_authenticated/diagnose.tsx` (trust badge)
+- `src/lib/owner.functions.ts` (stats)
+- `src/components/owner-panels.tsx` (breakdown UI)
 
-### 7. Owner dashboard
+## Out of scope
 
-New `AgeDecoderAnalyticsPanel` in `src/components/owner-panels.tsx`, mounted on `/owner`:
-- Totals (last 30d): Lookups / Successful / Unknown / Success Rate %
-- **Success Rate Trend** (last 30d, daily) — sparkline
-- **Unknown Rate Trend** (last 30d, daily) — sparkline
-- Per-manufacturer table (Whirlpool, GE, Frigidaire, LG, Samsung, Bosch, Other): lookups, success rate, broken down by `decoder_version`
-- Top 5 unknown reasons
-- Last 20 unknown serials (mfr, model, serial, reason)
-
-Data via owner-gated server fn `getAgeDecoderStats` (verifies `has_role(uid,'owner')`).
-
-### 8. UI updates
-
-`verify-appliance.tsx`:
-- Show `Applied Rule` (rule.name).
-- On Unknown: show human-readable reason; "Built" stays `Unknown` — no AI fallback.
-
-### 9. Tests
-
-`bunx vitest run src/lib/age-decoder` — pure functions, no AI, no network. Fixtures cover all 6 priority brands with known-good serials and expected `{ year, month?, week?, confidence, ruleId }`.
-
-### Files changed
-- **new**: `src/lib/age-decoder/{types,registry,scoring,decode}.ts`, `rules/{whirlpool,ge,frigidaire,lg,samsung,bosch,fisherpaykel,miele}.ts`, `tests/{fixtures.ts,decoder.test.ts}`
-- **rename**: `src/lib/serial-decode.server.ts` → `src/lib/serial-decode.legacy.ts`
-- **edit**: `src/lib/serial-decode.functions.ts` (uses new engine + DEV comparison), `src/components/verify-appliance.tsx`, `src/components/owner-panels.tsx`, `src/routes/_authenticated/owner.tsx`
-- **new migration**: `age_decode_attempts` + RLS + grants
-- **new server fn**: `getAgeDecoderStats` (owner-only)
-
-### Safety invariants enforced in code
-- Date/age never present in AI response schema.
-- `decodeAge` is a pure function — no `generateObject`, no `fetch`.
-- `manufactureDate`/`ageYears` in the response are computed only from `decodeAge` output.
-- Unknown is the default outcome whenever no rule matches.
+Age decoder, Documents feature, Fred's API integration, subscriptions, UI redesign.
