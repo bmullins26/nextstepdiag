@@ -30,7 +30,6 @@ type Kind = "bug" | "feature" | "general";
 export function FeedbackWidget() {
   const submit = useServerFn(submitFeedback);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const search = useRouterState({ select: (s) => s.location.searchStr });
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("general");
   const [subject, setSubject] = useState("");
@@ -51,7 +50,7 @@ export function FeedbackWidget() {
       const context = [
         "",
         "---",
-        `Page: ${pathname}${search ?? ""}`,
+        `Page: ${pathname}${typeof window !== "undefined" ? window.location.search : ""}`,
         `UA: ${typeof navigator !== "undefined" ? navigator.userAgent : "n/a"}`,
         `Viewport: ${typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : "n/a"}`,
       ].join("\n");
