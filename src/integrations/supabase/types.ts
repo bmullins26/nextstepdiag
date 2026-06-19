@@ -185,6 +185,102 @@ export type Database = {
         }
         Relationships: []
       }
+      appliance_age_api_cache: {
+        Row: {
+          alternative_years: Json
+          brand_key: string
+          confidence_percent: number | null
+          created_at: string
+          expires_at: string
+          id: string
+          manufacture_month: number | null
+          manufacture_year: number | null
+          model_number: string
+          raw_response: Json
+          response_time_ms: number | null
+          serial_number: string
+          status_code: number
+          success: boolean
+          updated_at: string
+        }
+        Insert: {
+          alternative_years?: Json
+          brand_key: string
+          confidence_percent?: number | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          manufacture_month?: number | null
+          manufacture_year?: number | null
+          model_number: string
+          raw_response: Json
+          response_time_ms?: number | null
+          serial_number: string
+          status_code: number
+          success: boolean
+          updated_at?: string
+        }
+        Update: {
+          alternative_years?: Json
+          brand_key?: string
+          confidence_percent?: number | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          manufacture_month?: number | null
+          manufacture_year?: number | null
+          model_number?: string
+          raw_response?: Json
+          response_time_ms?: number | null
+          serial_number?: string
+          status_code?: number
+          success?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      appliance_age_api_log: {
+        Row: {
+          brand: string
+          created_at: string
+          error_message: string | null
+          event: string
+          id: string
+          model_number: string
+          response_time_ms: number | null
+          serial_number: string
+          source: string | null
+          status_code: number | null
+          user_id: string | null
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          error_message?: string | null
+          event: string
+          id?: string
+          model_number: string
+          response_time_ms?: number | null
+          serial_number: string
+          source?: string | null
+          status_code?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          error_message?: string | null
+          event?: string
+          id?: string
+          model_number?: string
+          response_time_ms?: number | null
+          serial_number?: string
+          source?: string | null
+          status_code?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       diagnostic_sessions: {
         Row: {
           age_years: number | null
