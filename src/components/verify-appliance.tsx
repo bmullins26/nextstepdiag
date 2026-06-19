@@ -30,11 +30,30 @@ export type DecodedAppliance = {
   confidence: string;
   decodedBreakdown: string;
   ruleFamily: string;
+  ruleName?: string;
   ruleBreakdown: string;
   notes: string;
+  unknownReason?: string | null;
 };
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function humanReason(r: string): string {
+  switch (r) {
+    case "unsupported_manufacturer":
+      return "we don't have a decoder for this manufacturer yet.";
+    case "invalid_serial_format":
+      return "the serial number doesn't match this brand's known formats.";
+    case "missing_date_code":
+      return "this serial doesn't contain a date code (some brands print it elsewhere on the data plate).";
+    case "ambiguous_year_cycle":
+      return "the year code repeats on a cycle and we couldn't pick one confidently.";
+    case "insufficient_information":
+      return "not enough information was provided.";
+    default:
+      return r;
+  }
+}
 
 export function VerifyAppliance({
   onConfirm,
@@ -240,12 +259,18 @@ export function VerifyAppliance({
           />
           <KV k="Age" v={result.ageYears != null ? `${Math.max(0, Math.round(result.ageYears))} yr` : "Unknown"} />
           <KV k="Confidence" v={result.confidence} />
+          <KV k="Applied Rule" v={result.ruleName || result.ruleFamily || "—"} />
+          {result.ageYears == null && result.unknownReason ? (
+            <p className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              Age unknown — {humanReason(result.unknownReason)}
+            </p>
+          ) : null}
 
           {import.meta.env.DEV && (
             <div className="rounded-lg border border-dashed border-secondary/60 bg-background/40 p-3 text-[11px] font-mono text-muted-foreground">
               <div>Manufacturer: {result.manufacturer || result.brand}</div>
               <div>Serial: {result.serialNumber}</div>
-              <div>Applied Rule: {result.ruleFamily}</div>
+              <div>Applied Rule: {result.ruleName || result.ruleFamily}</div>
               <div>
                 Manufacture Date:{" "}
                 {result.manufactureDate?.year
@@ -255,6 +280,7 @@ export function VerifyAppliance({
               <div>
                 Calculated Age: {result.ageYears != null ? `${result.ageYears.toFixed(2)} yr` : "unknown"}
               </div>
+              {result.unknownReason ? <div>Unknown Reason: {result.unknownReason}</div> : null}
             </div>
           )}
 

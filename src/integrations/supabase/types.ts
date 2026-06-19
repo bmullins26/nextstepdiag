@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      age_decode_attempts: {
+        Row: {
+          appliance_type: string | null
+          confidence: string | null
+          created_at: string
+          decoder_version: string
+          id: string
+          manufacture_month: number | null
+          manufacture_year: number | null
+          manufacturer: string
+          model_number: string
+          rule_id: string | null
+          serial_number: string
+          status: string
+          unknown_reason: string | null
+          user_id: string | null
+        }
+        Insert: {
+          appliance_type?: string | null
+          confidence?: string | null
+          created_at?: string
+          decoder_version: string
+          id?: string
+          manufacture_month?: number | null
+          manufacture_year?: number | null
+          manufacturer: string
+          model_number: string
+          rule_id?: string | null
+          serial_number: string
+          status: string
+          unknown_reason?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          appliance_type?: string | null
+          confidence?: string | null
+          created_at?: string
+          decoder_version?: string
+          id?: string
+          manufacture_month?: number | null
+          manufacture_year?: number | null
+          manufacturer?: string
+          model_number?: string
+          rule_id?: string | null
+          serial_number?: string
+          status?: string
+          unknown_reason?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       ai_usage: {
         Row: {
           created_at: string

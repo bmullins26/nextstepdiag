@@ -163,6 +163,114 @@ export const getAiCostEstimate = createServerFn({ method: "POST" })
     };
   });
 
+// ---------- Age decoder stats ----------
+export const getAgeDecoderStats = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const since = isoDaysAgo(30);
+    const { data: rows, error } = await supabaseAdmin
+      .from("age_decode_attempts")
+      .select(
+        "decoder_version, manufacturer, status, confidence, rule_id, unknown_reason, model_number, serial_number, created_at",
+      )
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (error) throw new Error(error.message);
+
+    type Row = NonNullable<typeof rows>[number];
+    const all: Row[] = rows ?? [];
+
+    // Totals (v2 only — v1 rows are for comparison logging).
+    const v2 = all.filter((r) => r.decoder_version === "v2-rule-engine");
+    const total = v2.length;
+    const successful = v2.filter((r) => r.status === "ok").length;
+    const unknown = total - successful;
+    const successRate = total ? successful / total : 0;
+
+    // Per-day trend (last 30 days), v2 only.
+    const dayBuckets: Record<string, { total: number; ok: number }> = {};
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - i);
+      const k = d.toISOString().slice(0, 10);
+      dayBuckets[k] = { total: 0, ok: 0 };
+    }
+    for (const r of v2) {
+      const k = (r.created_at ?? "").slice(0, 10);
+      if (!dayBuckets[k]) continue;
+      dayBuckets[k].total += 1;
+      if (r.status === "ok") dayBuckets[k].ok += 1;
+    }
+    const trend = Object.entries(dayBuckets).map(([date, v]) => ({
+      date,
+      total: v.total,
+      successRate: v.total ? v.ok / v.total : 0,
+      unknownRate: v.total ? 1 - v.ok / v.total : 0,
+    }));
+
+    // Per-manufacturer + per-decoder-version breakdown.
+    const mfrMap = new Map<string, { mfr: string; v1: { total: number; ok: number }; v2: { total: number; ok: number } }>();
+    for (const r of all) {
+      const key = (r.manufacturer || "Unknown").toLowerCase();
+      const e = mfrMap.get(key) ?? {
+        mfr: r.manufacturer || "Unknown",
+        v1: { total: 0, ok: 0 },
+        v2: { total: 0, ok: 0 },
+      };
+      const bucket = r.decoder_version === "v2-rule-engine" ? e.v2 : e.v1;
+      bucket.total += 1;
+      if (r.status === "ok") bucket.ok += 1;
+      mfrMap.set(key, e);
+    }
+    const perManufacturer = Array.from(mfrMap.values())
+      .map((e) => ({
+        manufacturer: e.mfr,
+        v2Total: e.v2.total,
+        v2SuccessRate: e.v2.total ? e.v2.ok / e.v2.total : 0,
+        v1Total: e.v1.total,
+        v1SuccessRate: e.v1.total ? e.v1.ok / e.v1.total : 0,
+      }))
+      .sort((a, b) => b.v2Total - a.v2Total);
+
+    // Top 5 unknown reasons (v2).
+    const reasonMap = new Map<string, number>();
+    for (const r of v2) {
+      if (r.status !== "unknown" || !r.unknown_reason) continue;
+      reasonMap.set(r.unknown_reason, (reasonMap.get(r.unknown_reason) ?? 0) + 1);
+    }
+    const topUnknownReasons = Array.from(reasonMap.entries())
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    // Last 20 unknown serials (v2).
+    const recentUnknowns = v2
+      .filter((r) => r.status === "unknown")
+      .slice(0, 20)
+      .map((r) => ({
+        manufacturer: r.manufacturer,
+        modelNumber: r.model_number,
+        serialNumber: r.serial_number,
+        reason: r.unknown_reason ?? "unknown",
+        createdAt: r.created_at,
+      }));
+
+    return {
+      total,
+      successful,
+      unknown,
+      successRate,
+      trend,
+      perManufacturer,
+      topUnknownReasons,
+      recentUnknowns,
+    };
+  });
+
 // ---------- Users list ----------
 export const listUsers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
