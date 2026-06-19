@@ -36,6 +36,17 @@ export type DecodedAppliance = {
   notes: string;
   unknownReason?: string | null;
   candidates?: Array<{ year: number; month: number | null; week: number | null; score: number; sourceCount: number }>;
+  ageProvider?: {
+    source: "appliance_age_api" | "cache" | "local_fallback";
+    cached: boolean;
+    manufactureYear: number | null;
+    manufactureMonth: number | null;
+    confidencePercent: number | null;
+    alternativeYears: Array<{ year: number; month: number | null; confidencePercent: number; fullDate: string | null }>;
+    description: string | null;
+    responseTimeMs: number;
+    error?: string | null;
+  };
   corroboration?: {
     used: boolean;
     cached: boolean;
