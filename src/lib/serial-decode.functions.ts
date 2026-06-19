@@ -291,45 +291,10 @@ Identify the appliance. Do not state any date or age.`,
             used: outcome.corroboration.used,
             cached: outcome.corroboration.cached,
             hitCount: outcome.corroboration.hits.length,
-            hits: outcome.corroboration.hits.slice(0, 5),
+            sourceTypes: outcome.corroboration.sourceTypes ?? [],
+            retailerSignal: outcome.corroboration.retailerSignal ?? null,
+            hits: outcome.corroboration.hits.slice(0, 8),
           }
         : null,
     };
-  });
-
-const OcrInput = z.object({
-  imageDataUrl: z.string().min(20).describe("data:image/...;base64,..."),
-  brandHint: z.string().optional().default(""),
-});
-
-export const extractTagFromImage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => OcrInput.parse(d))
-  .handler(async ({ data, context }) => {
-    const gateway = getGateway();
-    const { object, usage } = await generateObject({
-      model: gateway(DEFAULT_MODEL),
-      schema: z.object({
-        brand: z.string(),
-        modelNumber: z.string(),
-        serialNumber: z.string(),
-        typeHints: z.string().describe("Any text on the tag suggesting appliance type/configuration."),
-      }),
-      system:
-        "You read appliance data plates. Return fields EXACTLY as printed on the tag. If a field is not visible, return an empty string. Do not invent values.",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Read this appliance data plate photo and extract brand, model number, and serial number.${data.brandHint ? ` Brand hint from technician: ${data.brandHint}.` : ""}`,
-            },
-            { type: "image_url", image_url: { url: data.imageDataUrl } } as never,
-          ],
-        },
-      ],
-    });
-    await logAiUsage({ userId: context.userId, feature: "extract_tag_from_image", model: DEFAULT_MODEL, usage });
-    return object;
   });

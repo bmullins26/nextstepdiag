@@ -1,8 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  Camera,
   Check,
   ChevronsUpDown,
   Loader2,
@@ -13,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { APPLIANCE_BRANDS, findBrand } from "@/lib/appliance-brands";
-import { decodeAppliance, extractTagFromImage } from "@/lib/serial-decode.functions";
+import { APPLIANCE_BRANDS } from "@/lib/appliance-brands";
+import { decodeAppliance } from "@/lib/serial-decode.functions";
 import { RepairInsightsCard } from "@/components/repair-insights-card";
 
 export type DecodedAppliance = {
@@ -40,7 +39,9 @@ export type DecodedAppliance = {
     used: boolean;
     cached: boolean;
     hitCount: number;
-    hits: Array<{ url: string; title?: string; trust: string; year?: number; excerpt?: string }>;
+    sourceTypes?: string[];
+    retailerSignal?: "discontinued" | "in_stock" | null;
+    hits: Array<{ url: string; title?: string; trust: string; sourceType?: string; year?: number; excerpt?: string }>;
   } | null;
 };
 
@@ -74,17 +75,11 @@ export function VerifyAppliance({
   const [model, setModel] = useState("");
   const [serial, setSerial] = useState("");
   const [decoding, setDecoding] = useState(false);
-  const [ocrBusy, setOcrBusy] = useState(false);
   const [result, setResult] = useState<DecodedAppliance | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const decode = useServerFn(decodeAppliance);
-  const ocr = useServerFn(extractTagFromImage);
-
-  const brandMeta = useMemo(() => findBrand(brand), [brand]);
-  const ocrEnabled = Boolean(brandMeta?.ocrSupported);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -106,24 +101,6 @@ export function VerifyAppliance({
       toast.error(e instanceof Error ? e.message : "Decode failed.");
     } finally {
       setDecoding(false);
-    }
-  }
-
-  async function handleFile(file: File) {
-    if (!ocrEnabled) return;
-    setOcrBusy(true);
-    try {
-      const dataUrl = await compressImage(file, 1600, 0.78);
-      const out = await ocr({ data: { imageDataUrl: dataUrl, brandHint: brand } });
-      if (out.brand && !brand) setBrand(out.brand);
-      if (out.modelNumber) setModel(out.modelNumber);
-      if (out.serialNumber) setSerial(out.serialNumber);
-      toast.success("Tag read — review the fields and tap Decode.");
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Couldn't read the tag — try a sharper photo.");
-    } finally {
-      setOcrBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -172,9 +149,6 @@ export function VerifyAppliance({
                         {brand === b.name ? <Check className="h-4 w-4 text-primary" /> : <span className="h-4 w-4" />}
                         <span>{b.name}</span>
                       </span>
-                      {b.ocrSupported && (
-                        <Camera className="h-3.5 w-3.5 text-[hsl(var(--accent))]" />
-                      )}
                     </button>
                   </li>
                 ))}
@@ -198,47 +172,16 @@ export function VerifyAppliance({
           />
         </div>
 
-        {/* Serial + camera */}
+        {/* Serial */}
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="serial" className="text-xs uppercase tracking-wide text-muted-foreground">Serial Number</Label>
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {ocrEnabled ? "Tag photo available" : brand ? "Photo unsupported" : "Select brand first"}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Input
-              id="serial"
-              value={serial}
-              onChange={(e) => setSerial(e.target.value)}
-              placeholder="C81234567"
-              className="h-12 flex-1 text-base"
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <button
-              type="button"
-              disabled={!ocrEnabled || ocrBusy}
-              onClick={() => fileRef.current?.click()}
-              title={ocrEnabled ? "Photograph the data plate" : "Image recognition coming soon for this brand"}
-              className={`flex h-12 w-12 items-center justify-center rounded-md border transition ${
-                ocrEnabled
-                  ? "border-[hsl(var(--accent))]/60 bg-[hsl(var(--accent))]/15 text-[hsl(var(--accent))] hover:bg-[hsl(var(--accent))]/25"
-                  : "border-border bg-muted/30 text-muted-foreground/60"
-              }`}
-            >
-              {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-5 w-5" />}
-            </button>
-          </div>
+          <Label htmlFor="serial" className="text-xs uppercase tracking-wide text-muted-foreground">Serial Number</Label>
+          <Input
+            id="serial"
+            value={serial}
+            onChange={(e) => setSerial(e.target.value)}
+            placeholder="C81234567"
+            className="h-12 w-full text-base"
+          />
         </div>
 
         <Button onClick={handleDecode} disabled={decoding} className="h-14 w-full text-base font-bold">
@@ -304,10 +247,28 @@ export function VerifyAppliance({
           {result.corroboration?.used ? (
             <details className="rounded-lg border border-border bg-background/40 p-3">
               <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Web corroboration · {result.corroboration.hitCount} source
+                Evidence · {result.corroboration.hitCount} source
                 {result.corroboration.hitCount === 1 ? "" : "s"}
+                {result.corroboration.sourceTypes && result.corroboration.sourceTypes.length
+                  ? ` across ${result.corroboration.sourceTypes.join(", ")}`
+                  : ""}
                 {result.corroboration.cached ? " (cached)" : ""}
               </summary>
+              {result.corroboration.retailerSignal ? (
+                <div className="mt-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      result.corroboration.retailerSignal === "discontinued"
+                        ? "bg-amber-500/15 text-amber-300 border border-amber-500/40"
+                        : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40"
+                    }`}
+                  >
+                    {result.corroboration.retailerSignal === "discontinued"
+                      ? "Discontinued at retail"
+                      : "Still sold at retail"}
+                  </span>
+                </div>
+              ) : null}
               <ul className="mt-2 space-y-2 text-xs">
                 {result.corroboration.hits.map((h, i) => (
                   <li key={i} className="space-y-0.5">
@@ -319,9 +280,16 @@ export function VerifyAppliance({
                     >
                       {h.title || h.url}
                     </a>
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {h.trust.replace("_", " ")}
-                      {h.year ? ` · cites ${h.year}` : ""}
+                    <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {h.sourceType ? (
+                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
+                          {h.sourceType}
+                        </span>
+                      ) : null}
+                      <span className="rounded bg-muted px-1.5 py-0.5">
+                        {h.trust.replace("_", " ")}
+                      </span>
+                      {h.year ? <span>cites {h.year}</span> : null}
                     </div>
                   </li>
                 ))}
@@ -402,30 +370,4 @@ function KV({ k, v }: { k: string; v: string }) {
       <span className="text-right text-sm font-semibold">{v}</span>
     </div>
   );
-}
-
-// Re-encode an image to a smaller JPEG to keep upload under ~1.5 MB.
-async function compressImage(file: File, maxDim: number, quality: number): Promise<string> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result));
-    fr.onerror = () => reject(new Error("Read failed"));
-    fr.readAsDataURL(file);
-  });
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const i = new Image();
-    i.onload = () => resolve(i);
-    i.onerror = () => reject(new Error("Image decode failed"));
-    i.src = dataUrl;
-  });
-  const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-  const w = Math.round(img.width * scale);
-  const h = Math.round(img.height * scale);
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return dataUrl;
-  ctx.drawImage(img, 0, 0, w, h);
-  return canvas.toDataURL("image/jpeg", quality);
 }
