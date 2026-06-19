@@ -65,8 +65,10 @@ export const fixtures: Fixture[] = [
     model: "11092573210",
     serial: "CF2328200",
     now: NOW,
-    // F = letter index 5 → 1978/1998/2018 — multi-candidate, no corroboration → unknown.
-    expect: { status: "unknown", unknownReason: "low_confidence" },
+    // F = letter index 5 → 1978/1998/2018 candidates. Pure decoder (no
+    // corroboration) picks most recent (2018) with Medium confidence. The
+    // server fn calls Firecrawl to disambiguate in production.
+    expect: { status: "ok", confidence: "Medium", ruleId: "whirlpool.year-letter-week" },
   },
   {
     label: "Samsung pos-7 year / pos-8 month",
