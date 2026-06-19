@@ -271,6 +271,84 @@ export const getAgeDecoderStats = createServerFn({ method: "POST" })
     };
   });
 
+// ---------- Tech sheet coverage ----------
+export const getTechSheetCoverageStats = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const since = isoDaysAgo(30);
+
+    const [lookupsRes, sheetsRes] = await Promise.all([
+      supabaseAdmin
+        .from("tech_sheet_lookups")
+        .select("brand, model_number, outcome, cache_hit, confidence, source_trust, source_url, created_at")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(5000),
+      supabaseAdmin
+        .from("tech_sheets")
+        .select("source_trust, confidence")
+        .limit(5000),
+    ]);
+
+    if (lookupsRes.error) throw new Error(lookupsRes.error.message);
+    if (sheetsRes.error) throw new Error(sheetsRes.error.message);
+
+    const lookups = lookupsRes.data ?? [];
+    const sheets = sheetsRes.data ?? [];
+
+    const total = lookups.length;
+    const cacheHits = lookups.filter((r) => r.cache_hit).length;
+    const cacheHitRate = total ? cacheHits / total : 0;
+
+    const confidenceCounts = {
+      exact_model: 0,
+      platform_family: 0,
+      manufacturer_family: 0,
+      low: 0,
+    } as Record<string, number>;
+    for (const r of lookups) {
+      confidenceCounts[r.confidence] = (confidenceCounts[r.confidence] ?? 0) + 1;
+    }
+
+    // Source trust breakdown across cached sheets (not lookup events) — represents corpus quality.
+    const trustCounts: Record<string, number> = { oem: 0, trusted_reference: 0, community: 0 };
+    for (const s of sheets) {
+      trustCounts[s.source_trust] = (trustCounts[s.source_trust] ?? 0) + 1;
+    }
+    const trustTotal = sheets.length;
+    const trustBreakdown = Object.entries(trustCounts).map(([trust, count]) => ({
+      trust,
+      count,
+      percentage: trustTotal ? count / trustTotal : 0,
+    }));
+
+    // Recent cache misses (so the team can manually seed)
+    const recentMisses = lookups
+      .filter((r) => r.outcome === "miss_low" || r.outcome === "miss_fetched")
+      .slice(0, 20)
+      .map((r) => ({
+        brand: r.brand,
+        modelNumber: r.model_number,
+        confidence: r.confidence,
+        sourceTrust: r.source_trust,
+        createdAt: r.created_at,
+      }));
+
+    return {
+      total,
+      cacheHits,
+      cacheHitRate,
+      confidenceCounts,
+      trustBreakdown,
+      trustTotal,
+      sheetsCached: sheets.length,
+      recentMisses,
+    };
+  });
+
 // ---------- Users list ----------
 export const listUsers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
