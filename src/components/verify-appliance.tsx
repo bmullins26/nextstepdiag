@@ -276,6 +276,40 @@ export function VerifyAppliance({
                 : result.confidence
             }
           />
+          {result.ageProvider ? (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {result.ageProvider.source === "appliance_age_api" || result.ageProvider.source === "cache" ? (
+                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                  Verified by Appliance Age Finder{result.ageProvider.cached ? " (cached)" : ""}
+                </span>
+              ) : (
+                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                  Local Decoder Fallback
+                </span>
+              )}
+              {result.ageProvider.responseTimeMs ? (
+                <span className="text-[10px] text-muted-foreground">{result.ageProvider.responseTimeMs} ms</span>
+              ) : null}
+            </div>
+          ) : null}
+          {result.ageProvider?.alternativeYears && result.ageProvider.alternativeYears.length > 0 ? (
+            <div className="rounded-lg border border-border bg-background/40 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Alternative Years
+              </div>
+              <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                {result.ageProvider.alternativeYears.map((a) => (
+                  <li key={a.year} className="flex justify-between gap-2">
+                    <span>
+                      {a.month ? MONTHS[a.month] + " " : ""}
+                      {a.year}
+                    </span>
+                    <span className="font-mono">{a.confidencePercent}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {result.manufactureDate?.year && result.confidence === "Low" ? (
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
               <span className="rounded-full border border-amber-400/60 bg-amber-400/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
