@@ -1,8 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  Camera,
   Check,
   ChevronsUpDown,
   Loader2,
@@ -13,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { APPLIANCE_BRANDS, findBrand } from "@/lib/appliance-brands";
-import { decodeAppliance, extractTagFromImage } from "@/lib/serial-decode.functions";
+import { APPLIANCE_BRANDS } from "@/lib/appliance-brands";
+import { decodeAppliance } from "@/lib/serial-decode.functions";
 import { RepairInsightsCard } from "@/components/repair-insights-card";
 
 export type DecodedAppliance = {
@@ -40,7 +39,8 @@ export type DecodedAppliance = {
     used: boolean;
     cached: boolean;
     hitCount: number;
-    hits: Array<{ url: string; title?: string; trust: string; year?: number; excerpt?: string }>;
+    sourceTypes?: string[];
+    hits: Array<{ url: string; title?: string; trust: string; sourceType?: string; year?: number; excerpt?: string }>;
   } | null;
 };
 
@@ -74,17 +74,11 @@ export function VerifyAppliance({
   const [model, setModel] = useState("");
   const [serial, setSerial] = useState("");
   const [decoding, setDecoding] = useState(false);
-  const [ocrBusy, setOcrBusy] = useState(false);
   const [result, setResult] = useState<DecodedAppliance | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const decode = useServerFn(decodeAppliance);
-  const ocr = useServerFn(extractTagFromImage);
-
-  const brandMeta = useMemo(() => findBrand(brand), [brand]);
-  const ocrEnabled = Boolean(brandMeta?.ocrSupported);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -106,24 +100,6 @@ export function VerifyAppliance({
       toast.error(e instanceof Error ? e.message : "Decode failed.");
     } finally {
       setDecoding(false);
-    }
-  }
-
-  async function handleFile(file: File) {
-    if (!ocrEnabled) return;
-    setOcrBusy(true);
-    try {
-      const dataUrl = await compressImage(file, 1600, 0.78);
-      const out = await ocr({ data: { imageDataUrl: dataUrl, brandHint: brand } });
-      if (out.brand && !brand) setBrand(out.brand);
-      if (out.modelNumber) setModel(out.modelNumber);
-      if (out.serialNumber) setSerial(out.serialNumber);
-      toast.success("Tag read — review the fields and tap Decode.");
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Couldn't read the tag — try a sharper photo.");
-    } finally {
-      setOcrBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
