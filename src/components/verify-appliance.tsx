@@ -247,10 +247,28 @@ export function VerifyAppliance({
           {result.corroboration?.used ? (
             <details className="rounded-lg border border-border bg-background/40 p-3">
               <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Web corroboration · {result.corroboration.hitCount} source
+                Evidence · {result.corroboration.hitCount} source
                 {result.corroboration.hitCount === 1 ? "" : "s"}
+                {result.corroboration.sourceTypes && result.corroboration.sourceTypes.length
+                  ? ` across ${result.corroboration.sourceTypes.join(", ")}`
+                  : ""}
                 {result.corroboration.cached ? " (cached)" : ""}
               </summary>
+              {result.corroboration.retailerSignal ? (
+                <div className="mt-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      result.corroboration.retailerSignal === "discontinued"
+                        ? "bg-amber-500/15 text-amber-300 border border-amber-500/40"
+                        : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40"
+                    }`}
+                  >
+                    {result.corroboration.retailerSignal === "discontinued"
+                      ? "Discontinued at retail"
+                      : "Still sold at retail"}
+                  </span>
+                </div>
+              ) : null}
               <ul className="mt-2 space-y-2 text-xs">
                 {result.corroboration.hits.map((h, i) => (
                   <li key={i} className="space-y-0.5">
@@ -262,9 +280,16 @@ export function VerifyAppliance({
                     >
                       {h.title || h.url}
                     </a>
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {h.trust.replace("_", " ")}
-                      {h.year ? ` · cites ${h.year}` : ""}
+                    <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {h.sourceType ? (
+                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
+                          {h.sourceType}
+                        </span>
+                      ) : null}
+                      <span className="rounded bg-muted px-1.5 py-0.5">
+                        {h.trust.replace("_", " ")}
+                      </span>
+                      {h.year ? <span>cites {h.year}</span> : null}
                     </div>
                   </li>
                 ))}
