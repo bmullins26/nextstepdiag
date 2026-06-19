@@ -265,6 +265,16 @@ export function VerifyAppliance({
                 : result.confidence
             }
           />
+          {result.manufactureDate?.year && result.confidence === "Low" ? (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              <span className="rounded-full border border-amber-400/60 bg-amber-400/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+                Best guess
+              </span>
+              <span>
+                Multiple candidate years — confirm on the data plate if it matters.
+              </span>
+            </div>
+          ) : null}
           <KV k="Applied Rule" v={result.ruleName || result.ruleFamily || "—"} />
 
           {result.candidates && result.candidates.length > 1 ? (
