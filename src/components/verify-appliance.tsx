@@ -148,9 +148,6 @@ export function VerifyAppliance({
                         {brand === b.name ? <Check className="h-4 w-4 text-primary" /> : <span className="h-4 w-4" />}
                         <span>{b.name}</span>
                       </span>
-                      {b.ocrSupported && (
-                        <Camera className="h-3.5 w-3.5 text-[hsl(var(--accent))]" />
-                      )}
                     </button>
                   </li>
                 ))}
@@ -174,47 +171,16 @@ export function VerifyAppliance({
           />
         </div>
 
-        {/* Serial + camera */}
+        {/* Serial */}
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="serial" className="text-xs uppercase tracking-wide text-muted-foreground">Serial Number</Label>
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {ocrEnabled ? "Tag photo available" : brand ? "Photo unsupported" : "Select brand first"}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Input
-              id="serial"
-              value={serial}
-              onChange={(e) => setSerial(e.target.value)}
-              placeholder="C81234567"
-              className="h-12 flex-1 text-base"
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <button
-              type="button"
-              disabled={!ocrEnabled || ocrBusy}
-              onClick={() => fileRef.current?.click()}
-              title={ocrEnabled ? "Photograph the data plate" : "Image recognition coming soon for this brand"}
-              className={`flex h-12 w-12 items-center justify-center rounded-md border transition ${
-                ocrEnabled
-                  ? "border-[hsl(var(--accent))]/60 bg-[hsl(var(--accent))]/15 text-[hsl(var(--accent))] hover:bg-[hsl(var(--accent))]/25"
-                  : "border-border bg-muted/30 text-muted-foreground/60"
-              }`}
-            >
-              {ocrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-5 w-5" />}
-            </button>
-          </div>
+          <Label htmlFor="serial" className="text-xs uppercase tracking-wide text-muted-foreground">Serial Number</Label>
+          <Input
+            id="serial"
+            value={serial}
+            onChange={(e) => setSerial(e.target.value)}
+            placeholder="C81234567"
+            className="h-12 w-full text-base"
+          />
         </div>
 
         <Button onClick={handleDecode} disabled={decoding} className="h-14 w-full text-base font-bold">
