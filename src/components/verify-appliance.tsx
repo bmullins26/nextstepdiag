@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { APPLIANCE_BRANDS } from "@/lib/appliance-brands";
 import { decodeAppliance } from "@/lib/serial-decode.functions";
+import { submitKnownYear } from "@/lib/age-ground-truth.functions";
 import { RepairInsightsCard } from "@/components/repair-insights-card";
 
 export type DecodedAppliance = {
@@ -80,6 +81,15 @@ export function VerifyAppliance({
   const [query, setQuery] = useState("");
 
   const decode = useServerFn(decodeAppliance);
+  const submitTruth = useServerFn(submitKnownYear);
+
+  // Ground-truth form state
+  const [truthYear, setTruthYear] = useState<string>("");
+  const [truthMonth, setTruthMonth] = useState<string>("");
+  const [truthSource, setTruthSource] = useState<string>("data_plate");
+  const [truthNotes, setTruthNotes] = useState<string>("");
+  const [truthSubmitting, setTruthSubmitting] = useState(false);
+  const [truthSubmitted, setTruthSubmitted] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -94,6 +104,10 @@ export function VerifyAppliance({
     }
     setDecoding(true);
     setResult(null);
+    setTruthSubmitted(false);
+    setTruthYear("");
+    setTruthMonth("");
+    setTruthNotes("");
     try {
       const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial } });
       setResult(r as DecodedAppliance);
@@ -101,6 +115,38 @@ export function VerifyAppliance({
       toast.error(e instanceof Error ? e.message : "Decode failed.");
     } finally {
       setDecoding(false);
+    }
+  }
+
+  async function handleSubmitTruth() {
+    if (!result) return;
+    const year = Number(truthYear);
+    const currentYear = new Date().getFullYear();
+    if (!Number.isInteger(year) || year < 1950 || year > currentYear + 1) {
+      toast.error(`Enter a year between 1950 and ${currentYear + 1}.`);
+      return;
+    }
+    setTruthSubmitting(true);
+    try {
+      await submitTruth({
+        data: {
+          brand: result.brand,
+          modelNumber: result.modelNumber || null,
+          serial: result.serialNumber,
+          knownYear: year,
+          knownMonth: truthMonth ? Number(truthMonth) : null,
+          source: (truthSource as "data_plate" | "receipt" | "owner_manual" | "other") || null,
+          notes: truthNotes.trim() || null,
+          decoderYear: result.manufactureDate?.year ?? null,
+          decoderConfidence: result.confidence ?? null,
+        },
+      });
+      setTruthSubmitted(true);
+      toast.success("Thanks — your known year is saved.");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to submit.");
+    } finally {
+      setTruthSubmitting(false);
     }
   }
 
