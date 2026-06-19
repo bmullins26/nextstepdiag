@@ -252,8 +252,9 @@ Identify the appliance. Do not state any date or age.`,
             },
     });
 
-    // 5) Build the response.
-    const manufactureDate =
+    // 5) Build the response. PRIMARY provider = Appliance Age Finder API.
+    //    Local decoder result is used only when the API failed (fallback).
+    const localManufactureDate =
       outcome.status === "ok"
         ? {
             year: outcome.manufactureYear,
@@ -262,7 +263,20 @@ Identify the appliance. Do not state any date or age.`,
             rangeEnd: `${outcome.manufactureYear}-${String(outcome.manufactureMonth ?? 12).padStart(2, "0")}`,
           }
         : null;
-    const ageYears = outcome.status === "ok" ? outcome.ageYears : null;
+    const localAgeYears = outcome.status === "ok" ? outcome.ageYears : null;
+
+    const manufactureDate = apiLookup.ok && apiLookup.manufactureYear
+      ? {
+          year: apiLookup.manufactureYear,
+          month: apiLookup.manufactureMonth,
+          rangeStart: `${apiLookup.manufactureYear}-${String(apiLookup.manufactureMonth ?? 1).padStart(2, "0")}`,
+          rangeEnd: `${apiLookup.manufactureYear}-${String(apiLookup.manufactureMonth ?? 12).padStart(2, "0")}`,
+        }
+      : localManufactureDate;
+    const ageYears = apiLookup.ok && apiLookup.manufactureYear
+      ? (Date.now() - new Date(apiLookup.manufactureYear, (apiLookup.manufactureMonth ?? 1) - 1, 1).getTime()) /
+        (365.25 * 24 * 3600 * 1000)
+      : localAgeYears;
     const appliedRule = outcome.appliedRule;
 
     console.log(
