@@ -28,12 +28,20 @@ export type DecodedAppliance = {
   manufactureDate: { year: number; month?: number | null; rangeStart: string; rangeEnd: string } | null;
   ageYears: number | null;
   confidence: string;
+  confidencePercent?: number;
   decodedBreakdown: string;
   ruleFamily: string;
   ruleName?: string;
   ruleBreakdown: string;
   notes: string;
   unknownReason?: string | null;
+  candidates?: Array<{ year: number; month: number | null; week: number | null; score: number; sourceCount: number }>;
+  corroboration?: {
+    used: boolean;
+    cached: boolean;
+    hitCount: number;
+    hits: Array<{ url: string; title?: string; trust: string; year?: number; excerpt?: string }>;
+  } | null;
 };
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -50,6 +58,8 @@ function humanReason(r: string): string {
       return "the year code repeats on a cycle and we couldn't pick one confidently.";
     case "insufficient_information":
       return "not enough information was provided.";
+    case "low_confidence":
+      return "the serial yields multiple possible years and we couldn't corroborate one. Please read the date code from the data plate.";
     default:
       return r;
   }
