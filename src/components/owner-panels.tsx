@@ -67,6 +67,7 @@ import {
   listFeedback,
   updateFeedbackStatus,
   getAgeDecoderStats,
+  getTechSheetCoverageStats,
 } from "@/lib/owner.functions";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
 
@@ -115,6 +116,7 @@ export function OwnerPanels() {
         <TabsTrigger value="feedback">Feedback</TabsTrigger>
         <TabsTrigger value="cost">AI Cost</TabsTrigger>
         <TabsTrigger value="age-decoder">Age Decoder</TabsTrigger>
+        <TabsTrigger value="tech-sheets">Tech Sheets</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
@@ -123,6 +125,7 @@ export function OwnerPanels() {
       <TabsContent value="feedback" className="mt-6"><FeedbackTab /></TabsContent>
       <TabsContent value="cost" className="mt-6"><CostTab /></TabsContent>
       <TabsContent value="age-decoder" className="mt-6"><AgeDecoderTab /></TabsContent>
+      <TabsContent value="tech-sheets" className="mt-6"><TechSheetCoverageTab /></TabsContent>
 
       <div className="mt-6 flex flex-wrap items-center gap-3 text-xs">
         <a
@@ -783,6 +786,90 @@ function Sparkline({
       <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
         <span>{labels[0]}</span>
         <span>{labels[labels.length - 1]}</span>
+      </div>
+    </div>
+  );
+}
+
+function TechSheetCoverageTab() {
+  const fn = useServerFn(getTechSheetCoverageStats);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["owner", "tech-sheets"],
+    queryFn: () => fn(),
+  });
+  if (isLoading) return <Loading />;
+  if (error) return <ErrorBlock error={error} />;
+  if (!data) return null;
+
+  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+  const trustLabel: Record<string, string> = {
+    oem: "OEM",
+    trusted_reference: "Trusted Reference",
+    community: "Community",
+  };
+  const confidenceLabel: Record<string, string> = {
+    exact_model: "Exact Model",
+    platform_family: "Platform Family",
+    manufacturer_family: "Manufacturer Family",
+    low: "Low / None",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Lookups (30d)" value={data.total} />
+        <StatCard label="Cache Hits" value={data.cacheHits} />
+        <StatCard label="Cache Hit Rate" value={pct(data.cacheHitRate)} />
+        <StatCard label="Sheets Cached" value={data.sheetsCached} />
+      </div>
+
+      <div className="rounded-lg border border-border bg-card/60 p-4">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Confidence Breakdown (last 30d lookups)
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {Object.entries(data.confidenceCounts).map(([k, v]) => (
+            <div key={k} className="rounded border border-border/40 bg-background/30 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{confidenceLabel[k] ?? k}</div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">{v}</div>
+              <div className="text-[10px] text-muted-foreground">{data.total ? pct(v / data.total) : "—"}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card/60 p-4">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Source Trust Breakdown (cached corpus)
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {data.trustBreakdown.map((t) => (
+            <div key={t.trust} className="rounded border border-border/40 bg-background/30 p-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{trustLabel[t.trust] ?? t.trust}</div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">{t.count}</div>
+              <div className="text-[10px] text-muted-foreground">{pct(t.percentage)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card/60 p-4">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Recent Cache Misses (manual-seed candidates)
+        </div>
+        <ul className="max-h-72 space-y-1 overflow-y-auto text-xs">
+          {data.recentMisses.map((m, i) => (
+            <li key={i} className="border-t border-border/30 py-1 first:border-t-0">
+              <div className="font-semibold">{m.brand} · {m.modelNumber}</div>
+              <div className="font-mono text-muted-foreground">
+                {m.confidence}{m.sourceTrust ? ` · ${m.sourceTrust}` : ""} — {fmtDate(m.createdAt)}
+              </div>
+            </li>
+          ))}
+          {!data.recentMisses.length && (
+            <li className="text-muted-foreground">No cache misses to show.</li>
+          )}
+        </ul>
       </div>
     </div>
   );

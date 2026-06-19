@@ -58,6 +58,15 @@ type Step = {
   mostLikelyFailures?: string[];
   recommendedNextTest: string;
   nextQuestion: { text: string; choices: string[]; allowFreeText: boolean };
+  groundingSource?: {
+    url: string | null;
+    confidence: "exact_model" | "platform_family" | "manufacturer_family" | "low";
+    sourceType: string;
+    sourceTrust: "oem" | "trusted_reference" | "community" | null;
+    platformFamily: string | null;
+    displayLabel: string;
+    trustLabel: string;
+  } | null;
 };
 
 type ResumeRow = {
@@ -554,6 +563,7 @@ function Phase3(props: {
             )}
           </div>
           <FindingCard label="Recommended Next Test" value={step.recommendedNextTest || "—"} accent="secondary" />
+          {step.groundingSource && <GroundingCaption source={step.groundingSource} />}
         </div>
       )}
 
@@ -662,6 +672,50 @@ function ApplianceChip({ appliance }: { appliance: Appliance }) {
         <div className="text-muted-foreground">Model {appliance.modelNumber}{appliance.serialNumber ? ` · S/N ${appliance.serialNumber}` : ""}</div>
       </div>
       <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">{appliance.confidence}</span>
+    </div>
+  );
+}
+
+function GroundingCaption({
+  source,
+}: {
+  source: NonNullable<Step["groundingSource"]>;
+}) {
+  if (source.confidence === "low") {
+    return (
+      <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+        No verified service literature for this model. Upload the tech sheet or confirm the appliance platform to continue.
+      </div>
+    );
+  }
+  const trustClass =
+    source.sourceTrust === "oem"
+      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+      : source.sourceTrust === "trusted_reference"
+        ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
+        : "bg-muted text-muted-foreground border-border";
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-1 text-[11px] text-muted-foreground">
+      <span>Grounded in:</span>
+      {source.url ? (
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="font-semibold text-foreground underline-offset-2 hover:underline"
+        >
+          {source.displayLabel}
+        </a>
+      ) : (
+        <span className="font-semibold text-foreground">{source.displayLabel}</span>
+      )}
+      {source.trustLabel && (
+        <span
+          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${trustClass}`}
+        >
+          {source.trustLabel}
+        </span>
+      )}
     </div>
   );
 }

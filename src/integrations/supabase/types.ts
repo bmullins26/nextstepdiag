@@ -287,6 +287,99 @@ export type Database = {
         }
         Relationships: []
       }
+      tech_sheet_lookups: {
+        Row: {
+          brand: string
+          cache_hit: boolean
+          confidence: string
+          created_at: string
+          id: string
+          model_number: string
+          outcome: string
+          source_trust: string | null
+          source_url: string | null
+          user_id: string | null
+        }
+        Insert: {
+          brand: string
+          cache_hit?: boolean
+          confidence: string
+          created_at?: string
+          id?: string
+          model_number: string
+          outcome: string
+          source_trust?: string | null
+          source_url?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          brand?: string
+          cache_hit?: boolean
+          confidence?: string
+          created_at?: string
+          id?: string
+          model_number?: string
+          outcome?: string
+          source_trust?: string | null
+          source_url?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      tech_sheets: {
+        Row: {
+          brand: string
+          confidence: string
+          content_markdown: string | null
+          created_at: string
+          created_by: string | null
+          fault_codes: Json
+          fetched_at: string
+          id: string
+          model_number: string
+          platform_family: string | null
+          source_trust: string
+          source_type: string
+          source_url: string | null
+          test_points: Json
+          updated_at: string
+        }
+        Insert: {
+          brand: string
+          confidence?: string
+          content_markdown?: string | null
+          created_at?: string
+          created_by?: string | null
+          fault_codes?: Json
+          fetched_at?: string
+          id?: string
+          model_number: string
+          platform_family?: string | null
+          source_trust?: string
+          source_type?: string
+          source_url?: string | null
+          test_points?: Json
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          confidence?: string
+          content_markdown?: string | null
+          created_at?: string
+          created_by?: string | null
+          fault_codes?: Json
+          fetched_at?: string
+          id?: string
+          model_number?: string
+          platform_family?: string | null
+          source_trust?: string
+          source_type?: string
+          source_url?: string | null
+          test_points?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
