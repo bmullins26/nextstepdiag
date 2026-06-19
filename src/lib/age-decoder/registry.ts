@@ -99,8 +99,39 @@ export function resolveBrand(brand: string): BrandKey | null {
   return null;
 }
 
-export function rulesForBrand(brand: string): Rule[] {
-  const key = resolveBrand(brand);
+/**
+ * Some Kenmore appliances carry a 3-digit model prefix that identifies the
+ * actual manufacturer (110/106 = Whirlpool, 363 = GE, 253 = Frigidaire, ...).
+ * If brand resolution fails on "Kenmore" we re-route to the builder.
+ */
+const KENMORE_PREFIX_TO_BRAND: Record<string, BrandKey> = {
+  "110": "whirlpool", // Whirlpool-built (most common: washers, dryers)
+  "106": "whirlpool", // Whirlpool-built refrigerators
+  "665": "whirlpool", // Whirlpool-built dishwashers
+  "664": "whirlpool", // Whirlpool-built dishwashers
+  "417": "frigidaire", // Frigidaire/Electrolux-built
+  "970": "frigidaire", // Frigidaire-built
+  "363": "ge",        // GE-built
+  "362": "ge",        // GE-built
+  "795": "lg",        // LG-built (newer refrigerators)
+  "401": "samsung",   // Samsung-built (newer washers)
+};
+
+function brandFromModel(model?: string): BrandKey | null {
+  if (!model) return null;
+  const m = model.replace(/[^0-9]/g, "");
+  const prefix = m.slice(0, 3);
+  return KENMORE_PREFIX_TO_BRAND[prefix] ?? null;
+}
+
+export function rulesForBrand(brand: string, model?: string): Rule[] {
+  let key = resolveBrand(brand);
+  // Kenmore is registered as a Whirlpool alias above, but other prefixes
+  // (GE/Frigidaire/LG/Samsung-built) need model-prefix detection.
+  if (brand.trim().toLowerCase().includes("kenmore")) {
+    const fromModel = brandFromModel(model);
+    if (fromModel) key = fromModel;
+  }
   if (!key) return [];
   return REGISTRY[key] ?? [];
 }
