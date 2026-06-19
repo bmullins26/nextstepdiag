@@ -25,7 +25,14 @@ export const testApplianceAgeApiFn = createServerFn({ method: "POST" })
       throw new Error("Forbidden: owners only");
     }
     const { testApplianceAgeApi } = await import("./appliance-age-api.server");
-    return testApplianceAgeApi(data);
+    const r = await testApplianceAgeApi(data);
+    return {
+      success: r.success,
+      statusCode: r.statusCode,
+      rawResponse: JSON.stringify(r.rawResponse ?? null),
+      authMethodUsed: r.authMethodUsed,
+      attempts: r.attempts,
+    };
   });
 
 export type ApplianceAgeApiResult = {
@@ -129,7 +136,7 @@ export async function lookupApplianceAgeWithCache(opts: {
             manufacture_month: apiResult.normalized.manufactureMonth,
             confidence_percent: apiResult.normalized.confidencePercent,
             alternative_years: apiResult.normalized.alternativeYears,
-            raw_response: apiResult.rawResponse as object,
+            raw_response: apiResult.rawResponse as any,
             status_code: apiResult.statusCode,
             success: true,
             response_time_ms: apiResult.responseTimeMs,
