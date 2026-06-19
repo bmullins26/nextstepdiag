@@ -1,63 +1,98 @@
-# Use Homespy's REST API directly
+# Remove camera + rebuild accuracy pipeline (homespy-style)
 
-You're right — homespy exposes a public REST API. The most accurate way to "do exactly what homespy does" is to **call their API**, not re-implement their algorithm. They have years of feedback tuning and partner data we can't replicate.
+Two scopes in one plan: a small UI cleanup, then the larger accuracy rebuild.
 
-## The endpoint
+---
 
-```bash
-curl -X GET "https://homespy.io/api/decode" \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d '{"make":"WHIRLPOOL","serial":"CF2328200","model":"11092573210"}'
-```
+## Part A — Remove the camera / tag-photo option
 
-Returns their decoded age + confidence. Pricing/tokens come from homespy (signup at homespy.io).
+**`src/components/verify-appliance.tsx`**
+- Drop the `Camera` icon import and the `extractTagFromImage` import.
+- Remove `ocrBusy` state, the `ocr` server-fn binding, `ocrEnabled`, and the file handler that calls `ocr(...)`.
+- Remove the camera badge next to brand entries in the brand picker.
+- Remove the "Tag photo available / Photo unsupported" sublabel and the camera `<button>` beside the serial input — the serial field becomes full-width.
+- Remove the now-unused `compressImage` helper.
 
-## Proposed architecture: homespy-first with local fallback
+**`src/lib/serial-decode.functions.ts`**
+- Remove the `extractTagFromImage` server function (no remaining callers).
+- Leave `decodeAppliance` untouched here; rebuilt in Part B.
+
+**Out of scope:** removing the `ocrSupported` field from the brand registry (harmless to keep).
+
+---
+
+## Part B — Build the homespy-style accuracy pipeline
+
+Goal: close most of the gap to homespy without their API by replicating their algorithmic shell — typed multi-source corroboration, weighted aggregation, feedback-driven retraining — on top of our existing serial decoder.
+
+Honest expectation: meaningfully more accurate than today, but won't match homespy's numbers exactly because they have years of feedback tuning we don't. The feedback loop (B3) closes that gap over time.
+
+### B1. Expand serial-rule coverage
+
+Add rules from electrical-forensics for high-volume brands homespy supports and we don't:
+
+Amana, Maytag (Whirlpool variants), KitchenAid, Jenn-Air, Magic Chef, Admiral, Speed Queen / Alliance Laundry, Asko, Haier, Hisense, Sub-Zero, Viking, Thermador.
+
+Each rule returns **all plausible year candidates** with a per-candidate prior (recency-decayed; month/week bonus when encoded). HVAC + water-heater rules deferred.
+
+### B2. Multi-source corroboration (biggest accuracy lever)
+
+Replace today's single Firecrawl query with **4 parallel typed searches**, each with its own template and trust weight. Each source produces year mentions; we aggregate per-year scores, combine with the serial-rule prior, take the argmax.
 
 ```text
-User submits brand + serial + model
-        │
-        ▼
-┌─────────────────────────────┐
-│  Cache hit? (90 days)       │──► return cached
-└──────────┬──────────────────┘
-           │ miss
-           ▼
-┌─────────────────────────────┐
-│  Homespy API (primary)      │──► success → cache + return
-└──────────┬──────────────────┘
-           │ fail (no key, 429, 5xx, unsupported brand)
-           ▼
-┌─────────────────────────────┐
-│  Local decoder (fallback)   │──► return with "fallback" badge
-└─────────────────────────────┘
+ManufacturerData  weight 1.00  site:{oem-domain} "{model}" (manual OR specifications OR "date of manufacture")
+RetailerData      weight 0.70  "{model}" (site:homedepot.com OR site:lowes.com OR site:bestbuy.com OR site:ajmadison.com)
+                               signals: "discontinued" / "no longer available" → year ≤ now-2
+                                        "in stock" / current listing          → year ≥ now-5
+ReviewData        weight 0.50  "{model}" review (site:consumerreports.org OR site:amazon.com OR site:reddit.com)
+                               extract: "bought in YYYY" / "purchased YYYY" / review dates
+GeneralData       weight 0.20  today's generic web sweep (lowest priority)
 ```
 
-Why this shape:
-- **Homespy = source of truth** when available → matches their accuracy by definition.
-- **Local decoder still ships** so the feature works offline, on unsupported brands, or if the homespy bill lapses.
-- **Cache** keeps cost down (1 paid call per unique serial+model, 90-day TTL).
-- **Same result schema** — UI doesn't care which source answered.
+Per-source results cached 90 days. Uncached decode = ~4 Firecrawl searches; cached = 0. Skipped entirely when the serial yields a single high-confidence year.
 
-## Changes
+### B3. Feedback-driven weight tuning
 
-1. **New secret**: `HOMESPY_API_TOKEN` (added via `add_secret` once you confirm you have an account).
-2. **New server module** `src/lib/age-decoder/homespy.server.ts` — `fetchHomespy({ brand, serial, model })` returning a normalized `DecodeOutcome`.
-3. **Rewrite** `src/lib/serial-decode.functions.ts` to: check cache → call homespy → on failure call existing local pipeline.
-4. **Cache table**: reuse `age_decode_corroborations` or add a small `age_decode_homespy_cache` (serial+model+brand → response_json, 90d TTL).
-5. **UI tag** on result: "Decoded by homespy" vs "Local fallback" (small muted badge).
-6. **Cost guardrail**: rate-limit per user (e.g. 50 decodes/day) and surface a clear message when hit.
+The `feedback` table already records correct/incorrect. Add a nightly recompute that stores rolling weights in a new `age_decoder_weights` table keyed by `(brand, source_type)`. Scoring reads these dynamic weights instead of the hardcoded ones in B2. Starts neutral; gets smarter every week.
 
-## What stays / what goes
+### B4. Confidence scoring upgrades
 
-- **Keep**: local serial rules — they're the fallback and handle unsupported brands.
-- **Drop from scope**: the bigger rebuild plan I proposed earlier (multi-source corroboration, feedback weights, brand expansion). Not needed if homespy is the primary.
-- **Out of scope**: image recognition / OCR.
+- Keep the 80% cap.
+- Penalize single-source agreement (one OEM hit alone ≠ high).
+- Reward cross-source agreement (OEM + retailer + review aligned → high).
+- Penalize wide candidate spread that survives corroboration.
 
-## What I need from you
+### B5. UI — show the evidence
 
-1. **Do you have (or will you create) a homespy.io API account?** Pricing is on their docs — I can't sign up for you. Once you have the token I'll wire it up via `add_secret`.
-2. **Fallback behavior when no token / API down** — silently use local decoder (with badge), or show an error and refuse?
-3. **Per-user rate limit** — yes (suggest 50/day) or no cap?
+On the result, show:
+- Each candidate year with the sources that voted for it.
+- "Searched N sources across manufacturer, retailer, reviews."
+- "Still sold / Discontinued" badge when the retailer signal is clear.
+
+Makes it obvious *why* we picked a year, gives users a clear "this is wrong" target, and fuels B3.
+
+---
+
+## Files
+
+**Part A**
+- Edit: `src/components/verify-appliance.tsx`
+- Edit: `src/lib/serial-decode.functions.ts`
+
+**Part B**
+- New: `src/lib/age-decoder/sources/{manufacturer,retailer,review,general}.server.ts`
+- New: `src/lib/age-decoder/feedback-weights.server.ts` + migration for `age_decoder_weights`
+- Rewrite: `src/lib/age-decoder/corroborate.server.ts` to orchestrate the 4 sources in parallel
+- Update: `src/lib/age-decoder/scoring.ts` — cross-source agreement bonus
+- New rule files in `src/lib/age-decoder/rules/` for the B1 brands
+- Migration: add `source_type` column to `age_decode_corroborations`
+- Update: `src/components/verify-appliance.tsx` — per-source evidence UI
+
+## Out of scope
+- Image / OCR (being removed in Part A)
+- HVAC + water-heater rules
+- Homespy API proxy (no token)
+
+## Two choices before I build
+1. **Brand expansion scope:** all 13 brands listed in B1, or top 5 only (Amana, Maytag, KitchenAid, Speed Queen, Sub-Zero)?
+2. **Firecrawl cost:** up to 4 searches per uncached decode (cached = 0), or cap at 2?
