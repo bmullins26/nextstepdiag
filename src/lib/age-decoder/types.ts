@@ -23,10 +23,19 @@ export type DateCandidate = {
 
 export type SourceTrust = "oem" | "trusted_reference" | "community";
 
+/** Homespy-style data point category. Determines query template and weight. */
+export type SourceType =
+  | "manufacturer"
+  | "retailer"
+  | "review"
+  | "general";
+
 export type SourceHit = {
   url: string;
   title?: string;
   trust: SourceTrust;
+  /** Which corroboration source category produced this hit. */
+  sourceType?: SourceType;
   /** Year mentioned near the model number in the source. */
   year?: number;
   /** Brief markdown excerpt around the match. */
@@ -40,6 +49,10 @@ export type Corroboration = {
   hits: SourceHit[];
   /** Adjusted score per year from corroboration evidence. */
   yearBoosts: Record<number, number>;
+  /** Which source types were actually queried (for UI/debug). */
+  sourceTypes?: SourceType[];
+  /** Retailer-signal narrowing: "discontinued" or "in_stock" when detected. */
+  retailerSignal?: "discontinued" | "in_stock" | null;
 };
 
 export type AppliedRule = {
