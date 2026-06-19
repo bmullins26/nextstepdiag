@@ -393,6 +393,81 @@ export function VerifyAppliance({
             </p>
           )}
 
+          {result.manufactureDate?.year ? (
+            <details className="rounded-lg border border-border bg-background/40 p-3">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Know the actual year? Help us improve
+              </summary>
+              {truthSubmitted ? (
+                <p className="mt-2 text-xs text-emerald-300">
+                  Saved — thanks for helping train the decoder.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Year</Label>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="2018"
+                        value={truthYear}
+                        onChange={(e) => setTruthYear(e.target.value)}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Month (optional)</Label>
+                      <select
+                        value={truthMonth}
+                        onChange={(e) => setTruthMonth(e.target.value)}
+                        className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="">—</option>
+                        {MONTHS.slice(1).map((m, i) => (
+                          <option key={m} value={i + 1}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Source</Label>
+                    <select
+                      value={truthSource}
+                      onChange={(e) => setTruthSource(e.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value="data_plate">Data plate</option>
+                      <option value="receipt">Receipt / invoice</option>
+                      <option value="owner_manual">Owner manual</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Notes (optional)</Label>
+                    <Input
+                      placeholder="e.g. data plate reads 04/2018"
+                      value={truthNotes}
+                      onChange={(e) => setTruthNotes(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleSubmitTruth}
+                    disabled={truthSubmitting || !truthYear}
+                    className="h-10 w-full"
+                  >
+                    {truthSubmitting ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting…</>
+                    ) : (
+                      "Submit known year"
+                    )}
+                  </Button>
+                </div>
+              )}
+            </details>
+          ) : null}
+
           <div className="flex gap-2 pt-1">
             <Button
               variant="ghost"
