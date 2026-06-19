@@ -644,3 +644,146 @@ function CostTab() {
     </div>
   );
 }
+
+function AgeDecoderTab() {
+  const fn = useServerFn(getAgeDecoderStats);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["owner", "age-decoder"],
+    queryFn: () => fn(),
+  });
+  if (isLoading) return <Loading />;
+  if (error) return <ErrorBlock error={error} />;
+  if (!data) return null;
+
+  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+  const trend = data.trend ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Lookups (30d)" value={data.total} />
+        <StatCard label="Successful" value={data.successful} />
+        <StatCard label="Unknown" value={data.unknown} />
+        <StatCard label="Success Rate" value={pct(data.successRate)} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Sparkline title="Success Rate Trend (last 30d)" points={trend.map((t) => t.successRate)} labels={trend.map((t) => t.date)} fmt={pct} />
+        <Sparkline title="Unknown Rate Trend (last 30d)" points={trend.map((t) => t.unknownRate)} labels={trend.map((t) => t.date)} fmt={pct} />
+      </div>
+
+      <div className="rounded-lg border border-border bg-card/60 p-4">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Per Manufacturer (v2 = rule engine, v1 = legacy comparison)
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="py-1 text-left">Manufacturer</th>
+                <th className="py-1 text-right">v2 Lookups</th>
+                <th className="py-1 text-right">v2 Success</th>
+                <th className="py-1 text-right">v1 Lookups</th>
+                <th className="py-1 text-right">v1 Success</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.perManufacturer.map((m) => (
+                <tr key={m.manufacturer} className="border-t border-border/40">
+                  <td className="py-1 font-medium">{m.manufacturer}</td>
+                  <td className="py-1 text-right">{m.v2Total}</td>
+                  <td className="py-1 text-right">{m.v2Total ? pct(m.v2SuccessRate) : "—"}</td>
+                  <td className="py-1 text-right text-muted-foreground">{m.v1Total}</td>
+                  <td className="py-1 text-right text-muted-foreground">{m.v1Total ? pct(m.v1SuccessRate) : "—"}</td>
+                </tr>
+              ))}
+              {!data.perManufacturer.length && (
+                <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">No lookups in the last 30 days.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-border bg-card/60 p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Top Unknown Reasons
+          </div>
+          <ul className="space-y-1 text-sm">
+            {data.topUnknownReasons.map((r) => (
+              <li key={r.reason} className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs">{r.reason}</span>
+                <span className="font-semibold">{r.count}</span>
+              </li>
+            ))}
+            {!data.topUnknownReasons.length && (
+              <li className="text-muted-foreground">No unknowns 🎉</li>
+            )}
+          </ul>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card/60 p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Last 20 Unknown Serials
+          </div>
+          <ul className="max-h-64 space-y-1 overflow-y-auto text-xs">
+            {data.recentUnknowns.map((u, i) => (
+              <li key={i} className="border-t border-border/30 py-1 first:border-t-0">
+                <div className="font-semibold">{u.manufacturer} · {u.modelNumber}</div>
+                <div className="font-mono text-muted-foreground">{u.serialNumber} — {u.reason}</div>
+              </li>
+            ))}
+            {!data.recentUnknowns.length && (
+              <li className="text-muted-foreground">No unknowns to show.</li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Sparkline({
+  title,
+  points,
+  labels,
+  fmt,
+}: {
+  title: string;
+  points: number[];
+  labels: string[];
+  fmt: (n: number) => string;
+}) {
+  const W = 320;
+  const H = 60;
+  const max = Math.max(1e-9, ...points, 1);
+  const min = 0;
+  const last = points[points.length - 1] ?? 0;
+  const path = points
+    .map((p, i) => {
+      const x = (i / Math.max(1, points.length - 1)) * W;
+      const y = H - ((p - min) / (max - min || 1)) * H;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <div className="rounded-lg border border-border bg-card/60 p-4">
+      <div className="mb-1 flex items-baseline justify-between">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</div>
+        <div className="text-sm font-semibold">{fmt(last)}</div>
+      </div>
+      {points.length ? (
+        <svg viewBox={`0 0 ${W} ${H}`} className="h-16 w-full">
+          <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary" />
+        </svg>
+      ) : (
+        <div className="text-xs text-muted-foreground">No data.</div>
+      )}
+      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+        <span>{labels[0]}</span>
+        <span>{labels[labels.length - 1]}</span>
+      </div>
+    </div>
+  );
+}
