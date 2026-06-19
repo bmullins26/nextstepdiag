@@ -291,7 +291,9 @@ Identify the appliance. Do not state any date or age.`,
             used: outcome.corroboration.used,
             cached: outcome.corroboration.cached,
             hitCount: outcome.corroboration.hits.length,
-            hits: outcome.corroboration.hits.slice(0, 5),
+            sourceTypes: outcome.corroboration.sourceTypes ?? [],
+            retailerSignal: outcome.corroboration.retailerSignal ?? null,
+            hits: outcome.corroboration.hits.slice(0, 8),
           }
         : null,
     };
