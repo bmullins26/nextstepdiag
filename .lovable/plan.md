@@ -1,98 +1,113 @@
-## Diagnostic Grounding Engine v1.1 — Source Trust Ranking
+# Age Decoder Rebuild (homespy.io parity)
 
-Adds a `SourceTrust` axis (`oem` / `trusted_reference` / `community`) on top of the v1 confidence hierarchy (`exact_model` / `platform_family` / `manufacturer_family` / `low`). Confidence answers *"how specific is this to the model?"*; trust answers *"how authoritative is the source?"*. Both flow into prompts, UI badges, and owner analytics.
+## Why the current decoder fails
 
-## Database
+Quick check against your two test cases:
 
-Migration on `public.tech_sheets`:
+**LG WM0642HW/02 · serial `909KWAT04496`** → Correct answer is **Sept 2009**.
+LG's convention is `YYM…` at positions 1–3 (year=09, month=9). Our current `src/lib/age-decoder/rules/lg.ts` doesn't apply this pattern correctly, so it misses.
 
-```sql
-ALTER TABLE public.tech_sheets
-  ADD COLUMN source_trust text NOT NULL DEFAULT 'community'
-  CHECK (source_trust IN ('oem','trusted_reference','community'));
+**Kenmore 11092573210 · serial `CF2328200`** → `110…` model prefix = Whirlpool-built. Whirlpool serial format is `LL WW SSSSS` (plant-letter, year-letter, 2-digit week, sequence). Year letter `F` is **ambiguous** (recycles every ~20 yrs: 1997 / 2017 / …). Our current rule returns one guess instead of all candidates and has no way to disambiguate with the model number — exactly the failure homespy designed around.
 
--- Backfill existing rows from source_url hostname
-UPDATE public.tech_sheets SET source_trust = CASE
-  WHEN source_url ~* '(whirlpool|maytag|kitchenaid|jennair|ge\.com|geappliances|samsung|lg\.com|frigidaire|electrolux|bosch-home|boschappliances|fisherpaykel|miele|haier|amana)\.' THEN 'oem'
-  WHEN source_url ~* '(appliantology\.org|applianceblog\.com|manualslib\.com)' THEN 'trusted_reference'
-  ELSE 'community'
-END;
+The root cause is architectural: our rules return one date, our brand coverage is thin, and there's no model-number corroboration step.
+
+## What homespy actually does (from their methodology page)
+
+1. Decode serial via brand-specific convention → emit **all possible years** (date codes recycle every ~12–30 years).
+2. Search the web for the model number (manufacturer pages, owner's manuals, retailer listings, reviews) and use those hits to pick the most likely candidate.
+3. Cap confidence at 80% because the process is inherently inferential.
+
+Their cited source for date-code conventions is the electrical-forensics.com major appliances reference, which is far more comprehensive than our hand-written rules.
+
+## Rebuild plan
+
+### 1. Replace rule library
+
+Rewrite `src/lib/age-decoder/rules/*` against the electrical-forensics conventions:
+
+- **LG**: `YYM` at positions 1–3 (digits). Single-candidate, unambiguous.
+- **Samsung**: position 7 = year letter, position 8 = month code (1–9, A–C). Two 10-year cycles → 2 candidates.
+- **Whirlpool family (incl. Kenmore 110/106/665 model prefixes)**: `L L WW SSSSS` — 2nd letter = year. Returns **all matching years** (~3 candidates spanning ~60 yrs). Adds Kenmore prefix detection so `11092573210` routes to Whirlpool rules instead of failing brand resolution.
+- **GE**: 2-letter year+month prefix (e.g. `AL` = Jan 2022). 12-year cycle → multiple candidates.
+- **Frigidaire/Electrolux**: `YYWW…` 4-digit prefix.
+- **Bosch (BSH)**: FD code from model plate; serial position 3–4 = year+month in newer scheme.
+- **Fisher & Paykel**: existing rule preserved, audited against ref.
+- **Miele**: serial-to-year table from ref.
+- **New brands** to match homespy coverage: Maytag-direct, Speed Queen / Alliance Laundry, Sub-Zero, Wolf, Viking, Dacor, U-Line, Marvel, Asko, Blomberg, Summit, Avanti, Danby, Haier-direct, Insignia, Hisense, Midea, A.O. Smith, Bradford White, Rheem, Rinnai, Navien, State, Lochinvar (HVAC/water-heater brands from building-center.org tables).
+
+Each rule's `extract()` now returns **every plausible year** (not just one) along with a per-candidate score = years-from-now decay (recent more likely) × month/week-present bonus.
+
+### 2. Add model-number corroboration via Firecrawl
+
+New file `src/lib/age-decoder/corroborate.server.ts`:
+
+- Input: candidate years + brand + model number.
+- Calls `firecrawl.search(`"<model>" <brand> manual OR review OR discontinued`, { limit: 8 })`.
+- Scrapes the top 3 hits for `markdown` + `metadata.publishedDate`.
+- Extracts year mentions near the model number (regex windows + manufacturer-domain bonus).
+- Weights by source tier (reuses `source-trust.ts` from the grounding engine — OEM > trusted > community).
+- Returns adjusted scores per candidate + an `evidence[]` array.
+
+Cached 90 days in a new `age_decode_corroborations` table keyed by `(brand, model)` to avoid re-spending Firecrawl credits.
+
+### 3. Confidence scoring (capped at 80%)
+
+`scoring.ts` rewritten:
+
+```text
+base = serial-only score of chosen candidate
+if corroborated by OEM hit:   +0.30
+if corroborated by trusted:   +0.20
+if corroborated by community: +0.10
+if only one serial candidate: +0.20
+final = min(0.80, base + bonuses)
 ```
 
-The same classifier lives in code (see `classifySourceTrust` below) so new fetches set it correctly without relying on the default.
+UI labels:
+- ≥ 0.65 → **High (capped 80%)**
+- 0.40–0.64 → **Medium**
+- < 0.40 → **Low** → returns `status: "unknown"` with reason `low_confidence` (matches v1.1 grounding contract — no guessing).
 
-## Module updates: `src/lib/tech-sheets/`
+### 4. Output contract change
 
-- `types.ts` — add `SourceTrust = "oem" | "trusted_reference" | "community"`; extend `TechSheet` and `GroundingResult` with `sourceTrust`. Reserve numeric trust rank for future tiers (Fred's data slotting between OEM and trusted_reference) via a `TRUST_RANK` map.
-- `source-trust.ts` (new) — `classifySourceTrust(url: string): SourceTrust` using a small hostname → trust map (OEM domains per brand, trusted reference domains, fallback `community`). Plus `pickBestSource(candidates)` that sorts by `TRUST_RANK` then by `confidence` rank.
-- `fetch.server.ts`:
-  - `findSourceWithPerplexity` now returns an **array** of candidate `{url, platformFamily}` (Perplexity citations + best match), each classified via `classifySourceTrust`. Pipeline picks highest-trust candidate before scraping.
-  - Persists `source_trust` on upsert.
-- `lookup.functions.ts` — when reading cache, surface `sourceTrust` in the returned `GroundingResult`.
-- `platform-families.ts` / `manufacturer-families.ts` — static entries marked `sourceTrust: 'trusted_reference'` (these are curated by us, not OEM PDFs).
+`DecodeOutcome` adds:
+- `candidates: { year, month?, week?, score, sources: SourceHit[] }[]` (always populated, sorted)
+- `corroboration: { used: boolean; query?: string; hits: SourceHit[] }`
+- `confidencePercent: number` (0–80)
 
-## Diagnostics integration (`src/lib/diagnostics.functions.ts`)
+The diagnose UI shows the chosen year prominently and a collapsible "Other possible years" list when >1 candidate exists — same UX as homespy.
 
-`groundingSource` returned to client now:
+### 5. Server-fn wiring
 
-```ts
-{ url, confidence, sourceType, sourceTrust, platformFamily, displayLabel, trustLabel }
-```
+`src/lib/serial-decode.functions.ts` rewritten as a single `decodeApplianceAge` server fn that:
+1. Runs pure serial decode (fast, offline).
+2. If >1 candidate AND model number provided → calls corroborate.server with Firecrawl.
+3. Persists result in existing `serial_decodes` table for analytics.
 
-System prompt appended (verbatim from spec):
+### 6. Tests
 
-> The provided grounding data may come from OEM documentation, trusted technical references, or community sources. When sources conflict: OEM documentation takes precedence over all other sources. Trusted technical references take precedence over community sources. Community sources should be treated as advisory information only.
+`src/lib/age-decoder/tests/decoder.test.ts` expanded with:
+- **`WM0642HW/02` / `909KWAT04496` → Sept 2009, High confidence** (LG unambiguous).
+- **`11092573210` / `CF2328200` → multi-candidate; with corroboration mocked to OEM "2007 model" → 2007, Medium confidence**.
+- One regression case per brand from manufacturer-documented examples.
 
-The v1 confidence rules (no inventing pins/voltages/codes; low → no test) remain unchanged.
+### 7. Cleanup
 
-## UI (`src/routes/_authenticated/diagnose.tsx`)
-
-Add a small trust badge next to the existing `Grounded in:` caption:
-
-- `oem` → green badge `OEM Source`
-- `trusted_reference` → blue badge `Trusted Technical Reference`
-- `community` → gray badge `Community Source`
-
-No layout changes. Uses existing shadcn `Badge`.
-
-## Owner dashboard
-
-Extend `getTechSheetCoverageStats` (`src/lib/owner.functions.ts`) and the Tech Sheet Coverage panel (`src/components/owner-panels.tsx`) with **Source Trust Breakdown**: count + % for OEM / Trusted Reference / Community across cached sheets. Keep existing confidence breakdown.
-
-## Future compatibility
-
-`TRUST_RANK` is a numeric map so future tiers slot in without touching diagnostics code:
-
-```ts
-export const TRUST_RANK = {
-  oem: 100,
-  fred_historical: 80,        // reserved
-  trusted_reference: 60,
-  community: 20,
-} as const;
-```
-
-Only `SourceTrust` union and DB CHECK constraint need updating to register a new tier.
-
-## Files
-
-Migration:
-- `supabase/migrations/<ts>_tech_sheets_source_trust.sql`
-
-New:
-- `src/lib/tech-sheets/source-trust.ts`
-
-Edited:
-- `src/lib/tech-sheets/types.ts`
-- `src/lib/tech-sheets/fetch.server.ts`
-- `src/lib/tech-sheets/lookup.functions.ts`
-- `src/lib/tech-sheets/platform-families.ts`
-- `src/lib/tech-sheets/manufacturer-families.ts`
-- `src/lib/diagnostics.functions.ts` (prompt + return shape)
-- `src/routes/_authenticated/diagnose.tsx` (trust badge)
-- `src/lib/owner.functions.ts` (stats)
-- `src/components/owner-panels.tsx` (breakdown UI)
+- Owner panel "Age decoder" tab gains a Firecrawl-call counter and cache-hit rate (mirrors the tech-sheets tab from v1.1).
+- Old `scoring.ts` heuristics and confidence enum (`High/Medium/Low/Unknown`) preserved for backwards compat; `confidencePercent` is additive.
 
 ## Out of scope
 
-Age decoder, Documents feature, Fred's API integration, subscriptions, UI redesign.
+- Tech-sheet / diagnostic grounding (v1.1) — untouched.
+- UI redesign beyond the candidate list + confidence chip.
+- HVAC/water-heater logic for non-appliance categories beyond brand registration (rule bodies for those can ship in a follow-up).
+
+## Files touched
+
+- Rewrite: `src/lib/age-decoder/{decode,scoring,registry,types}.ts`, all files in `src/lib/age-decoder/rules/`, `src/lib/serial-decode.functions.ts`
+- New: `src/lib/age-decoder/corroborate.server.ts`, `src/lib/age-decoder/kenmore-prefixes.ts`
+- New: `src/lib/age-decoder/rules/{speedqueen,subzero,viking,asko,haier,…}.ts`
+- Migration: `age_decode_corroborations` cache table (brand, model, hits jsonb, expires_at) + RLS + grants
+- Edit: `src/routes/_authenticated/diagnose.tsx` (verify-appliance card → show candidate list + 80%-capped chip)
+- Edit: `src/components/owner-panels.tsx` (analytics tab)
+- Tests: `src/lib/age-decoder/tests/decoder.test.ts`

@@ -2,13 +2,24 @@ import type { Rule, DateCandidate } from "../types";
 
 // Whirlpool letter→year table. Letters used historically: A..Y excluding
 // I, O, Q, U. Resets ~every 20 years. Most common modern cycle starts 1993.
+// Whirlpool year-letter table per electrical-forensics.com. The letter set
+// skips I, O, Q, U (easily confused with digits) and recycles ~every 20 yrs.
 const WP_LETTERS = "ABCDEFGHJKLMNPRSTVWXY".split("");
 
+/**
+ * Returns ALL plausible years for a given year-letter (homespy behavior).
+ * Cycles: 1973, 1993, 2013, 2033, ...
+ */
 function whirlpoolYearsFromLetter(letter: string): number[] {
   const idx = WP_LETTERS.indexOf(letter.toUpperCase());
   if (idx < 0) return [];
   const now = new Date().getFullYear();
-  return [1993 + idx, 2013 + idx].filter((y) => y >= 1993 && y <= now + 1);
+  const years: number[] = [];
+  for (let base = 1973; base <= now; base += 20) {
+    const y = base + idx;
+    if (y >= 1973 && y <= now + 1) years.push(y);
+  }
+  return years;
 }
 
 /**
@@ -27,17 +38,19 @@ const whirlpoolLetterWeek: Rule = {
     const week = parseInt(s.slice(2, 4), 10);
     const years = whirlpoolYearsFromLetter(yearLetter);
     if (!years.length) return [];
-    const out: DateCandidate[] = years.map((year, i) => ({
-      year,
-      week: Number.isFinite(week) && week >= 1 && week <= 53 ? week : undefined,
-      // Prefer the most recent cycle (later candidate gets higher score).
-      score: i === years.length - 1 ? 0.6 : 0.3,
-    }));
-    return out;
+    const now = new Date().getFullYear();
+    const wk = Number.isFinite(week) && week >= 1 && week <= 53 ? week : undefined;
+    // Recency-decayed scores. Returns every plausible cycle so corroboration
+    // can pick the right one.
+    return years.map<DateCandidate>((year) => {
+      const yearsAgo = Math.max(0, now - year);
+      const score = Math.max(0.20, 0.65 - yearsAgo * 0.012);
+      return { year, week: wk, score };
+    });
   },
   explain: (serial, c) => {
     const s = serial.toUpperCase();
-    return `Whirlpool: plant '${s[0]}', year letter '${s[1]}' → ${c.year}${c.week ? `, week ${c.week}` : ""}.`;
+    return `Whirlpool: plant '${s[0]}', year letter '${s[1]}' → ${c.year}${c.week ? `, week ${c.week}` : ""}. Year-letter cycles every 20 years; chosen by recency + model corroboration.`;
   },
 };
 

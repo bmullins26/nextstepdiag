@@ -51,6 +51,26 @@ export const fixtures: Fixture[] = [
     expect: { status: "ok", year: 2024, month: 12, confidence: "High", ruleId: "lg.yym" },
   },
   {
+    label: "LG legacy Y+MM (909... → Sept 2009, multi-candidate → low_confidence without corroboration)",
+    brand: "LG",
+    model: "WM0642HW/02",
+    serial: "909KWAT04496",
+    now: NOW,
+    // Without corroboration, three candidates (1999/2009/2019) → low → unknown.
+    expect: { status: "unknown", unknownReason: "low_confidence" },
+  },
+  {
+    label: "Kenmore Whirlpool-built (model 110…) routes to Whirlpool rules",
+    brand: "Kenmore",
+    model: "11092573210",
+    serial: "CF2328200",
+    now: NOW,
+    // F = letter index 5 → 1978/1998/2018 candidates. Pure decoder (no
+    // corroboration) picks most recent (2018) with Medium confidence. The
+    // server fn calls Firecrawl to disambiguate in production.
+    expect: { status: "ok", confidence: "Medium", ruleId: "whirlpool.year-letter-week" },
+  },
+  {
     label: "Samsung pos-7 year / pos-8 month",
     brand: "Samsung",
     model: "RF28R7551SR",

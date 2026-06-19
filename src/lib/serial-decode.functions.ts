@@ -5,7 +5,8 @@ import { getGateway, DEFAULT_MODEL } from "./ai-gateway.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { logAiUsage } from "./ai-usage-log.server";
 import { decodeAge } from "./age-decoder";
-import type { DecodeOutcome } from "./age-decoder";
+import type { DecodeOutcome, Corroboration } from "./age-decoder";
+import { resolveBrand } from "./age-decoder";
 import { decodeSerial as legacyDecodeSerial, pickBestCandidate as legacyPick } from "./serial-decode.legacy";
 
 const DecodeInput = z.object({
@@ -14,7 +15,7 @@ const DecodeInput = z.object({
   serialNumber: z.string().min(1),
 });
 
-const DECODER_VERSION = "v2-rule-engine";
+const DECODER_VERSION = "v3-homespy-grounded";
 
 async function logAttempt(opts: {
   supabase: any;
@@ -48,16 +49,111 @@ async function logAttempt(opts: {
   }
 }
 
+/** Load cached corroboration for (brand, model) if it hasn't expired. */
+async function loadCorroborationCache(
+  supabase: any,
+  brandKey: string,
+  modelNumber: string,
+): Promise<Corroboration | null> {
+  try {
+    const { data, error } = await supabase
+      .from("age_decode_corroborations")
+      .select("query, hits, year_scores, expires_at")
+      .eq("brand_key", brandKey)
+      .eq("model_number", modelNumber)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      used: true,
+      cached: true,
+      query: data.query,
+      hits: data.hits ?? [],
+      yearBoosts: data.year_scores ?? {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function saveCorroborationCache(
+  brandKey: string,
+  modelNumber: string,
+  c: Corroboration,
+): Promise<void> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const bestTrust = c.hits.reduce<string | null>((best, h) => {
+      const rank = { oem: 3, trusted_reference: 2, community: 1 } as const;
+      const r = rank[h.trust as keyof typeof rank] ?? 0;
+      const b = best ? rank[best as keyof typeof rank] ?? 0 : 0;
+      return r > b ? h.trust : best;
+    }, null);
+    await supabaseAdmin
+      .from("age_decode_corroborations")
+      .upsert(
+        {
+          brand_key: brandKey,
+          model_number: modelNumber,
+          query: c.query ?? "",
+          hits: c.hits,
+          year_scores: c.yearBoosts,
+          source_count: c.hits.length,
+          best_trust: bestTrust,
+          expires_at: new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString(),
+        },
+        { onConflict: "brand_key,model_number" },
+      );
+  } catch (e) {
+    console.warn("[age-decoder] failed to cache corroboration:", e);
+  }
+}
+
 export const decodeAppliance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => DecodeInput.parse(d))
   .handler(async ({ data, context }) => {
-    // 1) Deterministic age (no AI).
-    const outcome: DecodeOutcome = decodeAge({
+    // 1) First pass: deterministic decode with no corroboration.
+    let outcome: DecodeOutcome = decodeAge({
       brand: data.brand,
       model: data.modelNumber,
       serial: data.serialNumber,
     });
+
+    // 2) If we have >1 candidate (or a single low-confidence one), corroborate
+    //    via cached evidence or Firecrawl search.
+    const brandKey = resolveBrand(data.brand) ?? data.brand.toLowerCase();
+    const candidateYears = outcome.candidates.map((c) => c.year);
+    const shouldCorroborate =
+      candidateYears.length >= 1 &&
+      (outcome.candidates.length > 1 || outcome.confidencePercent < 65) &&
+      candidateYears.length <= 8; // sanity cap
+
+    if (shouldCorroborate) {
+      let corroboration = await loadCorroborationCache(
+        context.supabase,
+        brandKey,
+        data.modelNumber,
+      );
+      if (!corroboration) {
+        const { corroborateAge } = await import("./age-decoder/corroborate.server");
+        corroboration = await corroborateAge({
+          brandKey,
+          modelNumber: data.modelNumber,
+          candidateYears,
+        });
+        if (corroboration.used && corroboration.hits.length) {
+          await saveCorroborationCache(brandKey, data.modelNumber, corroboration);
+        }
+      }
+      // Re-run decode with corroboration injected.
+      outcome = decodeAge({
+        brand: data.brand,
+        model: data.modelNumber,
+        serial: data.serialNumber,
+        corroboration,
+      });
+    }
 
     // 2) AI only describes the appliance — never sees or returns dates/ages.
     const gateway = getGateway();
@@ -167,6 +263,7 @@ Identify the appliance. Do not state any date or age.`,
       applianceType: object.applianceType,
       platform: object.platform,
       confidence: outcome.confidence,
+      confidencePercent: outcome.confidencePercent,
       decodedBreakdown: outcome.breakdown,
       notes:
         outcome.status === "ok"
@@ -182,6 +279,21 @@ Identify the appliance. Do not state any date or age.`,
       ruleName: appliedRule?.name ?? "No rule matched",
       ruleBreakdown: outcome.breakdown,
       unknownReason: outcome.status === "unknown" ? outcome.unknownReason : null,
+      candidates: outcome.candidates.map((c) => ({
+        year: c.year,
+        month: c.month ?? null,
+        week: c.week ?? null,
+        score: c.score ?? 0,
+        sourceCount: c.sources?.length ?? 0,
+      })),
+      corroboration: outcome.corroboration
+        ? {
+            used: outcome.corroboration.used,
+            cached: outcome.corroboration.cached,
+            hitCount: outcome.corroboration.hits.length,
+            hits: outcome.corroboration.hits.slice(0, 5),
+          }
+        : null,
     };
   });
 

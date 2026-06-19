@@ -8,7 +8,8 @@ export type UnknownReason =
   | "invalid_serial_format"
   | "missing_date_code"
   | "ambiguous_year_cycle"
-  | "insufficient_information";
+  | "insufficient_information"
+  | "low_confidence";
 
 export type DateCandidate = {
   year: number;
@@ -16,6 +17,29 @@ export type DateCandidate = {
   week?: number;  // 1-53
   // Optional internal score (set by extract); higher = more likely.
   score?: number;
+  /** Evidence sources that corroborate this year (Firecrawl hits). */
+  sources?: SourceHit[];
+};
+
+export type SourceTrust = "oem" | "trusted_reference" | "community";
+
+export type SourceHit = {
+  url: string;
+  title?: string;
+  trust: SourceTrust;
+  /** Year mentioned near the model number in the source. */
+  year?: number;
+  /** Brief markdown excerpt around the match. */
+  excerpt?: string;
+};
+
+export type Corroboration = {
+  used: boolean;
+  cached: boolean;
+  query?: string;
+  hits: SourceHit[];
+  /** Adjusted score per year from corroboration evidence. */
+  yearBoosts: Record<number, number>;
 };
 
 export type AppliedRule = {
@@ -40,6 +64,8 @@ export type DecodeInput = {
   serial: string;
   /** Optional clock injection for tests. */
   now?: Date;
+  /** Optional pre-fetched corroboration (server-fn injects this). */
+  corroboration?: Corroboration | null;
 };
 
 export type DecodeOk = {
@@ -50,17 +76,21 @@ export type DecodeOk = {
   manufactureWeek: number | null;
   ageYears: number;
   confidence: Confidence;
+  confidencePercent: number;   // 0..80 (homespy cap)
   candidates: DateCandidate[];
   breakdown: string;
+  corroboration: Corroboration | null;
 };
 
 export type DecodeUnknown = {
   status: "unknown";
   appliedRule: AppliedRule | null;
   confidence: "Unknown";
+  confidencePercent: number;   // always 0 on unknown
   unknownReason: UnknownReason;
   breakdown: string;
   candidates: DateCandidate[];
+  corroboration: Corroboration | null;
 };
 
 export type DecodeOutcome = DecodeOk | DecodeUnknown;
