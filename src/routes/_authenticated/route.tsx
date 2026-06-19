@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BrandLogo } from "@/components/brand-logo";
+import { FeedbackWidget } from "@/components/feedback-widget";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -40,6 +41,7 @@ function AuthenticatedLayout() {
             />
           </footer>
         </div>
+        <FeedbackWidget />
       </SidebarInset>
     </SidebarProvider>
   );
