@@ -95,7 +95,7 @@ export const getTechSheet = createServerFn({ method: "POST" })
     if (cached) {
       const { freshnessWindowDays } = await import("./fetch.server");
       const ageMs = Date.now() - new Date(cached.fetched_at).getTime();
-      const windowMs = freshnessWindowDays(cached.confidence) * 24 * 3600 * 1000;
+        const windowMs = freshnessWindowDays(cached.confidence as TechSheet["confidence"]) * 24 * 3600 * 1000;
       if (ageMs < windowMs) {
         const sheet = rowToSheet(cached);
         await logLookup(supabaseAdmin, context.userId, sheet, true, "hit");
