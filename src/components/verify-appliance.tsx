@@ -40,6 +40,7 @@ export type DecodedAppliance = {
     cached: boolean;
     hitCount: number;
     sourceTypes?: string[];
+    retailerSignal?: "discontinued" | "in_stock" | null;
     hits: Array<{ url: string; title?: string; trust: string; sourceType?: string; year?: number; excerpt?: string }>;
   } | null;
 };
