@@ -288,8 +288,12 @@ Identify the appliance. Do not state any date or age.`,
       manufacturer: object.manufacturer,
       applianceType: object.applianceType,
       platform: object.platform,
-      confidence: outcome.confidence,
-      confidencePercent: outcome.confidencePercent,
+      confidence: apiLookup.ok && apiLookup.confidencePercent != null
+        ? (apiLookup.confidencePercent >= 70 ? "High" : apiLookup.confidencePercent >= 40 ? "Medium" : "Low")
+        : outcome.confidence,
+      confidencePercent: apiLookup.ok && apiLookup.confidencePercent != null
+        ? apiLookup.confidencePercent
+        : outcome.confidencePercent,
       decodedBreakdown: outcome.breakdown,
       notes:
         outcome.status === "ok"
