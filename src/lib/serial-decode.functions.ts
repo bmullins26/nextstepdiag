@@ -9,6 +9,7 @@ import type { DecodeOutcome, Corroboration } from "./age-decoder";
 import { resolveBrand } from "./age-decoder";
 import { decodeSerial as legacyDecodeSerial, pickBestCandidate as legacyPick } from "./serial-decode.legacy";
 import { lookupApplianceAgeWithCache } from "./appliance-age.functions";
+import { applyTypeOverrideServerSide } from "./appliance-type-overrides.functions";
 
 const DecodeInput = z.object({
   brand: z.string().min(1),
