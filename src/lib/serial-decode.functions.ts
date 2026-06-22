@@ -289,6 +289,7 @@ Identify the appliance. Do not state any date or age.`,
       manufacturer: object.manufacturer,
       applianceType: object.applianceType,
       platform: object.platform,
+      typeSource: "decoder" as "decoder" | "user_override",
       confidence: apiLookup.ok && apiLookup.confidencePercent != null
         ? (apiLookup.confidencePercent >= 70 ? "High" : apiLookup.confidencePercent >= 40 ? "Medium" : "Low")
         : outcome.confidence,
