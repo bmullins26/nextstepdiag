@@ -69,6 +69,10 @@ import {
   getAgeDecoderStats,
   getTechSheetCoverageStats,
 } from "@/lib/owner.functions";
+import {
+  listApplianceTypeOverrides,
+  deleteApplianceTypeOverride,
+} from "@/lib/appliance-type-overrides.functions";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
 
 function fmtDate(s: string | null | undefined) {
@@ -98,6 +102,78 @@ function Loading() {
   );
 }
 
+function TypeOverridesTab() {
+  const qc = useQueryClient();
+  const listFn = useServerFn(listApplianceTypeOverrides);
+  const delFn = useServerFn(deleteApplianceTypeOverride);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["owner", "type-overrides"],
+    queryFn: () => listFn(),
+  });
+  const delMut = useMutation({
+    mutationFn: (id: string) => delFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Override deleted.");
+      qc.invalidateQueries({ queryKey: ["owner", "type-overrides"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  if (isLoading) return <Loading />;
+  if (error) return <ErrorBlock error={error} />;
+  const rows = data ?? [];
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Brand+model corrections submitted by users. Future decodes for the same brand+model
+        automatically use the corrected type. Delete an entry to revert to the decoder's guess.
+      </p>
+      <div className="overflow-x-auto rounded-xl border border-border/60 bg-card/60 backdrop-blur">
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2">Brand</th>
+              <th className="px-3 py-2">Model</th>
+              <th className="px-3 py-2">Corrected Type</th>
+              <th className="px-3 py-2">Sub-type</th>
+              <th className="px-3 py-2 text-right">Corrections</th>
+              <th className="px-3 py-2 text-right">Applied</th>
+              <th className="px-3 py-2">Last used</th>
+              <th className="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any) => (
+              <tr key={r.id} className="border-t border-border/40">
+                <td className="px-3 py-2 font-medium">{r.brand_display}</td>
+                <td className="px-3 py-2 font-mono text-xs">{r.model_display}</td>
+                <td className="px-3 py-2">{r.appliance_type}</td>
+                <td className="px-3 py-2 text-muted-foreground">{r.sub_type || "—"}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.correction_count}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{r.hit_count}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(r.last_used_at)}</td>
+                <td className="px-3 py-2 text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => delMut.mutate(r.id)}
+                    disabled={delMut.isPending}
+                    aria-label="Delete override"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-sm text-muted-foreground">No overrides yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function ErrorBlock({ error }: { error: unknown }) {
   return (
     <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
@@ -117,6 +193,7 @@ export function OwnerPanels() {
         <TabsTrigger value="cost">AI Cost</TabsTrigger>
         <TabsTrigger value="age-decoder">Age Decoder</TabsTrigger>
         <TabsTrigger value="tech-sheets">Tech Sheets</TabsTrigger>
+        <TabsTrigger value="type-overrides">Type Overrides</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
@@ -126,6 +203,7 @@ export function OwnerPanels() {
       <TabsContent value="cost" className="mt-6"><CostTab /></TabsContent>
       <TabsContent value="age-decoder" className="mt-6"><AgeDecoderTab /></TabsContent>
       <TabsContent value="tech-sheets" className="mt-6"><TechSheetCoverageTab /></TabsContent>
+      <TabsContent value="type-overrides" className="mt-6"><TypeOverridesTab /></TabsContent>
 
       <div className="mt-6 flex flex-wrap items-center gap-3 text-xs">
         <a

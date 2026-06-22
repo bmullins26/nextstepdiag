@@ -25,6 +25,7 @@ import {
   nextDiagnosticStep,
 } from "@/lib/diagnostics.functions";
 import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
+import { ApplianceTypeEditor } from "@/components/appliance-type-editor";
 import {
   upsertSession,
   getSession,
@@ -365,6 +366,9 @@ function DiagnosePage() {
             onStart={startDiagnosis}
             findings={findings}
             setFindings={setFindings}
+            onTypeCorrected={(type, sub) =>
+              setAppliance((a) => (a ? { ...a, applianceType: type, platform: sub || a.platform, typeSource: "user_override" } : a))
+            }
           />
         )}
 
@@ -383,6 +387,9 @@ function DiagnosePage() {
             onReevaluate={() => advance(history)}
             onPrevious={goBackOneQuestion}
             onRewindTo={rewindTo}
+            onTypeCorrected={(type, sub) =>
+              setAppliance((a) => (a ? { ...a, applianceType: type, platform: sub || a.platform, typeSource: "user_override" } : a))
+            }
           />
         )}
 
@@ -434,8 +441,9 @@ function Phase2(props: {
   appliance: Appliance; complaint: string; setComplaint: (v: string) => void;
   onBack: () => void; onStart: () => void;
   findings: string[]; setFindings: (f: string[]) => void;
+  onTypeCorrected?: (type: string, subType: string) => void;
 }) {
-  const { appliance, complaint, setComplaint, onBack, onStart, findings, setFindings } = props;
+  const { appliance, complaint, setComplaint, onBack, onStart, findings, setFindings, onTypeCorrected } = props;
   const { listening, supported, toggle } = useDictation((t) =>
     setComplaint(complaint ? `${complaint} ${t}` : t),
   );
@@ -447,7 +455,7 @@ function Phase2(props: {
   return (
     <section className="space-y-5">
       <SectionHead step="STEP 2" title="Customer complaint" />
-      <ApplianceChip appliance={appliance} />
+      <ApplianceChip appliance={appliance} onTypeCorrected={onTypeCorrected} />
       <CurrentFindings findings={findings} setFindings={setFindings} />
       <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
         <Label htmlFor="complaint" className="text-sm">In the customer's words</Label>
@@ -504,15 +512,16 @@ function Phase3(props: {
   onReevaluate: () => void;
   onPrevious: () => void;
   onRewindTo: (index: number) => void;
+  onTypeCorrected?: (type: string, subType: string) => void;
 }) {
-  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith, findings, setFindings, onReevaluate, onPrevious, onRewindTo } = props;
+  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith, findings, setFindings, onReevaluate, onPrevious, onRewindTo, onTypeCorrected } = props;
   const failures = step?.mostLikelyFailures && step.mostLikelyFailures.length > 0
     ? step.mostLikelyFailures
     : step?.mostLikelyFailure ? [step.mostLikelyFailure] : [];
   return (
     <section className="space-y-5">
       <SectionHead step="STEP 3" title="Guided diagnosis" />
-      <ApplianceChip appliance={appliance} />
+      <ApplianceChip appliance={appliance} onTypeCorrected={onTypeCorrected} />
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Complaint</div>
         <p className="mt-1 text-sm">{complaint}</p>
@@ -664,11 +673,29 @@ function FindingCard({ label, value, accent }: { label: string; value: string; a
   );
 }
 
-function ApplianceChip({ appliance }: { appliance: Appliance }) {
+function ApplianceChip({
+  appliance,
+  onTypeCorrected,
+}: {
+  appliance: Appliance;
+  onTypeCorrected?: (type: string, subType: string) => void;
+}) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-border bg-card/60 px-4 py-2.5 text-xs">
       <div>
-        <div className="font-bold text-foreground">{appliance.manufacturer || appliance.brand} · {appliance.applianceType}</div>
+        <div className="flex items-center gap-1 font-bold text-foreground">
+          <span>{appliance.manufacturer || appliance.brand} · {appliance.applianceType || "Unknown type"}</span>
+          {onTypeCorrected ? (
+            <ApplianceTypeEditor
+              brand={appliance.brand}
+              model={appliance.modelNumber}
+              currentType={appliance.applianceType}
+              currentSubType={appliance.platform}
+              size="icon"
+              onSaved={onTypeCorrected}
+            />
+          ) : null}
+        </div>
         <div className="text-muted-foreground">Model {appliance.modelNumber}{appliance.serialNumber ? ` · S/N ${appliance.serialNumber}` : ""}</div>
       </div>
       <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">{appliance.confidence}</span>
