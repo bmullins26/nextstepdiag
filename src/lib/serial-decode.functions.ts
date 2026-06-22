@@ -284,12 +284,18 @@ Identify the appliance. Do not state any date or age.`,
       `[age-finder] decoder=${DECODER_VERSION} manufacturer=${object.manufacturer || data.brand} model=${data.modelNumber} serial=${data.serialNumber} rule=${appliedRule?.id ?? "none"} status=${outcome.status} date=${manufactureDate ? `${manufactureDate.year}-${String(manufactureDate.month ?? "??").padStart(2, "0")}` : "unknown"} age=${ageYears != null ? `${ageYears.toFixed(1)}yr` : "unknown"}`,
     );
 
+    // Apply user-learned appliance-type override (brand+model). Top layer above API/local decoder.
+    const typeOverride = await applyTypeOverrideServerSide(data.brand, data.modelNumber);
+    const finalApplianceType = typeOverride?.applianceType ?? object.applianceType;
+    const finalPlatform = typeOverride?.subType || object.platform;
+    const typeSource: "decoder" | "user_override" = typeOverride ? "user_override" : "decoder";
+
     return {
       identified: object.identified,
       manufacturer: object.manufacturer,
-      applianceType: object.applianceType,
-      platform: object.platform,
-      typeSource: "decoder" as "decoder" | "user_override",
+      applianceType: finalApplianceType,
+      platform: finalPlatform,
+      typeSource,
       confidence: apiLookup.ok && apiLookup.confidencePercent != null
         ? (apiLookup.confidencePercent >= 70 ? "High" : apiLookup.confidencePercent >= 40 ? "Medium" : "Low")
         : outcome.confidence,
