@@ -512,15 +512,16 @@ function Phase3(props: {
   onReevaluate: () => void;
   onPrevious: () => void;
   onRewindTo: (index: number) => void;
+  onTypeCorrected?: (type: string, subType: string) => void;
 }) {
-  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith, findings, setFindings, onReevaluate, onPrevious, onRewindTo } = props;
+  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith, findings, setFindings, onReevaluate, onPrevious, onRewindTo, onTypeCorrected } = props;
   const failures = step?.mostLikelyFailures && step.mostLikelyFailures.length > 0
     ? step.mostLikelyFailures
     : step?.mostLikelyFailure ? [step.mostLikelyFailure] : [];
   return (
     <section className="space-y-5">
       <SectionHead step="STEP 3" title="Guided diagnosis" />
-      <ApplianceChip appliance={appliance} />
+      <ApplianceChip appliance={appliance} onTypeCorrected={onTypeCorrected} />
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Complaint</div>
         <p className="mt-1 text-sm">{complaint}</p>
