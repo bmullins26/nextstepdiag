@@ -5,7 +5,6 @@ import {
   Check,
   ChevronsUpDown,
   Loader2,
-  Pencil,
   Search,
   Wrench,
 } from "lucide-react";
@@ -16,8 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { APPLIANCE_BRANDS } from "@/lib/appliance-brands";
 import { decodeAppliance } from "@/lib/serial-decode.functions";
 import { submitKnownYear } from "@/lib/age-ground-truth.functions";
-import { upsertApplianceTypeOverride } from "@/lib/appliance-type-overrides.functions";
-import { ApplianceTypeEditor, APPLIANCE_TYPE_OPTIONS } from "@/components/appliance-type-editor";
+import { ApplianceTypeEditor } from "@/components/appliance-type-editor";
 import { RepairInsightsCard } from "@/components/repair-insights-card";
 
 export type DecodedAppliance = {
