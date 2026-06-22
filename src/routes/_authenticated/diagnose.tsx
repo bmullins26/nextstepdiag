@@ -441,8 +441,9 @@ function Phase2(props: {
   appliance: Appliance; complaint: string; setComplaint: (v: string) => void;
   onBack: () => void; onStart: () => void;
   findings: string[]; setFindings: (f: string[]) => void;
+  onTypeCorrected?: (type: string, subType: string) => void;
 }) {
-  const { appliance, complaint, setComplaint, onBack, onStart, findings, setFindings } = props;
+  const { appliance, complaint, setComplaint, onBack, onStart, findings, setFindings, onTypeCorrected } = props;
   const { listening, supported, toggle } = useDictation((t) =>
     setComplaint(complaint ? `${complaint} ${t}` : t),
   );
@@ -454,7 +455,7 @@ function Phase2(props: {
   return (
     <section className="space-y-5">
       <SectionHead step="STEP 2" title="Customer complaint" />
-      <ApplianceChip appliance={appliance} />
+      <ApplianceChip appliance={appliance} onTypeCorrected={onTypeCorrected} />
       <CurrentFindings findings={findings} setFindings={setFindings} />
       <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
         <Label htmlFor="complaint" className="text-sm">In the customer's words</Label>
