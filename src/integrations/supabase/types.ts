@@ -281,6 +281,54 @@ export type Database = {
         }
         Relationships: []
       }
+      appliance_type_overrides: {
+        Row: {
+          appliance_type: string
+          brand_display: string
+          brand_key: string
+          corrected_by: string | null
+          correction_count: number
+          created_at: string
+          hit_count: number
+          id: string
+          last_used_at: string | null
+          model_display: string
+          model_key: string
+          sub_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          appliance_type: string
+          brand_display: string
+          brand_key: string
+          corrected_by?: string | null
+          correction_count?: number
+          created_at?: string
+          hit_count?: number
+          id?: string
+          last_used_at?: string | null
+          model_display: string
+          model_key: string
+          sub_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          appliance_type?: string
+          brand_display?: string
+          brand_key?: string
+          corrected_by?: string | null
+          correction_count?: number
+          created_at?: string
+          hit_count?: number
+          id?: string
+          last_used_at?: string | null
+          model_display?: string
+          model_key?: string
+          sub_type?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       diagnostic_sessions: {
         Row: {
           age_years: number | null
