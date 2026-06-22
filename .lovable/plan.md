@@ -1,44 +1,75 @@
 ## Goal
-Give signed-in testers a one-click way to submit a bug report or general feedback from anywhere in the app. Submissions flow into the existing admin Feedback tab.
 
-## What already exists (reusing, not rebuilding)
-- `public.feedback` table with `kind` (bug/feature/general), `subject`, `body`, `status`.
-- `submitFeedback` server function (`src/lib/feedback.functions.ts`) — auth-gated, Zod-validated.
-- Owner admin UI already has a **Feedback** tab in `src/components/owner-panels.tsx` listing all submissions with filters.
+Let testers manually correct the appliance type (e.g. Washer vs. Dryer) when the decoder misclassifies a model (Kenmore date-code edge cases, etc.). Remember the correction so future scans of the same brand+model auto-apply the right type instead of repeating the mistake.
 
-So this is purely a frontend addition.
+## UX
 
-## What to build
+On the Verify Appliance card (and in the session header on `/diagnose`), next to the "Appliance Type" field, add a small **Edit** (pencil) button. Clicking opens a popover with:
 
-**1. New `src/components/feedback-widget.tsx`**
-- Floating button fixed to bottom-right (mobile-safe spacing), `MessageSquare` icon, label "Feedback". Subtle, not intrusive.
-- Opens a shadcn `Dialog` containing a form:
-  - Type: Bug / Feature idea / General (segmented control or Select, default General)
-  - Subject (required, max 200)
-  - Message (required, max 5000, textarea)
-  - Small helper line: "We'll include the page URL and your browser info to help reproduce."
-- On submit: calls `submitFeedback` via `useServerFn`, appends auto-captured context to the body:
-  ```
-  ---
-  Page: <location.pathname + search>
-  UA: <navigator.userAgent>
-  Viewport: <w>x<h>
-  ```
-- Toast on success ("Thanks — we got it"), reset + close. Toast on error.
-- Only rendered for signed-in users (mounted inside `_authenticated/route.tsx` so the button doesn't appear on `/auth` or the landing page).
+- **Type** select: Washer, Dryer, Refrigerator, Dishwasher, Range/Oven, Microwave, Freezer, Ice Maker, Other (free text)
+- **Sub-type** (optional free text, e.g. "Top-Load", "Side-by-Side")
+- Save / Cancel
 
-**2. Mount the widget**
-- Add `<FeedbackWidget />` inside the `_authenticated/route.tsx` layout, alongside the existing `<Outlet />`.
+On Save:
+1. Update the current diagnostic session's `appliance_type` immediately so the running diagnosis uses the corrected type (error codes, repair insights, document assistant all re-key off it).
+2. Upsert a row in a new `appliance_type_overrides` table keyed by `(brand, model)` (case-insensitive, trimmed). Stores the corrected type, sub-type, `corrected_by`, count, and last-seen timestamp.
+3. Toast: "Saved. Future scans of {brand} {model} will use {type}."
 
-**3. Admin side — minor polish only**
-- The Feedback tab already exists; no schema changes. Confirm it surfaces new submissions (it does — queries `kind` + `status` with default `open`).
+A subtle badge on the Verify card shows **"Type corrected by user"** when the displayed type came from an override (vs. API/local decoder), so testers can see the system learned.
 
-## Out of scope
-- Screenshot uploads / storage bucket.
-- Public (logged-out) submissions.
-- Email notifications to admins.
-- Editing the existing admin Feedback tab beyond verifying it works.
+## Learning loop
+
+Inside `decodeAppliance` (server fn), after the API + local decoder produce a result, look up `appliance_type_overrides` by `(brand, model)`:
+
+- If a match exists, replace `applianceType` (and optionally `platform`) with the override, set `typeSource: "user_override"`, and bump the override's `hit_count` + `last_used_at`.
+- Otherwise leave the decoded type as-is.
+
+This keeps the existing API → local-decoder fallback chain intact; the override is a thin top layer that grows as users correct mistakes. Multiple corrections for the same brand+model just upsert (last write wins) and increment `correction_count`, giving owners a signal in the admin panel about ambiguous models.
+
+## Admin visibility
+
+Add a small **Type Overrides** tab in the existing owner admin UI (alongside Feedback) listing recent overrides: brand, model, corrected type, who corrected it, hit count, last used. Owner can delete a bad override (button → DELETE row). No new permission model — uses existing `has_role('admin')` gate.
+
+## Data model
+
+New table `public.appliance_type_overrides`:
+
+| column            | type        | notes                                       |
+| ----------------- | ----------- | ------------------------------------------- |
+| id                | uuid PK     |                                             |
+| brand_key         | text        | lower(trim(brand)), part of unique key      |
+| model_key         | text        | lower(trim(model)), part of unique key      |
+| brand_display     | text        | original casing for UI                      |
+| model_display     | text        |                                             |
+| appliance_type    | text NOT NULL |                                           |
+| sub_type          | text        |                                             |
+| corrected_by      | uuid → auth.users |                                       |
+| correction_count  | int default 1 |                                           |
+| hit_count         | int default 0 | bumped when decoder applies the override   |
+| last_used_at      | timestamptz |                                             |
+| created_at / updated_at | timestamptz |                                       |
+
+Unique index on `(brand_key, model_key)`.
+
+RLS:
+- `authenticated` can SELECT and INSERT/UPDATE their own corrections (any signed-in tester can teach the system).
+- `service_role` full access.
+- Only admins (`has_role(auth.uid(),'admin')`) can DELETE.
+
+GRANTs follow the standard pattern in the same migration.
 
 ## Files
-- **Create**: `src/components/feedback-widget.tsx`
-- **Edit**: `src/routes/_authenticated/route.tsx` (mount widget)
+
+- **Migration**: create `appliance_type_overrides` + grants + RLS + policies.
+- **New** `src/lib/appliance-type-overrides.functions.ts`: `getOverride({brand, model})`, `upsertOverride(...)`, `listOverrides()` (admin), `deleteOverride(id)` (admin), `bumpOverrideHit(id)`.
+- **Edit** `src/lib/serial-decode.functions.ts` (`decodeAppliance`): after API/local decode, apply override if present; include `typeSource` in the returned object.
+- **Edit** `src/components/verify-appliance.tsx`: add Edit pencil + popover; show "Type corrected by user" badge when `typeSource === 'user_override'`.
+- **Edit** `src/routes/_authenticated/diagnose.tsx`: add a small inline type editor in the session header so the user can also correct after a session is already running; update the session's `appliance_type` via the existing session-update path.
+- **Edit** `src/components/owner-panels.tsx` (or the file holding the admin tabs): add a **Type Overrides** tab.
+- **Edit** `src/integrations/supabase/types.ts`: regenerated after the migration is approved.
+
+## Non-goals / preserved
+
+- No changes to the age decoder, API fallback chain, error code system, document assistant, or owner permissions.
+- No changes to the existing Feedback widget.
+- The override only affects appliance **type/sub-type**, not the decoded age/year.
