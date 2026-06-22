@@ -258,7 +258,33 @@ export function VerifyAppliance({
             <Wrench className="h-4 w-4" /> Identification
           </div>
           <KV k="Manufacturer" v={result.manufacturer || result.brand} />
-          <KV k="Appliance Type" v={[result.applianceType, result.platform].filter(Boolean).join(" · ") || "—"} />
+          <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-1.5">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Appliance Type</span>
+            <div className="flex items-center gap-2">
+              <span className="text-right text-sm font-semibold">
+                {[result.applianceType, result.platform].filter(Boolean).join(" · ") || "—"}
+              </span>
+              <ApplianceTypeEditor
+                brand={result.brand}
+                model={result.modelNumber}
+                currentType={result.applianceType}
+                currentSubType={result.platform}
+                size="icon"
+                onSaved={(t, s) =>
+                  setResult((prev) =>
+                    prev
+                      ? { ...prev, applianceType: t, platform: s, typeSource: "user_override" }
+                      : prev,
+                  )
+                }
+              />
+            </div>
+          </div>
+          {result.typeSource === "user_override" ? (
+            <div className="-mt-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+              Type corrected by user
+            </div>
+          ) : null}
           <KV k="Model" v={result.modelNumber} />
           <KV k="Serial" v={result.serialNumber} />
           <KV
