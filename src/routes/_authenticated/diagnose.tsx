@@ -25,6 +25,7 @@ import {
   nextDiagnosticStep,
 } from "@/lib/diagnostics.functions";
 import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
+import { ApplianceTypeEditor } from "@/components/appliance-type-editor";
 import {
   upsertSession,
   getSession,
@@ -664,11 +665,29 @@ function FindingCard({ label, value, accent }: { label: string; value: string; a
   );
 }
 
-function ApplianceChip({ appliance }: { appliance: Appliance }) {
+function ApplianceChip({
+  appliance,
+  onTypeCorrected,
+}: {
+  appliance: Appliance;
+  onTypeCorrected?: (type: string, subType: string) => void;
+}) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-border bg-card/60 px-4 py-2.5 text-xs">
       <div>
-        <div className="font-bold text-foreground">{appliance.manufacturer || appliance.brand} · {appliance.applianceType}</div>
+        <div className="flex items-center gap-1 font-bold text-foreground">
+          <span>{appliance.manufacturer || appliance.brand} · {appliance.applianceType || "Unknown type"}</span>
+          {onTypeCorrected ? (
+            <ApplianceTypeEditor
+              brand={appliance.brand}
+              model={appliance.modelNumber}
+              currentType={appliance.applianceType}
+              currentSubType={appliance.platform}
+              size="icon"
+              onSaved={onTypeCorrected}
+            />
+          ) : null}
+        </div>
         <div className="text-muted-foreground">Model {appliance.modelNumber}{appliance.serialNumber ? ` · S/N ${appliance.serialNumber}` : ""}</div>
       </div>
       <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">{appliance.confidence}</span>
