@@ -366,6 +366,9 @@ function DiagnosePage() {
             onStart={startDiagnosis}
             findings={findings}
             setFindings={setFindings}
+            onTypeCorrected={(type, sub) =>
+              setAppliance((a) => (a ? { ...a, applianceType: type, platform: sub || a.platform, typeSource: "user_override" } : a))
+            }
           />
         )}
 
@@ -384,6 +387,9 @@ function DiagnosePage() {
             onReevaluate={() => advance(history)}
             onPrevious={goBackOneQuestion}
             onRewindTo={rewindTo}
+            onTypeCorrected={(type, sub) =>
+              setAppliance((a) => (a ? { ...a, applianceType: type, platform: sub || a.platform, typeSource: "user_override" } : a))
+            }
           />
         )}
 
