@@ -79,69 +79,69 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
       console.warn("[diagnose] grounding lookup failed:", err);
     }
 
-    const confidence = grounding?.confidence ?? "low";
+    const rawConfidence = grounding?.confidence ?? "low";
+    // Map grounding result to a diagnostic mode. Grounding IMPROVES diagnostics,
+    // it never blocks them. When no verified literature is available we fall back
+    // to symptom-based reasoning so the tech always gets useful guidance.
+    const hasManufacturer = !!data.appliance.manufacturer?.trim();
+    const hasApplianceType = !!data.appliance.applianceType?.trim();
+    type Mode =
+      | "exact_model"
+      | "platform_family"
+      | "manufacturer_family"
+      | "symptom_based"
+      | "unknown";
+    let mode: Mode;
+    if (rawConfidence === "exact_model") mode = "exact_model";
+    else if (rawConfidence === "platform_family") mode = "platform_family";
+    else if (rawConfidence === "manufacturer_family") mode = "manufacturer_family";
+    else if (hasManufacturer && hasApplianceType) mode = "symptom_based";
+    else mode = "unknown";
+
     console.log(
-      `[diagnose] grounding confidence=${confidence} trust=${grounding?.sourceTrust ?? "n/a"} cacheHit=${grounding?.cacheHit ?? false} url=${grounding?.sourceUrl ?? "(none)"}`,
+      `[diagnose] grounding confidence=${rawConfidence} mode=${mode} trust=${grounding?.sourceTrust ?? "n/a"} cacheHit=${grounding?.cacheHit ?? false} url=${grounding?.sourceUrl ?? "(none)"}`,
     );
 
-    // Low confidence — refuse to recommend a test, ask for tech sheet upload.
-    if (confidence === "low") {
-      return {
-        done: false,
-        currentFindings:
-          "No verified service literature located for this model. Diagnostic recommendations require grounding data.",
-        mostLikelyFailure: "",
-        mostLikelyFailures: [] as string[],
-        recommendedNextTest: "",
-        nextQuestion: {
-          text: "I do not have reliable service information for this model. Please upload the tech sheet or confirm the appliance platform.",
-          choices: [] as string[],
-          allowFreeText: true,
-        },
-        groundingSource: grounding
-          ? {
-              url: grounding.sourceUrl,
-              confidence: grounding.confidence,
-              sourceType: grounding.sourceType,
-              sourceTrust: grounding.sourceTrust,
-              platformFamily: grounding.platformFamily,
-              displayLabel: grounding.displayLabel,
-              trustLabel: grounding.trustLabel,
-            }
-          : null,
-      };
+    // Build grounding excerpt only when we actually have a sheet.
+    const sheet = grounding?.sheet ?? null;
+    let groundingExcerpt = "";
+    if (sheet && (mode === "exact_model" || mode === "platform_family" || mode === "manufacturer_family")) {
+      const mdSlice = (sheet.contentMarkdown || "").slice(0, 4500);
+      const codesText = sheet.faultCodes.length
+        ? `\n\nFAULT CODES:\n${sheet.faultCodes
+            .slice(0, 25)
+            .map((c) => `- ${c.code}: ${c.meaning}${c.test ? ` — ${c.test}` : ""}`)
+            .join("\n")}`
+        : "";
+      const tpText = sheet.testPoints.length
+        ? `\n\nTEST POINTS:\n${sheet.testPoints
+            .slice(0, 25)
+            .map(
+              (t) =>
+                `- ${t.label}${t.connector ? ` @ ${t.connector}` : ""}${t.pins ? ` pins ${t.pins}` : ""}${t.expected ? ` → expect ${t.expected}` : ""}${t.condition ? ` (${t.condition})` : ""}`,
+            )
+            .join("\n")}`
+        : "";
+      groundingExcerpt = `${mdSlice}${codesText}${tpText}`.trim();
     }
 
-    // Build grounding excerpt (capped) — markdown + structured codes/test points.
-    const sheet = grounding!.sheet!;
-    const mdSlice = (sheet.contentMarkdown || "").slice(0, 4500);
-    const codesText = sheet.faultCodes.length
-      ? `\n\nFAULT CODES:\n${sheet.faultCodes
-          .slice(0, 25)
-          .map((c) => `- ${c.code}: ${c.meaning}${c.test ? ` — ${c.test}` : ""}`)
-          .join("\n")}`
-      : "";
-    const tpText = sheet.testPoints.length
-      ? `\n\nTEST POINTS:\n${sheet.testPoints
-          .slice(0, 25)
-          .map(
-            (t) =>
-              `- ${t.label}${t.connector ? ` @ ${t.connector}` : ""}${t.pins ? ` pins ${t.pins}` : ""}${t.expected ? ` → expect ${t.expected}` : ""}${t.condition ? ` (${t.condition})` : ""}`,
-          )
-          .join("\n")}`
-      : "";
-    const groundingExcerpt = `${mdSlice}${codesText}${tpText}`.trim();
+    const modeNote: Record<Mode, string> = {
+      exact_model:
+        "MODE=exact_model. Grounding is from exact-model service literature. Provide full grounded diagnostics, citing specific connectors, pins, voltages, resistances, and fault codes from the grounding data.",
+      platform_family:
+        "MODE=platform_family. Grounding is from platform-family service literature (not exact model). Provide full diagnostics but prefix specific technical references with a brief platform disclaimer (e.g. 'On this platform family ...').",
+      manufacturer_family:
+        "MODE=manufacturer_family. No model-specific literature found. You MAY suggest likely failures and general diagnostic direction based on manufacturer architecture. You MUST NOT cite specific connector names, pin numbers, resistance values, voltage values, or fault-code definitions (none are grounded). Speak in component-level terms (e.g. 'drain pump', 'door lock assembly', 'main control board').",
+      symptom_based:
+        "MODE=symptom_based. No grounded service data available. Reason purely from the reported symptoms and any technician findings. Produce: (1) Most Likely Failures (top 2-3 ranked), (2) one Recommended Next Check at the component level, (3) one Clarifying Question to narrow the fault. Do NOT cite connectors, pins, voltages, resistances, or fault codes.",
+      unknown:
+        "MODE=unknown. Manufacturer or appliance type is unclear. Ask a clarifying question to identify the appliance before giving component-level guidance. Still provide best-effort generic next-check guidance based on the complaint.",
+    };
+    const confidenceNote = modeNote[mode];
 
-    const confidenceNote =
-      confidence === "exact_model"
-        ? "Grounding is from exact-model service literature."
-        : confidence === "platform_family"
-          ? "Grounding is from platform-family service literature (not exact model). Each recommendation MUST state it is based on platform-family documentation rather than exact-model documentation."
-          : "Grounding is from manufacturer-family architectural knowledge only. You MUST reason from symptoms, findings, and general architecture. You MUST NOT reference specific pins, connectors, voltages, resistances, or fault codes (none are present in grounding data).";
-
-    const trustNote = grounding!.sourceTrust
-      ? `Source trust tier: ${grounding!.sourceTrust} (${grounding!.trustLabel}).`
-      : "";
+    const trustNote = grounding?.sourceTrust
+      ? `Source trust tier: ${grounding.sourceTrust} (${grounding.trustLabel}).`
+      : "No verified source — operating in symptom-based mode.";
 
     const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
@@ -159,14 +159,15 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
       }),
       system: `You are an appliance diagnostic assistant guiding a senior tech on-site. The product question is always: "What should I test next?"
 
-GROUNDING (CRITICAL):
-- All recommendations must be grounded in the provided service literature ("grounding data").
-- You may reason from symptoms, findings, and manufacturer architecture.
-- You may ONLY reference connector names, pin numbers, test points, resistance values, voltage values, fault codes, and manufacturer procedures when those values are explicitly present in the grounding data below.
-- If grounding data does not contain those values, you MUST ask a clarifying question or recommend a general diagnostic direction rather than inventing technical details.
-- Never invent connector names, pin numbers, fault codes, test points, resistance values, voltage values, or manufacturer procedures.
+CRITICAL OUTPUT RULE:
+- mostLikelyFailures MUST contain at least one entry. Never return it empty.
+- recommendedNextTest MUST be a non-empty actionable check. Never return it empty.
+- Grounding IMPROVES diagnostics, it never BLOCKS diagnostics. Even with zero grounding data, give the technician useful symptom-based guidance.
+
+GROUNDING:
 - ${confidenceNote}
-- The provided grounding data may come from OEM documentation, trusted technical references, or community sources. When sources conflict: OEM documentation takes precedence over all other sources; trusted technical references take precedence over community sources; community sources should be treated as advisory information only. ${trustNote}
+- You may ONLY reference connector names, pin numbers, test points, resistance values, voltage values, and fault-code definitions when those values are explicitly present in the grounding data below. If absent, speak at the component level instead — do not invent technical details.
+- ${trustNote} When sources conflict: OEM > trusted reference > community.
 
 MANUFACTURER LOCK (CRITICAL):
 - The appliance is a ${data.appliance.manufacturer} ${data.appliance.applianceType} (model ${data.appliance.modelNumber}).
@@ -196,8 +197,8 @@ ${data.currentFindings.length ? data.currentFindings.map((f) => `- ${f}`).join("
 Q&A so far:
 ${historyText}
 
-GROUNDING DATA (confidence=${confidence}, source=${grounding!.sourceUrl ?? grounding!.displayLabel}):
-${groundingExcerpt || "(no extracted content — reason from architecture only)"}
+GROUNDING DATA (mode=${mode}, confidence=${rawConfidence}, source=${grounding?.sourceUrl ?? grounding?.displayLabel ?? "(none — symptom-based)"}):
+${groundingExcerpt || "(no extracted content — reason from symptoms and architecture only; still output failures + next test)"}
 
 ${data.documentExcerpt ? `Additional tech sheet / wiring diagram excerpt (uploaded by technician):\n${data.documentExcerpt.slice(0, 4000)}\n` : ""}
 Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.`,
@@ -205,15 +206,18 @@ Decide the single next diagnostic question, or finalize the call. Reminder: answ
     await logAiUsage({ userId: context.userId, feature: "next_diagnostic_step", model: DEFAULT_MODEL, usage });
     return {
       ...object,
-      groundingSource: {
-        url: grounding!.sourceUrl,
-        confidence: grounding!.confidence,
-        sourceType: grounding!.sourceType,
-        sourceTrust: grounding!.sourceTrust,
-        platformFamily: grounding!.platformFamily,
-        displayLabel: grounding!.displayLabel,
-        trustLabel: grounding!.trustLabel,
-      },
+      groundingMode: mode,
+      groundingSource: grounding
+        ? {
+            url: grounding.sourceUrl,
+            confidence: grounding.confidence,
+            sourceType: grounding.sourceType,
+            sourceTrust: grounding.sourceTrust,
+            platformFamily: grounding.platformFamily,
+            displayLabel: grounding.displayLabel,
+            trustLabel: grounding.trustLabel,
+          }
+        : null,
     };
   });
 

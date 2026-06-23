@@ -711,7 +711,7 @@ function GroundingCaption({
   if (source.confidence === "low") {
     return (
       <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-        No verified service literature for this model. Upload the tech sheet or confirm the appliance platform to continue.
+        No verified service literature found — diagnosing from symptoms only. Upload the tech sheet for grounded, model-specific guidance.
       </div>
     );
   }
