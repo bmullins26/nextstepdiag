@@ -1,75 +1,58 @@
+# Make Age Lookup Optional — Never Block Diagnostics
+
 ## Goal
+A technician must be able to verify an appliance and start diagnosing with **only Brand + Model Number**. Serial number, manufacture date, and age all become optional metadata that **enhance** diagnostics but never gate them.
 
-Let testers manually correct the appliance type (e.g. Washer vs. Dryer) when the decoder misclassifies a model (Kenmore date-code edge cases, etc.). Remember the correction so future scans of the same brand+model auto-apply the right type instead of repeating the mistake.
+## Behavior changes
 
-## UX
+**Verify Appliance form (`src/components/verify-appliance.tsx`)**
+- Required: Brand, Model Number.
+- Optional: Serial Number (label changes to `Serial Number (optional)`).
+- Decode button enabled as soon as Brand + Model are filled.
+- If serial is empty: skip age lookup entirely, return identification-only result (Built: Unknown, Age: Unknown).
+- If serial is present: run age lookup in background; on any failure show "Age unavailable" instead of an error toast.
+- Replace the existing error message "Brand, model number, and serial number are all required to decode" with a helper line under the serial field: *"Age lookup is optional and does not affect diagnostics."*
+- Result card always renders. Built/Age rows show `Unknown` when missing. No blocking warnings.
 
-On the Verify Appliance card (and in the session header on `/diagnose`), next to the "Appliance Type" field, add a small **Edit** (pencil) button. Clicking opens a popover with:
+**Decode server function (`src/lib/serial-decode.functions.ts`)**
+- Loosen Zod schema: `serialNumber: z.string().optional().nullable()`.
+- Skip `lookupApplianceAgeWithCache`, `decodeAge`, corroboration, and legacy comparison when no serial.
+- Wrap the API lookup and local decoder in try/catch — any throw becomes `ok: false` and the function continues.
+- Always return a successful response with the AI-identified `manufacturer / applianceType / platform`. `manufactureDate`, `ageYears`, `ageProvider`, `candidates`, `corroboration` become `null` / empty when unavailable.
+- Persist `age_decode_attempts` only when a decode was actually attempted.
 
-- **Type** select: Washer, Dryer, Refrigerator, Dishwasher, Range/Oven, Microwave, Freezer, Ice Maker, Other (free text)
-- **Sub-type** (optional free text, e.g. "Top-Load", "Side-by-Side")
-- Save / Cancel
+**Diagnose flow (`src/routes/_authenticated/diagnose.tsx`)**
+- `advance()` precondition: require only `manufacturer + applianceType + modelNumber`. Drop the implicit serial/age requirement. Pass `manufactureYear` / `ageYears` only if present.
+- Phase 2 chip: render "Built: Unknown / Age: Unknown" when missing, no warning style.
+- Autosave: nullable age fields already supported — confirm payload sends `null` cleanly.
 
-On Save:
-1. Update the current diagnostic session's `appliance_type` immediately so the running diagnosis uses the corrected type (error codes, repair insights, document assistant all re-key off it).
-2. Upsert a row in a new `appliance_type_overrides` table keyed by `(brand, model)` (case-insensitive, trimmed). Stores the corrected type, sub-type, `corrected_by`, count, and last-seen timestamp.
-3. Toast: "Saved. Future scans of {brand} {model} will use {type}."
+**Diagnostics + downstream features**
+- `nextDiagnosticStep`, error codes, repair insights, document assistant, session create: confirm none throw when `manufactureYear` / `ageYears` are null. If a prompt currently interpolates age, fall back to `"unknown age"` text — never short-circuit.
 
-A subtle badge on the Verify card shows **"Type corrected by user"** when the displayed type came from an override (vs. API/local decoder), so testers can see the system learned.
+**Verify card UI strings**
+- Replace any "couldn't decode / required" copy with: *"Age lookup is optional and does not affect diagnostics."*
+- "Age unavailable" badge (neutral muted) replaces error toasts when API + local both fail.
 
-## Learning loop
-
-Inside `decodeAppliance` (server fn), after the API + local decoder produce a result, look up `appliance_type_overrides` by `(brand, model)`:
-
-- If a match exists, replace `applianceType` (and optionally `platform`) with the override, set `typeSource: "user_override"`, and bump the override's `hit_count` + `last_used_at`.
-- Otherwise leave the decoded type as-is.
-
-This keeps the existing API → local-decoder fallback chain intact; the override is a thin top layer that grows as users correct mistakes. Multiple corrections for the same brand+model just upsert (last write wins) and increment `correction_count`, giving owners a signal in the admin panel about ambiguous models.
-
-## Admin visibility
-
-Add a small **Type Overrides** tab in the existing owner admin UI (alongside Feedback) listing recent overrides: brand, model, corrected type, who corrected it, hit count, last used. Owner can delete a bad override (button → DELETE row). No new permission model — uses existing `has_role('admin')` gate.
+## Priority order (unchanged, but each step is non-fatal)
+1. Cached age result
+2. Appliance Age Finder API
+3. Local deterministic decoder
+4. Unknown → continue
 
 ## Data model
+Already nullable in `diagnostic_sessions` (`manufacture_year`, `age_years`, `serial_number`). No migration required. Treat `null` as valid data everywhere.
 
-New table `public.appliance_type_overrides`:
+## Future-proofing
+All external age providers are isolated behind `lookupApplianceAgeWithCache` and `decodeAge`. Both are now wrapped so removal, rate-limiting, or paywall surfaces as `Age: Unknown` only — diagnostics, error codes, repair insights, grounding, document assistant, and session creation are unaffected.
 
-| column            | type        | notes                                       |
-| ----------------- | ----------- | ------------------------------------------- |
-| id                | uuid PK     |                                             |
-| brand_key         | text        | lower(trim(brand)), part of unique key      |
-| model_key         | text        | lower(trim(model)), part of unique key      |
-| brand_display     | text        | original casing for UI                      |
-| model_display     | text        |                                             |
-| appliance_type    | text NOT NULL |                                           |
-| sub_type          | text        |                                             |
-| corrected_by      | uuid → auth.users |                                       |
-| correction_count  | int default 1 |                                           |
-| hit_count         | int default 0 | bumped when decoder applies the override   |
-| last_used_at      | timestamptz |                                             |
-| created_at / updated_at | timestamptz |                                       |
+## Preserved
+- Existing age decoder, rules, scoring, corroboration, cache, owner analytics, ground-truth collection.
+- Appliance Age Finder API integration and cache table.
+- Type override learning system.
+- Grounding engine fallback behavior from previous change.
 
-Unique index on `(brand_key, model_key)`.
-
-RLS:
-- `authenticated` can SELECT and INSERT/UPDATE their own corrections (any signed-in tester can teach the system).
-- `service_role` full access.
-- Only admins (`has_role(auth.uid(),'admin')`) can DELETE.
-
-GRANTs follow the standard pattern in the same migration.
-
-## Files
-
-- **Migration**: create `appliance_type_overrides` + grants + RLS + policies.
-- **New** `src/lib/appliance-type-overrides.functions.ts`: `getOverride({brand, model})`, `upsertOverride(...)`, `listOverrides()` (admin), `deleteOverride(id)` (admin), `bumpOverrideHit(id)`.
-- **Edit** `src/lib/serial-decode.functions.ts` (`decodeAppliance`): after API/local decode, apply override if present; include `typeSource` in the returned object.
-- **Edit** `src/components/verify-appliance.tsx`: add Edit pencil + popover; show "Type corrected by user" badge when `typeSource === 'user_override'`.
-- **Edit** `src/routes/_authenticated/diagnose.tsx`: add a small inline type editor in the session header so the user can also correct after a session is already running; update the session's `appliance_type` via the existing session-update path.
-- **Edit** `src/components/owner-panels.tsx` (or the file holding the admin tabs): add a **Type Overrides** tab.
-- **Edit** `src/integrations/supabase/types.ts`: regenerated after the migration is approved.
-
-## Non-goals / preserved
-
-- No changes to the age decoder, API fallback chain, error code system, document assistant, or owner permissions.
-- No changes to the existing Feedback widget.
-- The override only affects appliance **type/sub-type**, not the decoded age/year.
+## Files touched
+- `src/components/verify-appliance.tsx` — make serial optional, soften messaging, always render result.
+- `src/lib/serial-decode.functions.ts` — optional serial, non-throwing age path, null-safe response.
+- `src/routes/_authenticated/diagnose.tsx` — drop age/serial preconditions; show `Unknown` cleanly.
+- (Spot-check) `src/lib/diagnostics.functions.ts`, `src/lib/error-codes.functions.ts`, `src/lib/repair-insights.functions.ts`, `src/lib/document-assistant.functions.ts`, `src/lib/sessions.functions.ts` — confirm null age is tolerated; small guard edits only if needed.

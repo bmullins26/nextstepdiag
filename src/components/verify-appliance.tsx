@@ -111,8 +111,8 @@ export function VerifyAppliance({
   }, [query]);
 
   async function handleDecode() {
-    if (!brand.trim() || !model.trim() || !serial.trim()) {
-      toast.error("Brand, model number, and serial number are all required to decode.");
+    if (!brand.trim() || !model.trim()) {
+      toast.error("Brand and model number are required.");
       return;
     }
     setDecoding(true);
@@ -122,7 +122,7 @@ export function VerifyAppliance({
     setTruthMonth("");
     setTruthNotes("");
     try {
-      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial } });
+      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial.trim() || null } });
       setResult(r as DecodedAppliance);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Decode failed.");
@@ -233,7 +233,7 @@ export function VerifyAppliance({
 
         {/* Serial */}
         <div className="space-y-1.5">
-          <Label htmlFor="serial" className="text-xs uppercase tracking-wide text-muted-foreground">Serial Number</Label>
+          <Label htmlFor="serial" className="text-xs uppercase tracking-wide text-muted-foreground">Serial Number (optional)</Label>
           <Input
             id="serial"
             value={serial}
@@ -241,6 +241,9 @@ export function VerifyAppliance({
             placeholder="C81234567"
             className="h-12 w-full text-base"
           />
+          <p className="text-[11px] text-muted-foreground">
+            Age lookup is optional and does not affect diagnostics.
+          </p>
         </div>
 
         <Button onClick={handleDecode} disabled={decoding} className="h-14 w-full text-base font-bold">
@@ -310,16 +313,26 @@ export function VerifyAppliance({
                 <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
                   Verified by Appliance Age Finder{result.ageProvider.cached ? " (cached)" : ""}
                 </span>
-              ) : (
+              ) : result.manufactureDate ? (
                 <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
                   Local Decoder Fallback
+                </span>
+              ) : (
+                <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Age unavailable
                 </span>
               )}
               {result.ageProvider.responseTimeMs ? (
                 <span className="text-[10px] text-muted-foreground">{result.ageProvider.responseTimeMs} ms</span>
               ) : null}
             </div>
-          ) : null}
+          ) : (
+            <div className="pt-1">
+              <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Age lookup skipped
+              </span>
+            </div>
+          )}
           {result.ageProvider?.alternativeYears && result.ageProvider.alternativeYears.length > 0 ? (
             <div className="rounded-lg border border-border bg-background/40 p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -427,8 +440,8 @@ export function VerifyAppliance({
           ) : null}
 
           {result.ageYears == null && result.unknownReason ? (
-            <p className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-              Age unknown — {humanReason(result.unknownReason)}
+            <p className="rounded-lg border border-dashed border-border bg-background/40 p-3 text-xs text-muted-foreground">
+              Age lookup is optional and does not affect diagnostics. ({humanReason(result.unknownReason)})
             </p>
           ) : null}
 
