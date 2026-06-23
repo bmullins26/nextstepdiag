@@ -233,7 +233,7 @@ export function VerifyAppliance({
 
         {/* Serial */}
         <div className="space-y-1.5">
-          <Label htmlFor="serial" className="text-xs uppercase tracking-wide text-muted-foreground">Serial Number</Label>
+          <Label htmlFor="serial" className="text-xs uppercase tracking-wide text-muted-foreground">Serial Number (optional)</Label>
           <Input
             id="serial"
             value={serial}
@@ -241,6 +241,9 @@ export function VerifyAppliance({
             placeholder="C81234567"
             className="h-12 w-full text-base"
           />
+          <p className="text-[11px] text-muted-foreground">
+            Age lookup is optional and does not affect diagnostics.
+          </p>
         </div>
 
         <Button onClick={handleDecode} disabled={decoding} className="h-14 w-full text-base font-bold">
