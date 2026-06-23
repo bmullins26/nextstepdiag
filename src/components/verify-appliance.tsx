@@ -440,8 +440,8 @@ export function VerifyAppliance({
           ) : null}
 
           {result.ageYears == null && result.unknownReason ? (
-            <p className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-              Age unknown — {humanReason(result.unknownReason)}
+            <p className="rounded-lg border border-dashed border-border bg-background/40 p-3 text-xs text-muted-foreground">
+              Age lookup is optional and does not affect diagnostics. ({humanReason(result.unknownReason)})
             </p>
           ) : null}
 
