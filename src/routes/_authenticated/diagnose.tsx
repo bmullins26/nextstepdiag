@@ -237,8 +237,8 @@ function DiagnosePage() {
     const mfg = (appliance.manufacturer || appliance.brand || "").trim();
     const type = (appliance.applianceType || "").trim();
     const model = (appliance.modelNumber || "").trim();
-    if (!mfg || !type || !model) {
-      toast.error("Manufacturer, appliance type, and model are required. Please re-verify the appliance.");
+    if (!mfg || !model) {
+      toast.error("Manufacturer and model number are required. Please re-verify the appliance.");
       setPhase(1);
       return;
     }
@@ -248,9 +248,9 @@ function DiagnosePage() {
         data: {
           appliance: {
             manufacturer: mfg,
-            applianceType: type,
+            applianceType: type || "Unknown",
             modelNumber: model,
-            serialNumber: appliance.serialNumber,
+            serialNumber: appliance.serialNumber || "",
             manufactureYear: appliance.manufactureDate?.year,
             ageYears: appliance.ageYears ?? undefined,
           },
