@@ -313,16 +313,26 @@ export function VerifyAppliance({
                 <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
                   Verified by Appliance Age Finder{result.ageProvider.cached ? " (cached)" : ""}
                 </span>
-              ) : (
+              ) : result.manufactureDate ? (
                 <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
                   Local Decoder Fallback
+                </span>
+              ) : (
+                <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Age unavailable
                 </span>
               )}
               {result.ageProvider.responseTimeMs ? (
                 <span className="text-[10px] text-muted-foreground">{result.ageProvider.responseTimeMs} ms</span>
               ) : null}
             </div>
-          ) : null}
+          ) : (
+            <div className="pt-1">
+              <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Age lookup skipped
+              </span>
+            </div>
+          )}
           {result.ageProvider?.alternativeYears && result.ageProvider.alternativeYears.length > 0 ? (
             <div className="rounded-lg border border-border bg-background/40 p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
