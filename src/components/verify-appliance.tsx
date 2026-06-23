@@ -111,8 +111,8 @@ export function VerifyAppliance({
   }, [query]);
 
   async function handleDecode() {
-    if (!brand.trim() || !model.trim() || !serial.trim()) {
-      toast.error("Brand, model number, and serial number are all required to decode.");
+    if (!brand.trim() || !model.trim()) {
+      toast.error("Brand and model number are required.");
       return;
     }
     setDecoding(true);
@@ -122,7 +122,7 @@ export function VerifyAppliance({
     setTruthMonth("");
     setTruthNotes("");
     try {
-      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial } });
+      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial.trim() || null } });
       setResult(r as DecodedAppliance);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Decode failed.");
