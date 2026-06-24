@@ -73,6 +73,8 @@ import {
   listApplianceTypeOverrides,
   deleteApplianceTypeOverride,
 } from "@/lib/appliance-type-overrides.functions";
+import { getOwnerOutcomeMetrics } from "@/lib/diagnostic-outcomes.functions";
+import { PendingRepairs } from "@/components/pending-repairs";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
 
 function fmtDate(s: string | null | undefined) {
@@ -187,6 +189,7 @@ export function OwnerPanels() {
     <Tabs defaultValue="overview" className="w-full">
       <TabsList className="flex w-full flex-wrap justify-start gap-1">
         <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="accuracy">Accuracy</TabsTrigger>
         <TabsTrigger value="ai">AI Usage</TabsTrigger>
         <TabsTrigger value="users">Users</TabsTrigger>
         <TabsTrigger value="feedback">Feedback</TabsTrigger>
@@ -197,6 +200,7 @@ export function OwnerPanels() {
       </TabsList>
 
       <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
+      <TabsContent value="accuracy" className="mt-6"><AccuracyTab /></TabsContent>
       <TabsContent value="ai" className="mt-6"><AiUsageTab /></TabsContent>
       <TabsContent value="users" className="mt-6"><UsersTab /></TabsContent>
       <TabsContent value="feedback" className="mt-6"><FeedbackTab /></TabsContent>
