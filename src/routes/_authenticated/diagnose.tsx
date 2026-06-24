@@ -523,8 +523,10 @@ function Phase3(props: {
   onPrevious: () => void;
   onRewindTo: (index: number) => void;
   onTypeCorrected?: (type: string, subType: string) => void;
+  sessionId: string | null;
+  onOutcomeRecorded: (kind: "confirmed" | "incorrect" | "partial" | "pending_repair") => void;
 }) {
-  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith, findings, setFindings, onReevaluate, onPrevious, onRewindTo, onTypeCorrected } = props;
+  const { appliance, complaint, history, step, thinking, freeText, setFreeText, answerWith, findings, setFindings, onReevaluate, onPrevious, onRewindTo, onTypeCorrected, sessionId, onOutcomeRecorded } = props;
   const failures = step?.mostLikelyFailures && step.mostLikelyFailures.length > 0
     ? step.mostLikelyFailures
     : step?.mostLikelyFailure ? [step.mostLikelyFailure] : [];
