@@ -19,6 +19,7 @@ import { amOwner } from "@/lib/owner.functions";
 import { Button } from "@/components/ui/button";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { OwnerPanels } from "@/components/owner-panels";
+import { PendingRepairs } from "@/components/pending-repairs";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -256,23 +257,17 @@ function DashboardPage() {
 
           <aside className="glass-card p-5">
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Field Tips
+              Pending Repairs
             </h2>
-            <ul className="mt-3 space-y-3 text-sm">
-              <li className="flex gap-2">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                Verify line voltage before you replace any control board.
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                Always log current findings — NextStep weights them when picking
-                the next test.
-              </li>
-              <li className="flex gap-2">
-                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                Stuck on a fault code? Open Error Codes for instant decoding.
-              </li>
-            </ul>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Diagnoses awaiting confirmation after a return visit.
+            </p>
+            <div className="mt-3">
+              <PendingRepairs limit={5} compact />
+            </div>
+            <Link to="/history" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+              View all <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
           </aside>
         </section>
       </div>
