@@ -26,6 +26,7 @@ import {
 } from "@/lib/diagnostics.functions";
 import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
 import { ApplianceTypeEditor } from "@/components/appliance-type-editor";
+import { OutcomeCapture } from "@/components/outcome-capture";
 import {
   upsertSession,
   getSession,
@@ -67,6 +68,14 @@ type Step = {
     platformFamily: string | null;
     displayLabel: string;
     trustLabel: string;
+  } | null;
+  historicalOutcomes?: {
+    scope: "exact_model" | "platform_family" | "manufacturer_type" | "manufacturer" | "none";
+    scopeLabel: string;
+    sampleSize: number;
+    exactModelCount: number;
+    totals: { confirmed: number; incorrect: number; partial: number };
+    ranked: Array<{ failure: string; share: number; weightedCount: number; rawCount: number }>;
   } | null;
 };
 
@@ -253,6 +262,7 @@ function DiagnosePage() {
             serialNumber: appliance.serialNumber || "",
             manufactureYear: appliance.manufactureDate?.year,
             ageYears: appliance.ageYears ?? undefined,
+            platform: appliance.platform || null,
           },
           complaint,
           history: h,
