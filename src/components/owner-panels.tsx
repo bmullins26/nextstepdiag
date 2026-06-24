@@ -956,3 +956,87 @@ function TechSheetCoverageTab() {
     </div>
   );
 }
+
+function AccuracyTab() {
+  const fn = useServerFn(getOwnerOutcomeMetrics);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["owner", "diagnostic-accuracy"],
+    queryFn: () => fn(),
+  });
+  if (isLoading) return <Loading />;
+  if (error) return <ErrorBlock error={error} />;
+  if (!data) return null;
+  const accuracy = data.accuracyPercent;
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+        <StatCard label="Total Outcomes" value={data.totals.total} />
+        <StatCard label="Confirmed" value={data.totals.confirmed} />
+        <StatCard label="Incorrect" value={data.totals.incorrect} />
+        <StatCard label="Partial" value={data.totals.partial} />
+        <StatCard label="Pending" value={data.totals.pending} />
+        <StatCard
+          label="Accuracy %"
+          value={accuracy == null ? "—" : `${accuracy}%`}
+          hint="confirmed / resolved"
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <RankList title="Top Confirmed Failures" rows={data.topConfirmed.map((r) => ({ label: r.failure, count: r.count }))} />
+        <RankList title="Most Incorrect Recommendations" rows={data.topIncorrect.map((r) => ({ label: r.failure, count: r.count }))} />
+        <RankList title="Most Common Complaints" rows={data.topComplaints.map((r) => ({ label: r.complaint, count: r.count }))} />
+        <RankList title="Most Common Appliance Types" rows={data.topApplianceTypes.map((r) => ({ label: r.type, count: r.count }))} />
+        <ModelList title="Highest Accuracy Models" rows={data.bestModels} />
+        <ModelList title="Lowest Accuracy Models" rows={data.worstModels} />
+      </div>
+
+      <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur">
+        <div className="mb-3 text-sm font-semibold">Pending Repairs (all technicians' rows you can see)</div>
+        <PendingRepairs limit={25} compact />
+      </div>
+    </div>
+  );
+}
+
+function RankList({ title, rows }: { title: string; rows: Array<{ label: string; count: number }> }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur">
+      <div className="mb-2 text-sm font-semibold">{title}</div>
+      {rows.length === 0 ? (
+        <div className="text-sm text-muted-foreground">No data yet.</div>
+      ) : (
+        <ul className="space-y-1 text-sm">
+          {rows.map((r) => (
+            <li key={r.label} className="flex justify-between gap-2 border-t border-border/30 py-1 first:border-t-0">
+              <span className="truncate">{r.label}</span>
+              <span className="font-mono tabular-nums text-muted-foreground">{r.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ModelList({ title, rows }: { title: string; rows: Array<{ model: string; resolved: number; accuracyPercent: number }> }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur">
+      <div className="mb-2 text-sm font-semibold">{title}</div>
+      {rows.length === 0 ? (
+        <div className="text-sm text-muted-foreground">Need at least 5 resolved outcomes per model.</div>
+      ) : (
+        <ul className="space-y-1 text-sm">
+          {rows.map((r) => (
+            <li key={r.model} className="flex justify-between gap-2 border-t border-border/30 py-1 first:border-t-0">
+              <span className="truncate">{r.model}</span>
+              <span className="font-mono tabular-nums text-muted-foreground">
+                {r.accuracyPercent}% · n={r.resolved}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
