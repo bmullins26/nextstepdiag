@@ -224,7 +224,7 @@ GROUNDING DATA (mode=${mode}, confidence=${rawConfidence}, source=${grounding?.s
 ${groundingExcerpt || "(no extracted content — reason from symptoms and architecture only; still output failures + next test)"}
 
 ${data.documentExcerpt ? `Additional tech sheet / wiring diagram excerpt (uploaded by technician):\n${data.documentExcerpt.slice(0, 4000)}\n` : ""}
-Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.`,
+Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.${historicalBlock}`,
     });
     await logAiUsage({ userId: context.userId, feature: "next_diagnostic_step", model: DEFAULT_MODEL, usage });
     return {
@@ -241,6 +241,17 @@ Decide the single next diagnostic question, or finalize the call. Reminder: answ
             trustLabel: grounding.trustLabel,
           }
         : null,
+      historicalOutcomes:
+        outcomeStats && outcomeStats.sampleSize > 0
+          ? {
+              scope: outcomeStats.scope,
+              scopeLabel: outcomeStats.scopeLabel,
+              sampleSize: outcomeStats.sampleSize,
+              exactModelCount: outcomeStats.exactModelCount,
+              totals: outcomeStats.totals,
+              ranked: outcomeStats.ranked.slice(0, 5),
+            }
+          : null,
     };
   });
 
