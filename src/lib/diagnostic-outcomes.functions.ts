@@ -64,12 +64,12 @@ export const updateOutcome = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => UpdateInput.parse(d))
   .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = {
+    const patch = {
       outcome: data.outcome,
       actual_failure: data.actualFailure ?? null,
       notes: data.notes ?? null,
+      confirmed_at: data.outcome === "confirmed" ? new Date().toISOString() : null,
     };
-    if (data.outcome === "confirmed") patch.confirmed_at = new Date().toISOString();
     const { data: row, error } = await context.supabase
       .from("diagnostic_outcomes")
       .update(patch)
