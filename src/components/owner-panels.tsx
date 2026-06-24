@@ -222,6 +222,10 @@ export function OwnerPanels() {
 }
 
 function OverviewTab() {
+  return <OverviewTabInner />;
+}
+
+function OverviewTabInner() {
   const fn = useServerFn(getOwnerOverview);
   const { data, isLoading, error } = useQuery({
     queryKey: ["owner", "overview"],
