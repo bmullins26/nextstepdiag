@@ -587,10 +587,42 @@ function Phase3(props: {
             ) : (
               <p className="mt-1 text-sm text-muted-foreground">Gathering evidence…</p>
             )}
+            {step.historicalOutcomes && step.historicalOutcomes.sampleSize > 0 ? (
+              <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-[11px] text-muted-foreground">
+                <div className="font-semibold text-primary">
+                  {step.historicalOutcomes.scope === "exact_model"
+                    ? `Based on ${step.historicalOutcomes.exactModelCount} repair${step.historicalOutcomes.exactModelCount === 1 ? "" : "s"} of this exact model`
+                    : `Based on ${step.historicalOutcomes.sampleSize} similar repair${step.historicalOutcomes.sampleSize === 1 ? "" : "s"} · ${step.historicalOutcomes.totals.confirmed} confirmed`}
+                </div>
+                {step.historicalOutcomes.ranked.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {step.historicalOutcomes.ranked.slice(0, 3).map((r) => (
+                      <li key={r.failure} className="flex justify-between gap-2">
+                        <span className="truncate">{r.failure}</span>
+                        <span className="font-mono">{r.share}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </div>
           <FindingCard label="Recommended Next Test" value={step.recommendedNextTest || "—"} accent="secondary" />
           {step.groundingSource && <GroundingCaption source={step.groundingSource} />}
         </div>
+      )}
+
+      {step?.done && (step.mostLikelyFailure || (step.mostLikelyFailures?.length ?? 0) > 0) && (
+        <OutcomeCapture
+          sessionId={sessionId}
+          manufacturer={appliance.manufacturer || appliance.brand}
+          modelNumber={appliance.modelNumber}
+          applianceType={appliance.applianceType}
+          platform={appliance.platform ?? null}
+          complaint={complaint}
+          recommendedFailure={step.mostLikelyFailure || step.mostLikelyFailures?.[0] || ""}
+          onRecorded={onOutcomeRecorded}
+        />
       )}
 
       <div className="rounded-2xl border border-primary/40 bg-card p-5">
