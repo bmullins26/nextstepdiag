@@ -6,6 +6,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { logAiUsage } from "./ai-usage-log.server";
 import { getTechSheet } from "./tech-sheets/lookup.functions";
 import type { GroundingResult } from "./tech-sheets/types";
+import { loadOutcomeStats } from "./diagnostic-outcomes.server";
 
 const ApplianceInput = z.object({
   brand: z.string().min(1),
@@ -45,6 +46,7 @@ const StepInput = z.object({
     serialNumber: z.string().optional().default(""),
     manufactureYear: z.number().int().optional(),
     ageYears: z.number().optional(),
+    platform: z.string().nullable().optional(),
   }),
   complaint: z.string().min(1),
   history: z.array(QAItem).default([]),
@@ -78,6 +80,27 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
     } catch (err) {
       console.warn("[diagnose] grounding lookup failed:", err);
     }
+
+    // --- Historical technician outcomes (weighted prior) ----------------------
+    let outcomeStats: Awaited<ReturnType<typeof loadOutcomeStats>> | null = null;
+    try {
+      outcomeStats = await loadOutcomeStats(context.supabase, {
+        manufacturer: data.appliance.manufacturer,
+        modelNumber: data.appliance.modelNumber,
+        applianceType: data.appliance.applianceType,
+        platform: data.appliance.platform ?? null,
+        complaint: data.complaint,
+      });
+    } catch (err) {
+      console.warn("[diagnose] outcome stats lookup failed:", err);
+    }
+    const historicalBlock =
+      outcomeStats && outcomeStats.sampleSize >= 3 && outcomeStats.ranked.length > 0
+        ? `\n\nHISTORICAL TECHNICIAN OUTCOMES\nScope: ${outcomeStats.scopeLabel}   Sample Size: ${outcomeStats.sampleSize}   Exact-model repairs: ${outcomeStats.exactModelCount}\n${outcomeStats.ranked
+            .slice(0, 5)
+            .map((r) => `- ${r.failure}: ${r.share}%`)
+            .join("\n")}\nUse these outcomes as historical evidence. Prioritize exact-model data over platform-family data; prioritize platform-family over manufacturer-family. Current diagnostic evidence may override historical trends when appropriate.`
+        : "";
 
     const rawConfidence = grounding?.confidence ?? "low";
     // Map grounding result to a diagnostic mode. Grounding IMPROVES diagnostics,
