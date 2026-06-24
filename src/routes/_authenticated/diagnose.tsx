@@ -379,14 +379,6 @@ function DiagnosePage() {
             onTypeCorrected={(type, sub) =>
               setAppliance((a) => (a ? { ...a, applianceType: type, platform: sub || a.platform, typeSource: "user_override" } : a))
             }
-            sessionId={sessionId}
-            onOutcomeRecorded={(kind) => {
-              if (kind === "pending_repair") {
-                toast.success("Pending repair saved.");
-                return;
-              }
-              resetAll();
-            }}
           />
         )}
 
@@ -408,6 +400,11 @@ function DiagnosePage() {
             onTypeCorrected={(type, sub) =>
               setAppliance((a) => (a ? { ...a, applianceType: type, platform: sub || a.platform, typeSource: "user_override" } : a))
             }
+            sessionId={sessionId}
+            onOutcomeRecorded={(kind) => {
+              if (kind === "pending_repair") return;
+              resetAll();
+            }}
           />
         )}
 
