@@ -131,6 +131,29 @@ export function VerifyAppliance({
     }
   }
 
+  async function handleVerifyAndStart() {
+    if (!brand.trim() || !model.trim()) {
+      toast.error("Brand and model number are required.");
+      return;
+    }
+    setDecoding(true);
+    try {
+      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial.trim() || null } });
+      const decoded = r as DecodedAppliance;
+      // Fast-track: identification is enough to start diagnosis even if age lookup didn't succeed.
+      const ready: DecodedAppliance = {
+        ...decoded,
+        identified: decoded.identified || !!(decoded.manufacturer || decoded.brand),
+      };
+      setResult(ready);
+      onConfirm(ready);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Decode failed.");
+    } finally {
+      setDecoding(false);
+    }
+  }
+
   async function handleSubmitTruth() {
     if (!result) return;
     const year = Number(truthYear);
@@ -246,13 +269,28 @@ export function VerifyAppliance({
           </p>
         </div>
 
-        <Button onClick={handleDecode} disabled={decoding} className="h-14 w-full text-base font-bold">
-          {decoding ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Decoding serial…</>
-          ) : (
-            "Decode"
-          )}
-        </Button>
+        <div className="flex flex-col gap-2">
+          <Button
+            onClick={handleVerifyAndStart}
+            disabled={decoding}
+            className="h-14 w-full text-base font-bold"
+          >
+            {decoding ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…</>
+            ) : (
+              "Verify & Start Diagnosis"
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleDecode}
+            disabled={decoding}
+            className="h-11 w-full text-sm"
+          >
+            Lookup Age (optional)
+          </Button>
+        </div>
       </div>
 
       {result && (

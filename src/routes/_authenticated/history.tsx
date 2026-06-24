@@ -10,6 +10,7 @@ import {
   toggleFavorite,
   deleteSession,
 } from "@/lib/sessions.functions";
+import { PendingRepairs } from "@/components/pending-repairs";
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({ meta: [{ title: "History — NextStep Diagnostics" }] }),
@@ -90,6 +91,13 @@ function HistoryPage() {
       <div className="mx-auto max-w-4xl px-4 pb-20 pt-6 md:px-8">
         <h1 className="text-2xl font-black tracking-tight">History</h1>
         <p className="mt-1 text-sm text-muted-foreground">Every service call you've worked on.</p>
+
+        <div className="mt-5">
+          <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            Pending Repairs
+          </h2>
+          <PendingRepairs />
+        </div>
 
         <div className="relative mt-4">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

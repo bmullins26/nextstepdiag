@@ -6,6 +6,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { logAiUsage } from "./ai-usage-log.server";
 import { getTechSheet } from "./tech-sheets/lookup.functions";
 import type { GroundingResult } from "./tech-sheets/types";
+import { loadOutcomeStats } from "./diagnostic-outcomes.server";
 
 const ApplianceInput = z.object({
   brand: z.string().min(1),
@@ -45,6 +46,7 @@ const StepInput = z.object({
     serialNumber: z.string().optional().default(""),
     manufactureYear: z.number().int().optional(),
     ageYears: z.number().optional(),
+    platform: z.string().nullable().optional(),
   }),
   complaint: z.string().min(1),
   history: z.array(QAItem).default([]),
@@ -78,6 +80,27 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
     } catch (err) {
       console.warn("[diagnose] grounding lookup failed:", err);
     }
+
+    // --- Historical technician outcomes (weighted prior) ----------------------
+    let outcomeStats: Awaited<ReturnType<typeof loadOutcomeStats>> | null = null;
+    try {
+      outcomeStats = await loadOutcomeStats(context.supabase, {
+        manufacturer: data.appliance.manufacturer,
+        modelNumber: data.appliance.modelNumber,
+        applianceType: data.appliance.applianceType,
+        platform: data.appliance.platform ?? null,
+        complaint: data.complaint,
+      });
+    } catch (err) {
+      console.warn("[diagnose] outcome stats lookup failed:", err);
+    }
+    const historicalBlock =
+      outcomeStats && outcomeStats.sampleSize >= 3 && outcomeStats.ranked.length > 0
+        ? `\n\nHISTORICAL TECHNICIAN OUTCOMES\nScope: ${outcomeStats.scopeLabel}   Sample Size: ${outcomeStats.sampleSize}   Exact-model repairs: ${outcomeStats.exactModelCount}\n${outcomeStats.ranked
+            .slice(0, 5)
+            .map((r) => `- ${r.failure}: ${r.share}%`)
+            .join("\n")}\nUse these outcomes as historical evidence. Prioritize exact-model data over platform-family data; prioritize platform-family over manufacturer-family. Current diagnostic evidence may override historical trends when appropriate.`
+        : "";
 
     const rawConfidence = grounding?.confidence ?? "low";
     // Map grounding result to a diagnostic mode. Grounding IMPROVES diagnostics,
@@ -201,7 +224,7 @@ GROUNDING DATA (mode=${mode}, confidence=${rawConfidence}, source=${grounding?.s
 ${groundingExcerpt || "(no extracted content — reason from symptoms and architecture only; still output failures + next test)"}
 
 ${data.documentExcerpt ? `Additional tech sheet / wiring diagram excerpt (uploaded by technician):\n${data.documentExcerpt.slice(0, 4000)}\n` : ""}
-Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.`,
+Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.${historicalBlock}`,
     });
     await logAiUsage({ userId: context.userId, feature: "next_diagnostic_step", model: DEFAULT_MODEL, usage });
     return {
@@ -218,6 +241,17 @@ Decide the single next diagnostic question, or finalize the call. Reminder: answ
             trustLabel: grounding.trustLabel,
           }
         : null,
+      historicalOutcomes:
+        outcomeStats && outcomeStats.sampleSize > 0
+          ? {
+              scope: outcomeStats.scope,
+              scopeLabel: outcomeStats.scopeLabel,
+              sampleSize: outcomeStats.sampleSize,
+              exactModelCount: outcomeStats.exactModelCount,
+              totals: outcomeStats.totals,
+              ranked: outcomeStats.ranked.slice(0, 5),
+            }
+          : null,
     };
   });
 

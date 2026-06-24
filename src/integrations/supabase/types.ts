@@ -329,6 +329,60 @@ export type Database = {
         }
         Relationships: []
       }
+      diagnostic_outcomes: {
+        Row: {
+          actual_failure: string | null
+          appliance_type: string
+          complaint: string
+          confirmed_at: string | null
+          created_at: string
+          id: string
+          manufacturer: string
+          model_number: string
+          notes: string | null
+          outcome: string
+          platform: string | null
+          recommended_failure: string
+          session_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_failure?: string | null
+          appliance_type?: string
+          complaint?: string
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          manufacturer?: string
+          model_number?: string
+          notes?: string | null
+          outcome: string
+          platform?: string | null
+          recommended_failure?: string
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          actual_failure?: string | null
+          appliance_type?: string
+          complaint?: string
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          manufacturer?: string
+          model_number?: string
+          notes?: string | null
+          outcome?: string
+          platform?: string | null
+          recommended_failure?: string
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       diagnostic_sessions: {
         Row: {
           age_years: number | null
