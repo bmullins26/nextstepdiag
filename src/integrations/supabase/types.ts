@@ -329,6 +329,96 @@ export type Database = {
         }
         Relationships: []
       }
+      beta_applications: {
+        Row: {
+          activated_at: string | null
+          approved_at: string | null
+          approved_by: string | null
+          beta_wave: number
+          calls_per_week: number
+          company: string | null
+          created_at: string
+          email: string
+          experience_years: number
+          first_name: string
+          id: string
+          invite_code: string | null
+          invited_at: string | null
+          last_name: string
+          location: string
+          notes: string | null
+          primary_brands: Json
+          reason: string
+          referred_by: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          role: string
+          source: string
+          status: string
+          updated_at: string
+          user_id: string | null
+          video_interview: string | null
+        }
+        Insert: {
+          activated_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          beta_wave?: number
+          calls_per_week: number
+          company?: string | null
+          created_at?: string
+          email: string
+          experience_years: number
+          first_name: string
+          id?: string
+          invite_code?: string | null
+          invited_at?: string | null
+          last_name: string
+          location: string
+          notes?: string | null
+          primary_brands?: Json
+          reason: string
+          referred_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          role: string
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          video_interview?: string | null
+        }
+        Update: {
+          activated_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          beta_wave?: number
+          calls_per_week?: number
+          company?: string | null
+          created_at?: string
+          email?: string
+          experience_years?: number
+          first_name?: string
+          id?: string
+          invite_code?: string | null
+          invited_at?: string | null
+          last_name?: string
+          location?: string
+          notes?: string | null
+          primary_brands?: Json
+          reason?: string
+          referred_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          role?: string
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          video_interview?: string | null
+        }
+        Relationships: []
+      }
       diagnostic_outcomes: {
         Row: {
           actual_failure: string | null

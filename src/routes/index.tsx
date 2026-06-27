@@ -50,6 +50,12 @@ function Index() {
               Start Diagnosis <ArrowRight className="ml-1 h-5 w-5" />
             </Link>
           </Button>
+          <Link
+            to="/beta"
+            className="mt-3 block text-center text-xs font-semibold uppercase tracking-wider text-primary hover:underline"
+          >
+            Apply for the private beta →
+          </Link>
         </div>
 
         <div className="mt-8 grid w-full grid-cols-3 gap-3 text-center">
