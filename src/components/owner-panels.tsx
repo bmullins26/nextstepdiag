@@ -76,6 +76,7 @@ import {
 import { getOwnerOutcomeMetrics } from "@/lib/diagnostic-outcomes.functions";
 import { PendingRepairs } from "@/components/pending-repairs";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
+import { BetaProgramTab } from "@/components/owner/beta-program-tab";
 
 function fmtDate(s: string | null | undefined) {
   if (!s) return "—";
@@ -197,6 +198,7 @@ export function OwnerPanels() {
         <TabsTrigger value="age-decoder">Age Decoder</TabsTrigger>
         <TabsTrigger value="tech-sheets">Tech Sheets</TabsTrigger>
         <TabsTrigger value="type-overrides">Type Overrides</TabsTrigger>
+        <TabsTrigger value="beta">Beta</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
@@ -208,6 +210,7 @@ export function OwnerPanels() {
       <TabsContent value="age-decoder" className="mt-6"><AgeDecoderTab /></TabsContent>
       <TabsContent value="tech-sheets" className="mt-6"><TechSheetCoverageTab /></TabsContent>
       <TabsContent value="type-overrides" className="mt-6"><TypeOverridesTab /></TabsContent>
+      <TabsContent value="beta" className="mt-6"><BetaProgramTab /></TabsContent>
 
       <div className="mt-6 flex flex-wrap items-center gap-3 text-xs">
         <a
