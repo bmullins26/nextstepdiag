@@ -1,192 +1,127 @@
-# NextStep Beta Program + Cohort Management & Tester Analytics
+# Beta Program → Technician Management Platform (Phase 1 + 2 + 2.5)
 
-Build a public beta landing page, application form, owner review tools, separated approval/invitation workflow, wave-based rollouts, and engagement analytics.
+Build out the existing beta scaffold into the permanent NextStep Technician & Community Management module. Single migration adds all new tables/columns; UI layered onto the existing Owner Beta tab plus a new Technician Profile surface.
 
-## Part 1 — Public Landing Page (`/beta`)
+## A. Public `/beta` polish (Phase 1)
 
-New public route `src/routes/beta.tsx` (SSR on, full `head()` with title, description, OG tags).
+`src/routes/beta.tsx` + `application-form.tsx`:
 
-Sections:
-- **Hero** — "Help Build the Future of Appliance Diagnostics" + subheading + CTA scrolling to `#apply`.
-- **Features grid** — 9 capability cards (Guided diagnostics, AI troubleshooting, Error codes, Tech sheet analysis, Document assistant, Repair insights, Appliance ID, Outcome learning, Continuous improvement).
-- **Screenshots / Demo** — 5 placeholder cards (Dashboard, Diagnostic workflow, Verify appliance, Tech sheet assistant, Repair insights). Neutral gradient placeholders, easy to swap for real `<img>` later.
-- **Beta Expectations** — bullet list (real service calls, report bugs, suggest improvements, confirm outcomes, help improve recommendations).
-- **Application form** at `#apply`.
+- Add NextStep overview, 6 feature cards, 4 screenshot placeholders, beta expectations, FAQ accordion.
+- Form gains **State** (split from location), **Referral source** select (FB, YouTube, Reddit, Word of mouth, Search, Trade show, Other).
+- Upgraded thank-you state with "What happens next" steps.
 
-Design: clean, professional, reuses existing tokens and `Card`/`Button`. No marketing hype.
+## B. Schema migration (additive, single migration)
 
-## Part 2 — Beta Application Form
+**Extend `beta_applications`:**
+- `state text`, `referral_source text`, `owner_notes text`, `owner_rating int` (1–5 nullable), `tags text[] default '{}'`, `beta_cohort text`
+- Indexes: `(state)`, `(referral_source)`, `(beta_cohort)`, GIN on `tags`
 
-Single-page form, <2 minute completion, Zod-validated client + server.
+**New table `applicant_timeline_events`** — generic timeline:
+- `id, application_id fk, event_type text, actor_user_id uuid null, actor_kind text ('owner'|'system'|'tester'), notes text, metadata jsonb, created_at`
+- Indexed by `(application_id, created_at desc)`
+- Used for: submitted, reviewed, notes_added, approved, waitlisted, declined, wave_assigned, cohort_assigned, invite_sent, account_created, first_login, first_diagnostic_started, first_diagnostic_completed, first_outcome_confirmed, tech_sheet_uploaded, feedback_submitted, etc. — `event_type` is open text so we add new events without migrations.
 
-Fields:
-- First Name, Last Name (≤80)
-- Email (lowercased, unique)
-- Company (optional)
-- Location (State/Country)
-- Experience Years (0–60)
-- Role (Independent Tech, Service Company Tech, Business Owner, Factory Service, Student, Other)
-- Calls Per Week (0–500)
-- Primary Brands — checkbox group (Whirlpool, GE, LG, Samsung, Frigidaire, Bosch, Speed Queen, Other) stored as jsonb
-- Reason (textarea, 20–2000 chars)
-- **Video interview willingness** (Yes / Maybe / No) — optional
-- Feedback consent (required)
-- Beta-software acknowledgement (required)
+**New table `applicant_communications`**:
+- `id, application_id fk, channel text ('email'|'manual'|'discord'), template text, subject text, sender_user_id uuid null, delivery_status text, provider_message_id text, metadata jsonb, created_at`
 
-Submit → public `submitBetaApplication` server fn. Duplicate email → friendly toast. Success → thank-you panel.
+**New table `technician_profiles`** (permanent, separate from `beta_applications` so it outlives the beta):
+- `id, user_id uuid unique fk auth.users, application_id uuid null fk beta_applications`
+- `display_name, company, location, state, country, years_experience int, primary_brands jsonb, primary_appliance_types jsonb, cohort text, beta_wave int, status text, bio text, avatar_url text`
+- `tags text[]`, `owner_rating int`, `owner_notes text`
+- Auto-created by extending `handle_new_user` trigger: when a `beta_applications` row links via email, also insert a `technician_profiles` row seeded from the application.
 
-## Part 3 — Database
+**New table `technician_contributions`** — append-only contribution events (knowledge graph base):
+- `id, technician_id fk, contribution_type text, ref_table text, ref_id uuid, weight numeric default 1, metadata jsonb, created_at`
+- Types: `diagnostic_started`, `diagnostic_completed`, `outcome_confirmed`, `outcome_corrected`, `outcome_partial`, `tech_sheet_uploaded`, `tech_sheet_analyzed`, `repair_insight_submitted`, `feature_request`, `bug_report`, `feedback`, `multi_failure_documented`
+- Indexes: `(technician_id, created_at desc)`, `(contribution_type)`
 
-New migration `beta_applications`:
+**New table `technician_badges`** (schema only, no UI yet):
+- `id, technician_id fk, badge_key text, awarded_at, metadata jsonb`, unique `(technician_id, badge_key)`
 
-```
-id uuid pk default gen_random_uuid()
-first_name text not null
-last_name text not null
-email text not null unique
-company text
-location text not null
-experience_years int not null
-role text not null
-calls_per_week int not null
-primary_brands jsonb not null default '[]'::jsonb
-reason text not null
-video_interview text check (video_interview in ('yes','maybe','no'))
-status text not null default 'pending'
-  check (status in ('pending','approved','invited','active','waitlisted','declined'))
-beta_wave int not null default 1
-source text not null default 'public_form'    -- future: invite_code, referral, company_invite
-invite_code text
-referred_by uuid
-notes text
-reviewed_by uuid references auth.users(id)
-reviewed_at timestamptz
-approved_by uuid references auth.users(id)
-approved_at timestamptz
-invited_at timestamptz
-activated_at timestamptz
-user_id uuid references auth.users(id)        -- linked when applicant signs up
-created_at timestamptz default now()
-updated_at timestamptz default now()
-```
+**New view `technician_metrics_v`** — aggregates contributions by type per technician for fast dashboard reads (replaces per-request joins, scales to 5k+ testers).
 
-Grants + RLS:
-- `GRANT INSERT ON public.beta_applications TO anon;` for the public form (publishable-key server client).
-- `GRANT SELECT, INSERT, UPDATE ON ... TO authenticated; GRANT ALL TO service_role;`
-- Anon INSERT policy: `WITH CHECK (status='pending' AND beta_wave=1 AND source='public_form')`.
-- Admin (`has_role('admin')`) full SELECT/UPDATE.
-- Authenticated non-admins: no SELECT (no PII leak).
-- `set_updated_at` trigger.
-- Indexes: `(status, created_at desc)`, `(email)`, `(beta_wave)`, `(user_id)`.
+**Knowledge-graph hooks** — `technician_contributions.ref_table/ref_id` lets future AI services join contributions back to `diagnostic_sessions`, `diagnostic_outcomes`, `tech_sheets`, `repair_insights`, etc., without schema changes. `metadata jsonb` carries appliance/model/complaint/failure for grounding queries (exact model → platform family → manufacturer).
 
-DB trigger `link_beta_application_on_signup` on `auth.users` insert: if `new.email` matches a `beta_applications.email`, sets `user_id = new.id`, `activated_at = now()`, `status = 'active'` (only if previous status was `'invited'`).
+**Grants & RLS:** all new tables get standard GRANTs; owners-only SELECT/UPDATE on `applicant_*`; technicians can SELECT their own `technician_profiles` and `technician_contributions`; owners SELECT all. Service role full access.
 
-Future-proof fields (`source`, `invite_code`, `referred_by`, `beta_wave`) cover closed/open beta, invite codes, referrals, company invites without redesign.
+**Triggers/automation:**
+- Insert `applicant_timeline_events` rows from existing UPDATE actions (status changes, wave/cohort assignment, invite sent, notes added) via DB triggers on `beta_applications`.
+- Trigger on `diagnostic_sessions` / `diagnostic_outcomes` / `feedback` / `tech_sheets` insert → write `technician_contributions` row + appropriate timeline event (first_* events only when no prior row of that type).
 
-## Part 4 — Server Functions (`src/lib/beta-applications.functions.ts`)
+## C. Server functions
 
-- `submitBetaApplication` — **public** (no auth middleware). Server publishable client. Zod-validated. Returns `{ ok }` / `{ ok:false, reason:'duplicate' }`.
-- `listBetaApplications({ status?, wave?, search?, page? })` — admin-only.
-- `getBetaApplication(id)` — admin-only, returns full row + computed engagement metrics (Part 5).
-- `updateBetaApplicationStatus({ id, status, notes?, wave? })` — admin-only. Stamps `reviewed_by/reviewed_at`. On `approved` → stamps `approved_by/approved_at` (no invite). Allows direct moves: waitlist, decline, deactivate (sets back to `waitlisted` from `active`).
-- `assignBetaWave({ id, wave })` — admin-only.
-- `sendBetaInvite({ id })` — admin-only. Dynamically imports `client.server`, calls `supabaseAdmin.auth.admin.inviteUserByEmail(email, { data:{first_name,last_name,source:'beta',wave}, redirectTo: site/auth })`. Stamps `invited_at`, transitions `status` to `'invited'`. Allowed from `approved` or `invited` (resend).
-- `getBetaProgramStats` — admin-only. Returns counts by status, by wave, by experience bucket (0–2/3–5/6–10/10+), by brand, by region (parse first comma in location), avg activity, most active testers (top 10), inactive testers (top 10 by `last_activity desc null first`).
-- `getBetaTesterMetrics(id)` — admin-only. For an `active`/`invited` row with `user_id`, joins `auth.users`, `diagnostic_sessions`, `diagnostic_outcomes`, `feedback` to compute:
-  - last_login (auth.users.last_sign_in_at)
-  - account_created (auth.users.created_at)
-  - total_sessions, completed_sessions, pending_repairs (diagnostic_outcomes where outcome='pending_repair')
-  - outcome_confirmations (diagnostic_outcomes where outcome='confirmed')
-  - bug_reports, feature_requests, feedback_entries (feedback rows by category — assumes `feedback.category` text; if absent, counts all feedback and labels as "Feedback Entries")
-  - last_activity_date (max of session updated_at, outcome created_at, feedback created_at, last_sign_in_at)
-  - health_score (Part 5)
+`src/lib/beta-applications.functions.ts` extends with:
+- Accept `state`, `referralSource`, `tags`, `cohort`, `ownerRating`, `ownerNotes` in update fn.
+- `getBetaProgramStats` returns `byState`, `byReferralSource`, `byCohort`, `byTag`.
+- `getApplicantTimeline({ id })`, `getApplicantCommunications({ id })`, `findDuplicateApplicants({ id })` — checks email exact, name fuzzy (`similarity()` via pg_trgm), company exact.
+- `listBetaApplications` — paginated (cursor/offset + limit), default 50, filters: status, wave, cohort, tags, search.
+- `getOwnerActivityFeed({ limit })` — UNION across recent timeline events + contributions, newest first.
 
-All admin fns share a `requireAdmin(context)` helper. Uses existing `requireSupabaseAuth` middleware.
+`src/lib/technicians.functions.ts` (new):
+- `getTechnicianProfile({ userId|id })`
+- `listTechnicians({ cohort?, tags?, search?, sort? })` — paginated
+- `getTechnicianMetrics({ id })` — reads `technician_metrics_v`
+- `getTechnicianTimeline({ id })`
+- `updateTechnicianProfile` (owner: rating/tags/notes/cohort; tester: bio/avatar/primary brands/types)
 
-## Part 5 — Health Score
+## D. Owner UI
 
-Computed server-side in `getBetaTesterMetrics`. Weighted scoring, capped at 100:
+**Beta Program tab** (`beta-program-tab.tsx`):
+- Stat strip + 4 bar charts (State, Experience, Brand, Referral Source) using existing `chart.tsx`.
+- Applications table gains Company, State, Calls/Wk, Brands, Tags, Owner Rating (★ readonly). Filters: status, wave, cohort, tag chips, search. Server-paginated.
+- Row click → right-side **Sheet** with tabs: **Application | Timeline | Communications | Duplicates | Notes & Rating | Tester Dashboard**.
+  - Duplicate warning banner at top when matches found; approve still allowed.
+  - Owner Rating: 1–5 star picker (private).
+  - Tag multi-select with create-new.
+  - Cohort free-text + suggestions (Appliance Academy, Discord Community, YouTube, Facebook, Service Companies, Whirlpool Specialists, Refrigeration Specialists).
+  - Communications list shows all `applicant_communications` rows (invites auto-logged when `sendBetaInvite` runs).
+  - Tester Dashboard tab (only when active): last login, sessions, confirmed/partial/incorrect repairs, feedback, bugs, feature requests, tech sheets, health badge.
 
-```
-score =
-  min(completed_sessions, 30) * 1.5     // up to 45
-+ min(outcome_confirmations, 20) * 1.0  // up to 20
-+ min(bug_reports, 10) * 1.5            // up to 15
-+ min(feature_requests, 10) * 1.0       // up to 10
-+ recency_bonus                         // up to 10: 10 if active <7d, 7 if <30d, 3 if <60d, 0 if >90d
-- inactivity_penalty                    // -10 if no activity >60d
-```
+**New "Activity Feed" card** at top of Owner panel — live feed (TanStack Query 30s refetch), newest first, links to applicant/technician.
 
-Badge mapping:
-- 80–100 → ⭐⭐⭐⭐⭐ Power Tester
-- 60–79 → ⭐⭐⭐⭐ Active Tester
-- 35–59 → ⭐⭐⭐ Occasional Tester
-- 15–34 → ⭐⭐ Needs Attention
-- <15 → ⭐ Inactive
+**New Owner sub-tab "Technicians"** — directory of `technician_profiles`, searchable/filterable by cohort/tags/specialty/rating, opens Technician Profile detail.
 
-Informational only. Returned with metrics.
+## E. Technician Profile surface
 
-## Part 6 — Owner Panel: Beta Tab
+New route `src/routes/_authenticated/technicians.$id.tsx` (owner-only via `has_role` check in loader; profile owner can view own):
+- Header: name, company, location, status, beta wave/cohort, health badge, owner rating (owner-only).
+- Specialties: primary brands + appliance type chips, editable by profile owner.
+- **Contributions card** — counts for every contribution type from `technician_metrics_v`.
+- **Reputation card** — informational metrics (confirmed repairs, contribution score, outcome accuracy %, feedback quality, tech-sheet contributions). Never gates access.
+- **Timeline card** — chronological events from `applicant_timeline_events` + `technician_contributions`, newest first.
+- **Badges placeholder** — hidden until first badge exists (schema ready, no awarding logic yet).
 
-New tab in `src/components/owner-panels.tsx` → **Beta**, split into two sub-views via internal tabs:
+## F. Scalability & integration guardrails
 
-**Stats sub-view** (`beta-stats-card.tsx`):
-- Applications Received, Pending Review, Approved, Invited, Active, Waitlisted, Declined
-- Beta Waves Summary (counts per wave)
-- Avg Years Experience, Avg Calls/Week, Avg Tester Activity (avg sessions/active tester)
-- Most Active Testers (top 10) and Inactive Testers (top 10)
-- Applications by Experience Level (bucket bars), by Primary Brand (top 8), by Geographic Region (top 8)
-
-**Applications sub-view** (`beta-applications-panel.tsx`):
-- Toolbar: search (name/email), status filter, wave filter
-- Table: Applicant, Email, Experience, Role, Calls/Week, Wave, Applied, Status badge, Actions menu
-- Actions menu: `Approve`, `Send Invite`, `Resend Invite`, `Move to Waitlist`, `Decline`, `Deactivate Tester`, `Assign Wave…`, `View Full Application`
-- Action visibility depends on current status (e.g. Send Invite only when `approved`; Resend only when `invited`; Deactivate only when `active`).
-
-**Tester Detail Dialog** (`beta-tester-detail.tsx`):
-- Opens from "View Full Application"
-- Header: name, email, status badge, health badge (when active)
-- Application section: every field + reason + video interview willingness + notes textarea
-- Engagement section (only when `user_id` present): last login, account created, total/completed sessions, pending repairs, outcome confirmations, bug reports, feature requests, feedback entries, last activity, health score breakdown
-- Footer: status select, wave select, Save (calls `updateBetaApplicationStatus` / `assignBetaWave`)
-
-## Part 7 — Navigation
-
-- Add `Beta` link in `/`'s public marketing/footer area so visitors find `/beta`.
-- No signed-in sidebar entry (page is for prospects).
-
-## Workflow Summary
-
-```
-Submitted → Pending → Approved → (Send Invite) → Invited → (signup trigger) → Active
-                          ↓                                      ↓
-                      Waitlisted                            Deactivate → Waitlisted
-                          ↓
-                       Declined
-```
-
-Approval never auto-invites. `Send Invite` is a separate explicit action so cohorts can be released in waves or paused.
-
-## Guardrails
-
-- Public form uses publishable-key server client + narrow anon INSERT policy; never touches admin client client-side.
-- All admin ops gated by `has_role('admin')` server-side.
-- Non-admin authenticated users cannot read applications (no PII leak).
-- Health score is informational; no automated gating.
-- `source`/`invite_code`/`referred_by`/`beta_wave` future-proof closed beta, open beta, early access, company invites, invite codes, referrals.
+- All list endpoints paginate server-side; default 50, max 200.
+- `technician_metrics_v` aggregated view avoids N+1 joins for 5k+ testers.
+- Append-only event tables (`applicant_timeline_events`, `technician_contributions`, `applicant_communications`) — no UPDATEs in hot path, easy to shard later.
+- `metadata jsonb` everywhere keeps future fields (Discord username, mobile push token, API usage, badges) additive.
+- `ref_table/ref_id` polymorphic links keep the knowledge-graph open: Technician → Session → Complaint → Appliance → Failure → Outcome → Tech Sheet → Insight all join without schema redesign.
+- `applicant_communications` decouples from the email backend — switching providers or adding Discord/SMS is a new `channel` value.
 
 ## Files
 
 **New:**
-- `supabase/migrations/<ts>_beta_applications.sql`
-- `src/routes/beta.tsx`
-- `src/components/beta/hero.tsx`, `features.tsx`, `screenshots.tsx`, `expectations.tsx`, `application-form.tsx`
-- `src/components/owner/beta-applications-panel.tsx`
-- `src/components/owner/beta-stats-card.tsx`
-- `src/components/owner/beta-tester-detail.tsx`
-- `src/lib/beta-applications.functions.ts`
+- `supabase/migrations/<ts>_technician_platform.sql`
+- `src/lib/technicians.functions.ts`
+- `src/components/owner/activity-feed.tsx`
+- `src/components/owner/technicians-tab.tsx`
+- `src/components/owner/applicant-detail-sheet.tsx` (replaces current Dialog)
+- `src/components/owner/applicant-timeline.tsx`
+- `src/components/owner/applicant-communications.tsx`
+- `src/components/owner/applicant-duplicates.tsx`
+- `src/components/owner/owner-rating.tsx`
+- `src/components/owner/tag-picker.tsx`
+- `src/components/technician/profile-header.tsx`
+- `src/components/technician/contributions-card.tsx`
+- `src/components/technician/reputation-card.tsx`
+- `src/components/technician/timeline-card.tsx`
+- `src/routes/_authenticated/technicians.$id.tsx`
 
 **Edited:**
-- `src/components/owner-panels.tsx` — add Beta tab
-- `src/routes/index.tsx` — add `/beta` link
-- `src/integrations/supabase/types.ts` — auto-regenerated post-migration
+- `src/routes/beta.tsx` — overview, features, screenshots, expectations, FAQ
+- `src/components/beta/application-form.tsx` — state, referral source
+- `src/lib/beta-applications.functions.ts` — new fields, pagination, timeline/communications/duplicates/feed
+- `src/components/owner/beta-program-tab.tsx` — charts, expanded table, sheet integration, activity feed, technicians sub-tab
+- `src/components/owner-panels.tsx` — wire Technicians sub-tab
