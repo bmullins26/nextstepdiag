@@ -528,10 +528,6 @@ function BetaTesterDetailDialog({ id, onClose }: { id: string; onClose: () => vo
                   <div className="text-muted-foreground">Calls / week</div>
                   <div>{app.calls_per_week}</div>
                 </div>
-                <div>
-                  <div className="text-muted-foreground">Video Interview</div>
-                  <div className="capitalize">{app.video_interview ?? "—"}</div>
-                </div>
               </div>
               <div className="mt-2 text-xs">
                 <div className="text-muted-foreground">Primary brands</div>
