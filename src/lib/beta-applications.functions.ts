@@ -37,7 +37,6 @@ const SubmitInput = z.object({
   callsPerWeek: z.number().int().min(0).max(500),
   primaryBrands: z.array(z.enum(BRAND_OPTIONS)).min(1),
   reason: z.string().trim().min(20).max(2000),
-  videoInterview: z.enum(["yes", "maybe", "no"]).optional(),
   feedbackConsent: z.literal(true),
   betaAcknowledged: z.literal(true),
 });
@@ -61,7 +60,6 @@ export const submitBetaApplication = createServerFn({ method: "POST" })
       calls_per_week: data.callsPerWeek,
       primary_brands: data.primaryBrands,
       reason: data.reason,
-      video_interview: data.videoInterview ?? null,
       status: "pending" as const,
       beta_wave: 1,
       source: "public_form",
