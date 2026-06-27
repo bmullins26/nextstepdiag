@@ -1,126 +1,192 @@
-# NextStep v2 + v2.1 — Fast Track, Outcome Learning, Delayed Confirmation
+# NextStep Beta Program + Cohort Management & Tester Analytics
 
-Today's app already runs diagnostics from Brand + Model alone (age is non-blocking). This plan finishes the workflow split, captures real repair outcomes (including delayed confirmation after a return visit), and feeds those outcomes back into recommendations and owner analytics.
+Build a public beta landing page, application form, owner review tools, separated approval/invitation workflow, wave-based rollouts, and engagement analytics.
 
-## Part 1 — Fast Track Verify UI
+## Part 1 — Public Landing Page (`/beta`)
 
-`src/components/verify-appliance.tsx`
-- Replace the single `Decode` button with two:
-  - Primary: **Verify & Start Diagnosis** — runs `decodeAppliance` (serial passed only if filled) and immediately calls `onConfirm`, so `diagnose.tsx` advances to Phase 2.
-  - Secondary: **Lookup Age** — runs only the age path and renders the identification card without leaving Verify.
-- If a serial was provided, keep populating Built/Age in the background; when it resolves, push an updated appliance back via a new `onUpdate` prop so the Phase 2 chip reflects it.
-- Helper copy stays: "Age lookup is optional and does not affect diagnostics." Remove any remaining "required" copy around serial.
+New public route `src/routes/beta.tsx` (SSR on, full `head()` with title, description, OG tags).
 
-`src/routes/_authenticated/diagnose.tsx`
-- Accept `onUpdate` from `VerifyAppliance` so late-arriving age refreshes update `appliance` without resetting the phase.
+Sections:
+- **Hero** — "Help Build the Future of Appliance Diagnostics" + subheading + CTA scrolling to `#apply`.
+- **Features grid** — 9 capability cards (Guided diagnostics, AI troubleshooting, Error codes, Tech sheet analysis, Document assistant, Repair insights, Appliance ID, Outcome learning, Continuous improvement).
+- **Screenshots / Demo** — 5 placeholder cards (Dashboard, Diagnostic workflow, Verify appliance, Tech sheet assistant, Repair insights). Neutral gradient placeholders, easy to swap for real `<img>` later.
+- **Beta Expectations** — bullet list (real service calls, report bugs, suggest improvements, confirm outcomes, help improve recommendations).
+- **Application form** at `#apply`.
 
-No server changes for Part 1 (the decode + age chain are already non-blocking).
+Design: clean, professional, reuses existing tokens and `Card`/`Button`. No marketing hype.
 
-## Part 2 — Data model: `diagnostic_outcomes`
+## Part 2 — Beta Application Form
 
-New table `public.diagnostic_outcomes`:
-- `id uuid pk default gen_random_uuid()`
-- `session_id uuid null` (loose ref to `diagnostic_sessions.id`)
-- `user_id uuid not null default auth.uid()`
-- `manufacturer text`, `model_number text`, `appliance_type text`, `platform text null`
-- `complaint text`
-- `recommended_failure text`
-- `actual_failure text null`
-- `notes text null`
-- `outcome text not null check (outcome in ('confirmed','incorrect','partial','pending_repair'))`
-- `confirmed_at timestamptz null`
-- `created_at timestamptz default now()`, `updated_at timestamptz default now()` (with `set_updated_at` trigger)
+Single-page form, <2 minute completion, Zod-validated client + server.
 
-Grants + RLS (same migration):
-- `GRANT SELECT, INSERT, UPDATE, DELETE ... TO authenticated; GRANT ALL ... TO service_role;`
-- RLS: user can `SELECT/INSERT/UPDATE` their own rows (`auth.uid() = user_id`); owners (`has_role(auth.uid(),'admin')`) can `SELECT` all.
+Fields:
+- First Name, Last Name (≤80)
+- Email (lowercased, unique)
+- Company (optional)
+- Location (State/Country)
+- Experience Years (0–60)
+- Role (Independent Tech, Service Company Tech, Business Owner, Factory Service, Student, Other)
+- Calls Per Week (0–500)
+- Primary Brands — checkbox group (Whirlpool, GE, LG, Samsung, Frigidaire, Bosch, Speed Queen, Other) stored as jsonb
+- Reason (textarea, 20–2000 chars)
+- **Video interview willingness** (Yes / Maybe / No) — optional
+- Feedback consent (required)
+- Beta-software acknowledgement (required)
 
-Indexes: `(user_id, outcome)`, `(manufacturer, model_number, appliance_type, complaint)`, `(outcome) where outcome = 'pending_repair'`.
+Submit → public `submitBetaApplication` server fn. Duplicate email → friendly toast. Success → thank-you panel.
 
-## Part 3 — Server functions
+## Part 3 — Database
 
-New `src/lib/diagnostic-outcomes.functions.ts`:
-- `recordOutcome` — insert a new outcome. Input: `{ sessionId?, manufacturer, modelNumber, applianceType, platform?, complaint, recommendedFailure, outcome: 'confirmed'|'incorrect'|'partial'|'pending_repair', actualFailure?, notes? }`. On `confirmed` sets `confirmed_at = now()` and flips `diagnostic_sessions.status` to `completed` when a sessionId is present. `pending_repair` leaves the session active.
-- `updateOutcome` — for delayed confirmation. Input: `{ id, outcome: 'confirmed'|'incorrect'|'partial', actualFailure?, notes? }`. Sets `confirmed_at = now()` on confirm; user can only update rows where `user_id = auth.uid()`.
-- `listPendingRepairs` — auth user's `pending_repair` rows, newest first.
-- `getOutcomeStats({ manufacturer, modelNumber?, applianceType, complaint, platform? })` — weighted aggregation. Pulls rows scoped to each tier and combines with weights:
+New migration `beta_applications`:
 
-  | Tier | Match | Weight |
-  | --- | --- | --- |
-  | exact_model | manufacturer + modelNumber + complaint | 1.00 |
-  | platform_family | manufacturer + platform + applianceType + complaint | 0.75 |
-  | mfg_type | manufacturer + applianceType + complaint | 0.50 |
-  | mfg | manufacturer + complaint | 0.25 |
+```
+id uuid pk default gen_random_uuid()
+first_name text not null
+last_name text not null
+email text not null unique
+company text
+location text not null
+experience_years int not null
+role text not null
+calls_per_week int not null
+primary_brands jsonb not null default '[]'::jsonb
+reason text not null
+video_interview text check (video_interview in ('yes','maybe','no'))
+status text not null default 'pending'
+  check (status in ('pending','approved','invited','active','waitlisted','declined'))
+beta_wave int not null default 1
+source text not null default 'public_form'    -- future: invite_code, referral, company_invite
+invite_code text
+referred_by uuid
+notes text
+reviewed_by uuid references auth.users(id)
+reviewed_at timestamptz
+approved_by uuid references auth.users(id)
+approved_at timestamptz
+invited_at timestamptz
+activated_at timestamptz
+user_id uuid references auth.users(id)        -- linked when applicant signs up
+created_at timestamptz default now()
+updated_at timestamptz default now()
+```
 
-  Only `confirmed`/`incorrect`/`partial` count (pending excluded). For each row: confirmed adds +1 to `recommendedFailure`; incorrect adds +1 to `actualFailure`; partial adds +0.5 to each. Final score per failure = Σ (weight × count). Return `{ scope, totals: { confirmed, incorrect, partial }, sampleSize, ranked: Array<{ failure, share, count }>, exactModelCount }`. `scope` is the most-specific tier that produced data.
-- `getOwnerOutcomeMetrics` (admin-only via `has_role`) — totals by outcome, accuracy %, top confirmed failures, top incorrect recommendations, top complaints, top appliance types, models with highest/lowest accuracy (min 5 resolved outcomes).
+Grants + RLS:
+- `GRANT INSERT ON public.beta_applications TO anon;` for the public form (publishable-key server client).
+- `GRANT SELECT, INSERT, UPDATE ON ... TO authenticated; GRANT ALL TO service_role;`
+- Anon INSERT policy: `WITH CHECK (status='pending' AND beta_wave=1 AND source='public_form')`.
+- Admin (`has_role('admin')`) full SELECT/UPDATE.
+- Authenticated non-admins: no SELECT (no PII leak).
+- `set_updated_at` trigger.
+- Indexes: `(status, created_at desc)`, `(email)`, `(beta_wave)`, `(user_id)`.
 
-Shared helper `src/lib/diagnostic-outcomes.server.ts` exposes `loadOutcomeStats()` for direct server-side reuse from `diagnostics.functions.ts` without re-authing.
+DB trigger `link_beta_application_on_signup` on `auth.users` insert: if `new.email` matches a `beta_applications.email`, sets `user_id = new.id`, `activated_at = now()`, `status = 'active'` (only if previous status was `'invited'`).
 
-## Part 4 — End-of-diagnosis capture UI
+Future-proof fields (`source`, `invite_code`, `referred_by`, `beta_wave`) cover closed/open beta, invite codes, referrals, company invites without redesign.
 
-New `src/components/outcome-capture.tsx`, rendered inside `Phase3` when `step.done === true` and `step.mostLikelyFailure` is set. Replaces the current "Mark Complete" path for confident hypotheses.
+## Part 4 — Server Functions (`src/lib/beta-applications.functions.ts`)
 
-- Header: "Likely Cause: {failure}" + confidence badge.
-- Four buttons: `Yes, This Fixed It` / `No, This Was Not The Issue` / `Partially Correct` / `Repair Pending`.
-- YES → `recordOutcome({ outcome: 'confirmed' })`, toast "Thanks! This helps improve future diagnostics.", auto-mark session completed, reset.
-- NO → reveal input (datalist of recent `actual_failure` for the brand/type + free text) → `recordOutcome({ outcome: 'incorrect', actualFailure })`.
-- PARTIAL → reveal textarea for "what else contributed" → `recordOutcome({ outcome: 'partial', notes })`.
-- REPAIR PENDING → `recordOutcome({ outcome: 'pending_repair' })`, toast "Repair outcome saved. You can confirm the result later.", session stays active so it appears in Pending Repairs.
+- `submitBetaApplication` — **public** (no auth middleware). Server publishable client. Zod-validated. Returns `{ ok }` / `{ ok:false, reason:'duplicate' }`.
+- `listBetaApplications({ status?, wave?, search?, page? })` — admin-only.
+- `getBetaApplication(id)` — admin-only, returns full row + computed engagement metrics (Part 5).
+- `updateBetaApplicationStatus({ id, status, notes?, wave? })` — admin-only. Stamps `reviewed_by/reviewed_at`. On `approved` → stamps `approved_by/approved_at` (no invite). Allows direct moves: waitlist, decline, deactivate (sets back to `waitlisted` from `active`).
+- `assignBetaWave({ id, wave })` — admin-only.
+- `sendBetaInvite({ id })` — admin-only. Dynamically imports `client.server`, calls `supabaseAdmin.auth.admin.inviteUserByEmail(email, { data:{first_name,last_name,source:'beta',wave}, redirectTo: site/auth })`. Stamps `invited_at`, transitions `status` to `'invited'`. Allowed from `approved` or `invited` (resend).
+- `getBetaProgramStats` — admin-only. Returns counts by status, by wave, by experience bucket (0–2/3–5/6–10/10+), by brand, by region (parse first comma in location), avg activity, most active testers (top 10), inactive testers (top 10 by `last_activity desc null first`).
+- `getBetaTesterMetrics(id)` — admin-only. For an `active`/`invited` row with `user_id`, joins `auth.users`, `diagnostic_sessions`, `diagnostic_outcomes`, `feedback` to compute:
+  - last_login (auth.users.last_sign_in_at)
+  - account_created (auth.users.created_at)
+  - total_sessions, completed_sessions, pending_repairs (diagnostic_outcomes where outcome='pending_repair')
+  - outcome_confirmations (diagnostic_outcomes where outcome='confirmed')
+  - bug_reports, feature_requests, feedback_entries (feedback rows by category — assumes `feedback.category` text; if absent, counts all feedback and labels as "Feedback Entries")
+  - last_activity_date (max of session updated_at, outcome created_at, feedback created_at, last_sign_in_at)
+  - health_score (Part 5)
 
-Existing manual "Mark Complete / Abandon" controls remain for sessions that never reach a confident hypothesis.
+All admin fns share a `requireAdmin(context)` helper. Uses existing `requireSupabaseAuth` middleware.
 
-## Part 5 — Pending Repairs (delayed confirmation)
+## Part 5 — Health Score
 
-New `src/components/pending-repairs.tsx` — list driven by `listPendingRepairs`. Columns: Appliance (brand · type), Model, Complaint, Recommended Failure, Date Diagnosed. Row actions: `Confirm Repair`, `Mark Incorrect`, `Mark Partial` (same prompts as end-of-diagnosis), each calling `updateOutcome`. Resume button links to `/diagnose?session={id}` when `session_id` is set.
+Computed server-side in `getBetaTesterMetrics`. Weighted scoring, capped at 100:
 
-Mounted on:
-- `src/routes/_authenticated/history.tsx` — new "Pending Repairs" section above the existing history list.
-- `src/routes/_authenticated/dashboard.tsx` — compact card with up to 5 most recent pending rows + "View all" → history.
-- `src/components/owner-panels.tsx` — admin-only full table.
+```
+score =
+  min(completed_sessions, 30) * 1.5     // up to 45
++ min(outcome_confirmations, 20) * 1.0  // up to 20
++ min(bug_reports, 10) * 1.5            // up to 15
++ min(feature_requests, 10) * 1.0       // up to 10
++ recency_bonus                         // up to 10: 10 if active <7d, 7 if <30d, 3 if <60d, 0 if >90d
+- inactivity_penalty                    // -10 if no activity >60d
+```
 
-## Part 6 — Learning Layer (feed outcomes into the LLM)
+Badge mapping:
+- 80–100 → ⭐⭐⭐⭐⭐ Power Tester
+- 60–79 → ⭐⭐⭐⭐ Active Tester
+- 35–59 → ⭐⭐⭐ Occasional Tester
+- 15–34 → ⭐⭐ Needs Attention
+- <15 → ⭐ Inactive
 
-`src/lib/diagnostics.functions.ts` (`nextDiagnosticStep`):
-- Before the LLM call, call `loadOutcomeStats(...)` (server-side helper).
-- If `sampleSize >= 3`, append a prompt block:
+Informational only. Returned with metrics.
 
-  ```
-  HISTORICAL TECHNICIAN OUTCOMES
-  Scope: {scope}   Sample Size: {sampleSize}   Exact-model repairs: {exactModelCount}
-  - {failure}: {share}%
-  - ...
-  Use these outcomes as historical evidence. Prioritize exact-model data over
-  platform-family data; prioritize platform-family over manufacturer-family.
-  Current diagnostic evidence may override historical trends when appropriate.
-  ```
+## Part 6 — Owner Panel: Beta Tab
 
-- Return `historicalOutcomes` on the response (scope, sampleSize, exactModelCount, ranked top 5).
+New tab in `src/components/owner-panels.tsx` → **Beta**, split into two sub-views via internal tabs:
 
-`Phase3` UI: under the Most Likely Failure block, render a small evidence chip:
+**Stats sub-view** (`beta-stats-card.tsx`):
+- Applications Received, Pending Review, Approved, Invited, Active, Waitlisted, Declined
+- Beta Waves Summary (counts per wave)
+- Avg Years Experience, Avg Calls/Week, Avg Tester Activity (avg sessions/active tester)
+- Most Active Testers (top 10) and Inactive Testers (top 10)
+- Applications by Experience Level (bucket bars), by Primary Brand (top 8), by Geographic Region (top 8)
 
-- Exact-model scope: "Based on N repairs of this exact model"
-- Otherwise: "Based on N similar repairs · M confirmed outcomes"
+**Applications sub-view** (`beta-applications-panel.tsx`):
+- Toolbar: search (name/email), status filter, wave filter
+- Table: Applicant, Email, Experience, Role, Calls/Week, Wave, Applied, Status badge, Actions menu
+- Actions menu: `Approve`, `Send Invite`, `Resend Invite`, `Move to Waitlist`, `Decline`, `Deactivate Tester`, `Assign Wave…`, `View Full Application`
+- Action visibility depends on current status (e.g. Send Invite only when `approved`; Resend only when `invited`; Deactivate only when `active`).
 
-Hidden when no historical data exists.
+**Tester Detail Dialog** (`beta-tester-detail.tsx`):
+- Opens from "View Full Application"
+- Header: name, email, status badge, health badge (when active)
+- Application section: every field + reason + video interview willingness + notes textarea
+- Engagement section (only when `user_id` present): last login, account created, total/completed sessions, pending repairs, outcome confirmations, bug reports, feature requests, feedback entries, last activity, health score breakdown
+- Footer: status select, wave select, Save (calls `updateBetaApplicationStatus` / `assignBetaWave`)
 
-## Part 7 — Owner Diagnostic Accuracy panel
+## Part 7 — Navigation
 
-`src/components/owner-panels.tsx` — new card backed by `getOwnerOutcomeMetrics`:
-- Totals: Total Outcomes, Confirmed, Incorrect, Partial, Pending Repair
-- **Accuracy %** = `confirmed / (confirmed + incorrect + partial)` — pending excluded until resolved
-- Top Confirmed Failures (top 10)
-- Most Incorrect Recommendations (top 10)
-- Most Common Complaints / Appliance Types
-- Highest / Lowest Accuracy Models (≥5 resolved outcomes)
+- Add `Beta` link in `/`'s public marketing/footer area so visitors find `/beta`.
+- No signed-in sidebar entry (page is for prospects).
 
-Reuses the existing `/owner` route gating (`amOwner` + `_authenticated`).
+## Workflow Summary
 
-## Guardrails preserved
-- No external API ever blocks diagnostics; age/serial/platform stay optional.
-- Outcome capture is optional per session — skipping it never breaks the flow; the LLM falls back cleanly when `sampleSize < 3`.
-- Pending repairs don't pollute accuracy until resolved.
+```
+Submitted → Pending → Approved → (Send Invite) → Invited → (signup trigger) → Active
+                          ↓                                      ↓
+                      Waitlisted                            Deactivate → Waitlisted
+                          ↓
+                       Declined
+```
 
-## Files touched
-- New: `supabase/migrations/<ts>_diagnostic_outcomes.sql`, `src/lib/diagnostic-outcomes.functions.ts`, `src/lib/diagnostic-outcomes.server.ts`, `src/components/outcome-capture.tsx`, `src/components/pending-repairs.tsx`.
-- Edited: `src/components/verify-appliance.tsx`, `src/routes/_authenticated/diagnose.tsx`, `src/routes/_authenticated/history.tsx`, `src/routes/_authenticated/dashboard.tsx`, `src/components/owner-panels.tsx`, `src/lib/diagnostics.functions.ts`, `src/integrations/supabase/types.ts` (auto-regen post-migration).
+Approval never auto-invites. `Send Invite` is a separate explicit action so cohorts can be released in waves or paused.
+
+## Guardrails
+
+- Public form uses publishable-key server client + narrow anon INSERT policy; never touches admin client client-side.
+- All admin ops gated by `has_role('admin')` server-side.
+- Non-admin authenticated users cannot read applications (no PII leak).
+- Health score is informational; no automated gating.
+- `source`/`invite_code`/`referred_by`/`beta_wave` future-proof closed beta, open beta, early access, company invites, invite codes, referrals.
+
+## Files
+
+**New:**
+- `supabase/migrations/<ts>_beta_applications.sql`
+- `src/routes/beta.tsx`
+- `src/components/beta/hero.tsx`, `features.tsx`, `screenshots.tsx`, `expectations.tsx`, `application-form.tsx`
+- `src/components/owner/beta-applications-panel.tsx`
+- `src/components/owner/beta-stats-card.tsx`
+- `src/components/owner/beta-tester-detail.tsx`
+- `src/lib/beta-applications.functions.ts`
+
+**Edited:**
+- `src/components/owner-panels.tsx` — add Beta tab
+- `src/routes/index.tsx` — add `/beta` link
+- `src/integrations/supabase/types.ts` — auto-regenerated post-migration
