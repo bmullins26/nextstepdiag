@@ -137,7 +137,14 @@ export const updateBetaApplicationStatus = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
     const now = new Date().toISOString();
-    const patch: Record<string, unknown> = {
+    const patch: {
+      status: typeof data.status;
+      reviewed_by: string;
+      reviewed_at: string;
+      notes?: string | null;
+      approved_by?: string;
+      approved_at?: string;
+    } = {
       status: data.status,
       reviewed_by: context.userId,
       reviewed_at: now,
