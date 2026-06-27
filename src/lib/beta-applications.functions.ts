@@ -243,7 +243,6 @@ export type BetaProgramStats = {
   byRegion: Array<{ region: string; count: number }>;
   avgExperience: number | null;
   avgCallsPerWeek: number | null;
-  videoInterview: { yes: number; maybe: number; no: number };
 };
 
 export const getBetaProgramStats = createServerFn({ method: "POST" })
@@ -253,7 +252,7 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
     const { data: rows, error } = await context.supabase
       .from("beta_applications")
       .select(
-        "status,beta_wave,experience_years,calls_per_week,primary_brands,location,video_interview",
+        "status,beta_wave,experience_years,calls_per_week,primary_brands,location",
       )
       .limit(10000);
     if (error) throw new Error(error.message);
@@ -273,7 +272,6 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
     const regions = new Map<string, number>();
     let expSum = 0;
     let callsSum = 0;
-    const vi = { yes: 0, maybe: 0, no: 0 };
 
     for (const r of rows ?? []) {
       totals.total += 1;
@@ -292,9 +290,6 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
       if (loc) {
         const region = loc.split(",").pop()?.trim() || loc;
         regions.set(region, (regions.get(region) ?? 0) + 1);
-      }
-      if (r.video_interview && r.video_interview in vi) {
-        vi[r.video_interview as "yes" | "maybe" | "no"] += 1;
       }
     }
 
@@ -315,7 +310,6 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
         .map(([region, count]) => ({ region, count })),
       avgExperience: totals.total ? Math.round((expSum / n) * 10) / 10 : null,
       avgCallsPerWeek: totals.total ? Math.round((callsSum / n) * 10) / 10 : null,
-      videoInterview: vi,
     };
   });
 
