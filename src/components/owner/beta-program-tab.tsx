@@ -158,12 +158,8 @@ export function BetaProgramTab() {
           value={statsQ.data?.avgCallsPerWeek ?? "—"}
         />
         <Stat
-          label="Video Interview (Y/M/N)"
-          value={
-            statsQ.data
-              ? `${statsQ.data.videoInterview.yes}/${statsQ.data.videoInterview.maybe}/${statsQ.data.videoInterview.no}`
-              : "—"
-          }
+          label="Waves"
+          value={statsQ.data?.byWave.length ?? 0}
         />
       </div>
 
