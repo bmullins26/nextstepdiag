@@ -48,7 +48,6 @@ type FormState = {
   callsPerWeek: string;
   primaryBrands: string[];
   reason: string;
-  videoInterview: "yes" | "maybe" | "no" | "";
   feedbackConsent: boolean;
   betaAcknowledged: boolean;
 };
@@ -64,7 +63,6 @@ const initial: FormState = {
   callsPerWeek: "",
   primaryBrands: [],
   reason: "",
-  videoInterview: "",
   feedbackConsent: false,
   betaAcknowledged: false,
 };
@@ -88,7 +86,6 @@ export function BetaApplicationForm() {
           callsPerWeek: parseInt(s.callsPerWeek, 10),
           primaryBrands: s.primaryBrands as any,
           reason: s.reason.trim(),
-          videoInterview: s.videoInterview || undefined,
           feedbackConsent: true as const,
           betaAcknowledged: true as const,
         } as any,
@@ -249,22 +246,6 @@ export function BetaApplicationForm() {
           onChange={(e) => setS({ ...s, reason: e.target.value })}
           placeholder="Tell us about the kind of jobs you run and what would make a diagnostic tool actually useful in the field."
         />
-      </Field>
-
-      <Field label="Would you be willing to participate in a short video interview about your experience with NextStep?">
-        <Select
-          value={s.videoInterview}
-          onValueChange={(v) => setS({ ...s, videoInterview: v as any })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Optional" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="yes">Yes</SelectItem>
-            <SelectItem value="maybe">Maybe</SelectItem>
-            <SelectItem value="no">No</SelectItem>
-          </SelectContent>
-        </Select>
       </Field>
 
       <div className="space-y-2 rounded-xl border border-border bg-card/60 p-3 text-sm">
