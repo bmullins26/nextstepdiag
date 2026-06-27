@@ -158,12 +158,8 @@ export function BetaProgramTab() {
           value={statsQ.data?.avgCallsPerWeek ?? "—"}
         />
         <Stat
-          label="Video Interview (Y/M/N)"
-          value={
-            statsQ.data
-              ? `${statsQ.data.videoInterview.yes}/${statsQ.data.videoInterview.maybe}/${statsQ.data.videoInterview.no}`
-              : "—"
-          }
+          label="Waves"
+          value={statsQ.data?.byWave.length ?? 0}
         />
       </div>
 
@@ -531,10 +527,6 @@ function BetaTesterDetailDialog({ id, onClose }: { id: string; onClose: () => vo
                 <div>
                   <div className="text-muted-foreground">Calls / week</div>
                   <div>{app.calls_per_week}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Video Interview</div>
-                  <div className="capitalize">{app.video_interview ?? "—"}</div>
                 </div>
               </div>
               <div className="mt-2 text-xs">

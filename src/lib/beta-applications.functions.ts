@@ -37,7 +37,6 @@ const SubmitInput = z.object({
   callsPerWeek: z.number().int().min(0).max(500),
   primaryBrands: z.array(z.enum(BRAND_OPTIONS)).min(1),
   reason: z.string().trim().min(20).max(2000),
-  videoInterview: z.enum(["yes", "maybe", "no"]).optional(),
   feedbackConsent: z.literal(true),
   betaAcknowledged: z.literal(true),
 });
@@ -61,7 +60,6 @@ export const submitBetaApplication = createServerFn({ method: "POST" })
       calls_per_week: data.callsPerWeek,
       primary_brands: data.primaryBrands,
       reason: data.reason,
-      video_interview: data.videoInterview ?? null,
       status: "pending" as const,
       beta_wave: 1,
       source: "public_form",
@@ -245,7 +243,6 @@ export type BetaProgramStats = {
   byRegion: Array<{ region: string; count: number }>;
   avgExperience: number | null;
   avgCallsPerWeek: number | null;
-  videoInterview: { yes: number; maybe: number; no: number };
 };
 
 export const getBetaProgramStats = createServerFn({ method: "POST" })
@@ -255,7 +252,7 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
     const { data: rows, error } = await context.supabase
       .from("beta_applications")
       .select(
-        "status,beta_wave,experience_years,calls_per_week,primary_brands,location,video_interview",
+        "status,beta_wave,experience_years,calls_per_week,primary_brands,location",
       )
       .limit(10000);
     if (error) throw new Error(error.message);
@@ -275,7 +272,6 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
     const regions = new Map<string, number>();
     let expSum = 0;
     let callsSum = 0;
-    const vi = { yes: 0, maybe: 0, no: 0 };
 
     for (const r of rows ?? []) {
       totals.total += 1;
@@ -294,9 +290,6 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
       if (loc) {
         const region = loc.split(",").pop()?.trim() || loc;
         regions.set(region, (regions.get(region) ?? 0) + 1);
-      }
-      if (r.video_interview && r.video_interview in vi) {
-        vi[r.video_interview as "yes" | "maybe" | "no"] += 1;
       }
     }
 
@@ -317,7 +310,6 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
         .map(([region, count]) => ({ region, count })),
       avgExperience: totals.total ? Math.round((expSum / n) * 10) / 10 : null,
       avgCallsPerWeek: totals.total ? Math.round((callsSum / n) * 10) / 10 : null,
-      videoInterview: vi,
     };
   });
 
