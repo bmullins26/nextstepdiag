@@ -72,6 +72,35 @@ export const submitBetaApplication = createServerFn({ method: "POST" })
       }
       throw new Error(error.message);
     }
+
+    // Fire-and-forget Discord notification — never blocks or throws.
+    try {
+      const { sendDiscordNotification, DISCORD_COLORS } = await import("@/lib/discord.server");
+      const roleId = process.env.DISCORD_OWNER_ROLE_ID;
+      void sendDiscordNotification({
+        webhookUrl: process.env.DISCORD_BETA_WEBHOOK_URL,
+        title: "🚀 New Beta Application",
+        url: "https://nextstepdiag.com/owner?tab=beta",
+        color: DISCORD_COLORS.blue,
+        content: roleId ? `<@&${roleId}>` : undefined,
+        description: "**Review Application:** https://nextstepdiag.com/owner?tab=beta",
+        footer: "NextStep Diagnostics Beta Program",
+        fields: [
+          { name: "Name", value: `${data.firstName} ${data.lastName}`, inline: true },
+          { name: "Email", value: data.email, inline: true },
+          { name: "Company", value: data.company || "—", inline: true },
+          { name: "Location", value: data.location, inline: true },
+          { name: "Experience", value: `${data.experienceYears} yrs`, inline: true },
+          { name: "Role", value: data.role, inline: true },
+          { name: "Calls / Week", value: String(data.callsPerWeek), inline: true },
+          { name: "Brands", value: data.primaryBrands.join(", ") },
+          { name: "Reason", value: data.reason },
+        ],
+      });
+    } catch (err) {
+      console.warn("[beta] discord notify skipped", err);
+    }
+
     return { ok: true as const };
   });
 
