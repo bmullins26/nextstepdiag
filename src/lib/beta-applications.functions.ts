@@ -200,34 +200,28 @@ export const listBetaApplications = createServerFn({ method: "POST" })
     return rows ?? [];
   });
 
-// ---------- Update status ----------
+// ---------- Review (application_status) ----------
 
-const StatusInput = z.object({
+const ReviewInput = z.object({
   id: z.string().uuid(),
-  status: z.enum(["pending", "approved", "waitlisted", "declined", "invited", "active"]),
-  notes: z.string().max(2000).nullable().optional(),
+  decision: z.enum(["pending", "approved", "waitlisted", "declined"]),
+  reason: z.string().max(500).optional(),
 });
 
-export const updateBetaApplicationStatus = createServerFn({ method: "POST" })
+export const reviewApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => StatusInput.parse(d))
+  .inputValidator((d: unknown) => ReviewInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
     const now = new Date().toISOString();
-    const patch: {
-      status: typeof data.status;
-      reviewed_by: string;
-      reviewed_at: string;
-      notes?: string | null;
-      approved_by?: string;
-      approved_at?: string;
-    } = {
-      status: data.status,
+    const patch: Record<string, unknown> = {
+      application_status: data.decision,
+      status: data.decision === "approved" ? "approved" : data.decision,
       reviewed_by: context.userId,
       reviewed_at: now,
     };
-    if (data.notes !== undefined) patch.notes = data.notes;
-    if (data.status === "approved") {
+    if (data.reason !== undefined) patch.last_status_reason = data.reason;
+    if (data.decision === "approved") {
       patch.approved_by = context.userId;
       patch.approved_at = now;
     }
@@ -239,6 +233,302 @@ export const updateBetaApplicationStatus = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     return row;
+  });
+
+// Backward-compat shim: old name some UI/tests may still reference.
+export const updateBetaApplicationStatus = reviewApplication;
+
+// ---------- Access status mutations ----------
+
+const IdInput = z.object({ id: z.string().uuid() });
+const IdReasonInput = z.object({ id: z.string().uuid(), reason: z.string().max(500).optional() });
+
+async function setAccessStatus(opts: {
+  context: { supabase: any; userId: string };
+  id: string;
+  next: "not_invited" | "invited" | "active" | "suspended" | "deactivated";
+  reason?: string;
+  globalSignOut?: boolean;
+}) {
+  await assertOwner(opts.context.supabase, opts.context.userId);
+  const patch: Record<string, unknown> = { access_status: opts.next };
+  if (opts.reason !== undefined) patch.last_status_reason = opts.reason;
+  if (opts.next === "active") {
+    patch.activated_at = new Date().toISOString();
+  }
+  const { data: row, error } = await opts.context.supabase
+    .from("beta_applications")
+    .update(patch)
+    .eq("id", opts.id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  if (opts.globalSignOut && row?.user_id) {
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.auth.admin.signOut(row.user_id, "global");
+    } catch (e) {
+      console.warn("[beta] global signOut failed", e);
+    }
+  }
+  return row;
+}
+
+export const activateBetaTester = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => IdInput.parse(d))
+  .handler(({ data, context }) =>
+    setAccessStatus({ context, id: data.id, next: "active" }),
+  );
+
+export const suspendBetaTester = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => IdReasonInput.parse(d))
+  .handler(({ data, context }) =>
+    setAccessStatus({ context, id: data.id, next: "suspended", reason: data.reason, globalSignOut: true }),
+  );
+
+export const deactivateBetaTester = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => IdReasonInput.parse(d))
+  .handler(({ data, context }) =>
+    setAccessStatus({ context, id: data.id, next: "deactivated", reason: data.reason, globalSignOut: true }),
+  );
+
+export const reinstateBetaTester = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => IdInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { data: row } = await context.supabase
+      .from("beta_applications")
+      .select("user_id")
+      .eq("id", data.id)
+      .single();
+    const next = row?.user_id ? "active" : "invited";
+    return setAccessStatus({ context, id: data.id, next });
+  });
+
+export const deleteBetaApplication = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => IdInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { data: row, error: readErr } = await context.supabase
+      .from("beta_applications")
+      .select("id,application_status,user_id")
+      .eq("id", data.id)
+      .single();
+    if (readErr || !row) throw new Error(readErr?.message ?? "Application not found");
+    if (!["pending", "waitlisted", "declined"].includes(row.application_status)) {
+      throw new Error("Only pending, waitlisted, or declined applications can be deleted.");
+    }
+    if (row.user_id) {
+      throw new Error("Cannot delete: a user account is linked to this application.");
+    }
+    const { error } = await context.supabase.from("beta_applications").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+// ---------- Owner notes / rating / labels / state ----------
+
+export const updateOwnerNotes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ id: z.string().uuid(), notes: z.string().max(10000) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { data: row, error } = await context.supabase
+      .from("beta_applications")
+      .update({
+        owner_notes: data.notes,
+        owner_notes_updated_at: new Date().toISOString(),
+        owner_notes_updated_by: context.userId,
+      })
+      .eq("id", data.id)
+      .select("owner_notes,owner_notes_updated_at,owner_notes_updated_by")
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const updateOwnerRating = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ id: z.string().uuid(), rating: z.number().int().min(1).max(5).nullable() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { data: row, error } = await context.supabase
+      .from("beta_applications")
+      .update({ owner_rating: data.rating })
+      .eq("id", data.id)
+      .select("owner_rating")
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const setOwnerLabels = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ id: z.string().uuid(), labels: z.array(z.string().max(60)).max(20) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { data: row, error } = await context.supabase
+      .from("beta_applications")
+      .update({ owner_labels: data.labels })
+      .eq("id", data.id)
+      .select("owner_labels")
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const updateApplicantState = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ id: z.string().uuid(), state: z.string().trim().min(1).max(80) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { data: row, error } = await context.supabase
+      .from("beta_applications")
+      .update({ state: data.state })
+      .eq("id", data.id)
+      .select("state")
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+// ---------- Bulk + CSV ----------
+
+const BulkAction = z.enum([
+  "approve",
+  "waitlist",
+  "decline",
+  "invite",
+  "activate",
+  "suspend",
+  "deactivate",
+  "delete_pending",
+]);
+
+export const bulkApplyAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(500), action: BulkAction }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const id of data.ids) {
+      try {
+        switch (data.action) {
+          case "approve":
+          case "waitlist":
+          case "decline": {
+            const decision = data.action === "approve" ? "approved" : data.action === "waitlist" ? "waitlisted" : "declined";
+            await context.supabase
+              .from("beta_applications")
+              .update({
+                application_status: decision,
+                status: decision,
+                reviewed_by: context.userId,
+                reviewed_at: new Date().toISOString(),
+                ...(decision === "approved" ? { approved_by: context.userId, approved_at: new Date().toISOString() } : {}),
+              })
+              .eq("id", id);
+            break;
+          }
+          case "invite":
+            await sendBetaInvite({ data: { id } });
+            break;
+          case "activate":
+            await setAccessStatus({ context, id, next: "active" });
+            break;
+          case "suspend":
+            await setAccessStatus({ context, id, next: "suspended", globalSignOut: true });
+            break;
+          case "deactivate":
+            await setAccessStatus({ context, id, next: "deactivated", globalSignOut: true });
+            break;
+          case "delete_pending": {
+            const { data: row } = await context.supabase
+              .from("beta_applications")
+              .select("application_status,user_id")
+              .eq("id", id)
+              .single();
+            if (row && !row.user_id && ["pending", "waitlisted", "declined"].includes(row.application_status)) {
+              await context.supabase.from("beta_applications").delete().eq("id", id);
+            } else {
+              throw new Error("Not eligible for delete");
+            }
+            break;
+          }
+        }
+        results.push({ id, ok: true });
+      } catch (e) {
+        results.push({ id, ok: false, error: (e as Error).message });
+      }
+    }
+    return { results };
+  });
+
+function csvEscape(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  const s = Array.isArray(v) ? v.join("; ") : String(v);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+export const exportBetaApplicationsCsv = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ ids: z.array(z.string().uuid()).optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    let q = context.supabase
+      .from("beta_applications")
+      .select(
+        "id,first_name,last_name,email,company,state,location_raw,role,experience_years,calls_per_week,primary_brands,application_status,access_status,owner_rating,owner_labels,created_at,invited_at,activated_at",
+      )
+      .order("created_at", { ascending: false });
+    if (data.ids && data.ids.length) q = q.in("id", data.ids);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    const headers = [
+      "id","first_name","last_name","email","company","state","location_raw","role","experience_years","calls_per_week","primary_brands","application_status","access_status","owner_rating","owner_labels","created_at","invited_at","activated_at",
+    ];
+    const body = (rows ?? []).map((r) => headers.map((h) => csvEscape((r as any)[h])).join(",")).join("\n");
+    return { csv: headers.join(",") + "\n" + body };
+  });
+
+// ---------- Access gate ----------
+
+export const hasBetaAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: roleRow } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "owner")
+      .maybeSingle();
+    const isOwner = !!roleRow;
+    const { data: app } = await context.supabase
+      .from("beta_applications")
+      .select("access_status,application_status")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    const accessStatus = (app?.access_status as string | null) ?? null;
+    const ok = isOwner || accessStatus === "active" || accessStatus === null; // null = no application (legacy users) - allow
+    return { ok, isOwner, accessStatus, applicationStatus: app?.application_status ?? null };
   });
 
 // ---------- Assign wave ----------
