@@ -251,7 +251,9 @@ async function setAccessStatus(opts: {
   globalSignOut?: boolean;
 }) {
   await assertOwner(opts.context.supabase, opts.context.userId);
-  const patch: Record<string, unknown> = { access_status: opts.next };
+  const patch: Database["public"]["Tables"]["beta_applications"]["Update"] = {
+    access_status: opts.next,
+  };
   if (opts.reason !== undefined) patch.last_status_reason = opts.reason;
   if (opts.next === "active") {
     patch.activated_at = new Date().toISOString();
