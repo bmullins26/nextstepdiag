@@ -322,12 +322,6 @@ export const deleteBetaApplication = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .single();
     if (readErr || !row) throw new Error(readErr?.message ?? "Application not found");
-    if (!["pending", "waitlisted", "declined"].includes(row.application_status)) {
-      throw new Error("Only pending, waitlisted, or declined applications can be deleted.");
-    }
-    if (row.user_id) {
-      throw new Error("Cannot delete: a user account is linked to this application.");
-    }
     const { error } = await context.supabase.from("beta_applications").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true as const };
@@ -460,16 +454,8 @@ export const bulkApplyAction = createServerFn({ method: "POST" })
             await setAccessStatus({ context, id, next: "deactivated", globalSignOut: true });
             break;
           case "delete_pending": {
-            const { data: row } = await context.supabase
-              .from("beta_applications")
-              .select("application_status,user_id")
-              .eq("id", id)
-              .single();
-            if (row && !row.user_id && ["pending", "waitlisted", "declined"].includes(row.application_status)) {
-              await context.supabase.from("beta_applications").delete().eq("id", id);
-            } else {
-              throw new Error("Not eligible for delete");
-            }
+            const { error: delErr } = await context.supabase.from("beta_applications").delete().eq("id", id);
+            if (delErr) throw new Error(delErr.message);
             break;
           }
         }
