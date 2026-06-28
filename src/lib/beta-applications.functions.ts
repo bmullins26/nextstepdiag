@@ -914,8 +914,8 @@ export const getBetaTesterRosters = createServerFn({ method: "POST" })
     await assertOwner(context.supabase, context.userId);
     const { data: apps, error } = await context.supabase
       .from("beta_applications")
-      .select("id,first_name,last_name,email,user_id,status")
-      .in("status", ["active", "invited"]);
+      .select("id,first_name,last_name,email,user_id,access_status")
+      .eq("access_status", "active");
     if (error) throw new Error(error.message);
     const withUser = (apps ?? []).filter((a) => a.user_id);
     if (withUser.length === 0) {
