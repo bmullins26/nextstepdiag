@@ -18,7 +18,15 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
   }
 });
 
+const lovableBypassMiddleware = createMiddleware().server(async ({ request, next }) => {
+  const url = new URL(request.url);
+  if (url.pathname.startsWith("/lovable/")) {
+    return await next();
+  }
+  return await next();
+});
+
 export const startInstance = createStart(() => ({
   functionMiddleware: [attachSupabaseAuth],
-  requestMiddleware: [errorMiddleware],
+  requestMiddleware: [lovableBypassMiddleware, errorMiddleware],
 }));
