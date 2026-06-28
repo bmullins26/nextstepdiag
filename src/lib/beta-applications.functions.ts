@@ -826,7 +826,7 @@ export const getBetaTesterMetrics = createServerFn({ method: "POST" })
         .select("outcome,created_at")
         .eq("user_id", uid),
       supabaseAdmin.from("feedback").select("kind,created_at").eq("user_id", uid),
-      supabaseAdmin.from("tech_sheets").select("id", { count: "exact", head: true }).eq("uploaded_by", uid),
+      supabaseAdmin.from("tech_sheets").select("id", { count: "exact", head: true }).eq("created_by", uid),
     ]);
 
     const authUser = authUserRes.data?.user;
