@@ -222,6 +222,7 @@ export const sendBetaInvite = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SendInviteInput.parse(d))
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
+    const startedAt = new Date().toISOString();
     const { data: row, error: readErr } = await context.supabase
       .from("beta_applications")
       .select("id,email,first_name,last_name,status,beta_wave")
@@ -235,21 +236,43 @@ export const sendBetaInvite = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const siteOrigin =
       process.env.SITE_URL ?? process.env.PUBLIC_SITE_URL ?? "https://nextstepdiag.com";
-    const { error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(row.email, {
+    const redirectTo = `${siteOrigin}/auth`;
+    console.log("[beta-invite] start", {
+      applicationId: row.id,
+      email: row.email,
+      redirectTo,
+      startedAt,
+      actorUserId: context.userId,
+    });
+
+    const inviteRes = await supabaseAdmin.auth.admin.inviteUserByEmail(row.email, {
       data: {
         first_name: row.first_name,
         last_name: row.last_name,
         source: "beta",
         beta_wave: row.beta_wave,
       },
-      redirectTo: `${siteOrigin}/auth`,
+      redirectTo,
     });
-    if (inviteErr) {
-      const msg = inviteErr.message || "";
-      // Allow re-inviting an already-registered user — flip to invited anyway
-      if (!/registered|exists/i.test(msg)) {
-        throw new Error(msg);
-      }
+
+    const inviteErr = inviteRes.error;
+    const alreadyRegistered = !!inviteErr && /registered|exists|already/i.test(inviteErr.message || "");
+
+    console.log("[beta-invite] inviteUserByEmail response", {
+      applicationId: row.id,
+      email: row.email,
+      ok: !inviteErr,
+      alreadyRegistered,
+      errorMessage: inviteErr?.message ?? null,
+      errorStatus: (inviteErr as { status?: number } | null)?.status ?? null,
+      errorCode: (inviteErr as { code?: string } | null)?.code ?? null,
+      userId: inviteRes.data?.user?.id ?? null,
+      finishedAt: new Date().toISOString(),
+    });
+
+    // Do not silently swallow. Re-throw real failures so the UI surfaces them.
+    if (inviteErr && !alreadyRegistered) {
+      throw new Error(`Supabase inviteUserByEmail failed: ${inviteErr.message}`);
     }
 
     const { data: updated, error: updErr } = await context.supabase
@@ -258,8 +281,21 @@ export const sendBetaInvite = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .select()
       .single();
-    if (updErr) throw new Error(updErr.message);
-    return updated;
+    if (updErr) {
+      console.error("[beta-invite] status update failed", {
+        applicationId: row.id,
+        email: row.email,
+        error: updErr.message,
+      });
+      throw new Error(updErr.message);
+    }
+    console.log("[beta-invite] complete", {
+      applicationId: row.id,
+      email: row.email,
+      alreadyRegistered,
+      newStatus: updated?.status,
+    });
+    return { ...updated, _invite: { alreadyRegistered, ok: true } };
   });
 
 // ---------- Program stats ----------
