@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { hasBetaAccess } from "@/lib/beta-applications.functions";
 import {
   SidebarInset,
   SidebarProvider,
@@ -14,6 +15,15 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/auth" });
+    try {
+      const access = await hasBetaAccess();
+      if (!access.ok && (access.accessStatus === "suspended" || access.accessStatus === "deactivated")) {
+        throw redirect({ to: "/access-denied" });
+      }
+    } catch (e) {
+      // Network / RPC failures should not lock the user out — they will still be auth-gated.
+      if ((e as { isRedirect?: boolean })?.isRedirect) throw e;
+    }
     return { user: data.user };
   },
   component: AuthenticatedLayout,
