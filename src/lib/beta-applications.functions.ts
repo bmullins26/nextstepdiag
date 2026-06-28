@@ -124,9 +124,26 @@ async function assertOwner(supabase: any, userId: string) {
 // ---------- List ----------
 
 const ListInput = z.object({
-  status: z
-    .enum(["pending", "approved", "invited", "active", "waitlisted", "declined", "all"])
+  applicationStatus: z
+    .enum(["pending", "approved", "waitlisted", "declined", "all"])
     .default("all"),
+  accessStatus: z
+    .enum(["not_invited", "invited", "active", "suspended", "deactivated", "all"])
+    .default("all"),
+  labels: z.array(z.string()).optional(),
+  minRating: z.number().int().min(1).max(5).optional(),
+  sort: z
+    .enum([
+      "newest",
+      "oldest",
+      "experience",
+      "calls",
+      "last_login",
+      "health",
+      "application_status",
+      "access_status",
+    ])
+    .default("newest"),
   wave: z.number().int().min(1).max(50).nullable().optional(),
   search: z.string().trim().max(120).optional(),
   limit: z.number().int().min(1).max(200).default(100),
@@ -137,19 +154,47 @@ export const listBetaApplications = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ListInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
-    let q = context.supabase
-      .from("beta_applications")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(data.limit);
-    if (data.status !== "all") q = q.eq("status", data.status);
+    let q = context.supabase.from("beta_applications").select("*");
+    if (data.applicationStatus !== "all") q = q.eq("application_status", data.applicationStatus);
+    if (data.accessStatus !== "all") q = q.eq("access_status", data.accessStatus);
     if (data.wave) q = q.eq("beta_wave", data.wave);
+    if (data.minRating) q = q.gte("owner_rating", data.minRating);
+    if (data.labels && data.labels.length) q = q.overlaps("owner_labels", data.labels);
     if (data.search) {
       const s = data.search.replace(/[%_]/g, "\\$&");
+      const like = `%${s}%`;
       q = q.or(
-        `first_name.ilike.%${s}%,last_name.ilike.%${s}%,email.ilike.%${s}%`,
+        [
+          `first_name.ilike.${like}`,
+          `last_name.ilike.${like}`,
+          `email.ilike.${like}`,
+          `company.ilike.${like}`,
+          `state.ilike.${like}`,
+          `role.ilike.${like}`,
+          `primary_brands.cs.["${s}"]`,
+        ].join(","),
       );
     }
+    switch (data.sort) {
+      case "oldest":
+        q = q.order("created_at", { ascending: true });
+        break;
+      case "experience":
+        q = q.order("experience_years", { ascending: false });
+        break;
+      case "calls":
+        q = q.order("calls_per_week", { ascending: false });
+        break;
+      case "application_status":
+        q = q.order("application_status").order("created_at", { ascending: false });
+        break;
+      case "access_status":
+        q = q.order("access_status").order("created_at", { ascending: false });
+        break;
+      default:
+        q = q.order("created_at", { ascending: false });
+    }
+    q = q.limit(data.limit);
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return rows ?? [];
