@@ -340,7 +340,7 @@ export function BetaProgramTab() {
             <BulkBtn onClick={() => setConfirm({ action: "activate", ids: Array.from(selected), copy: `Activate ${selected.size} testers?` })} label="Activate" />
             <BulkBtn onClick={() => setConfirm({ action: "suspend", ids: Array.from(selected), copy: `Suspend ${selected.size} testers? They will be signed out.` })} label="Suspend" />
             <BulkBtn onClick={() => setConfirm({ action: "deactivate", ids: Array.from(selected), copy: `Deactivate ${selected.size} testers? They will be signed out.` })} label="Deactivate" />
-            <BulkBtn onClick={() => setConfirm({ action: "delete_pending", ids: Array.from(selected), copy: `Delete ${selected.size} pending/waitlisted/declined applications? History is preserved.` })} label="Delete Pending" destructive />
+            <BulkBtn onClick={() => setConfirm({ action: "delete_pending", ids: Array.from(selected), copy: `Delete ${selected.size} applicant${selected.size === 1 ? "" : "s"} from the beta signup list? Linked user accounts and history are preserved.` })} label="Delete Applicants" destructive />
             <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs" onClick={() => setSelected(new Set())}>Clear</Button>
           </div>
         )}
@@ -566,22 +566,18 @@ function ApplicationRow({ app, onOpen, selected, onToggle }: { app: any; onOpen:
                 <RotateCcw className="mr-2 h-4 w-4" /> Reinstate Tester
               </DropdownMenuItem>
             ) : null}
-            {!app.user_id && (appStatus === "pending" || appStatus === "waitlisted" || appStatus === "declined") ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setConfirmDel(true)} className="text-destructive focus:text-destructive">
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete Application
-                </DropdownMenuItem>
-              </>
-            ) : null}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setConfirmDel(true)} className="text-destructive focus:text-destructive">
+              <Trash2 className="mr-2 h-4 w-4" /> Delete Applicant
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <AlertDialog open={confirmDel} onOpenChange={setConfirmDel}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete application?</AlertDialogTitle>
+              <AlertDialogTitle>Delete applicant?</AlertDialogTitle>
               <AlertDialogDescription>
-                Removes the application record only. No user account or historical data is affected.
+                Permanently removes this applicant record from the beta signup list. Any linked user account and diagnostic history are preserved — to also revoke their access, suspend or deactivate them first.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
