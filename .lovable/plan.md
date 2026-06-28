@@ -1,74 +1,111 @@
-## Beta Access Approval Gate
+## Discord Notification Service
 
-Add an **approval gate** on top of existing auth — sign-up/login stay untouched. Every authenticated user now has an `access_status` that controls whether they reach the app or land on a status page.
+Centralized, server-only webhook notifier. Fire-and-forget; never blocks responses or surfaces errors to the user.
 
-### 1. Database
+### 1. Secrets (via `add_secret`)
 
-New table `public.user_access` (one row per user; created automatically on signup):
-- `user_id` → `auth.users.id` (PK, cascade delete)
-- `access_status` enum: `pending | approved | denied | suspended` (default `pending`)
-- `status_reason` text (optional, owner-set)
-- `status_changed_by` uuid, `status_changed_at` timestamp
-- `created_at`, `updated_at`
+- `DISCORD_BETA_WEBHOOK_URL` — wired now
+- `DISCORD_BUG_WEBHOOK_URL` — reserved
+- `DISCORD_FEATURE_WEBHOOK_URL` — reserved
+- `DISCORD_SYSTEM_WEBHOOK_URL` — reserved
+- `DISCORD_OWNER_ROLE_ID` — optional; when present, beta notifications prepend `<@&ROLE_ID>` so owners get pinged
 
-Why a separate table (not on `beta_applications`): people can sign up without ever submitting a beta application, and an application row isn't guaranteed to exist at signup time. The owner dashboard will join `beta_applications` ↔ `user_access` by `user_id`.
+The user will paste each value into the secure form; nothing is hardcoded. Already-saved secrets are skipped automatically.
 
-Triggers / functions:
-- Extend `handle_new_user()` to also insert a `user_access` row with `pending`.
-- If an existing `beta_applications` row matches the email and is already `approved/active`, set the new `user_access` row to `approved` in the same trigger (preserves the existing approval workflow).
-- Security-definer RPC `get_my_access_status()` so the client can read its own status without exposing the table broadly.
-- RLS: user can `SELECT` own row; only owners can `UPDATE`. Service role full.
+### 2. Helper — `src/lib/discord.server.ts`
 
-Backfill: insert a `pending` row for every existing `auth.users` id that doesn't have one (owner-only initial bootstrap; existing owner account auto-set to `approved`).
+`.server.ts` ensures the module is stripped from client bundles.
 
-### 2. Status Pages (public routes, but require a session)
+Exports:
 
-Create `src/routes/pending-approval.tsx`, `/access-denied.tsx`, `/access-suspended.tsx`. Each:
-- Calls `get_my_access_status()` on mount.
-- If status is `approved`, redirects to `/diagnose`.
-- Renders the exact copy from the spec (Pending / Denied / Suspended) with the specified button.
-- Sign-out link in the corner so a user isn't stuck.
+```ts
+export const DISCORD_COLORS = {
+  blue:   0x3B82F6, // Beta
+  green:  0x22C55E, // Confirmed Repair
+  red:    0xEF4444, // Bug Report
+  amber:  0xF59E0B, // Feature Request
+  purple: 0xA855F7, // System Alert
+} as const;
 
-### 3. Gate the `_authenticated` Layout
+export type DiscordField = { name: string; value: string; inline?: boolean };
 
-In `src/routes/_authenticated/route.tsx` `beforeLoad`, after `getUser()` succeeds:
-- Call `get_my_access_status()`.
-- `approved` → continue.
-- `pending` → `redirect({ to: "/pending-approval" })`.
-- `denied` → `/access-denied`.
-- `suspended` → `/access-suspended`.
-- Missing row (defensive) → treat as `pending`.
+export async function sendDiscordNotification(opts: {
+  webhookUrl: string | undefined;
+  title: string;
+  description?: string;
+  url?: string;                 // makes embed title clickable
+  color?: number;               // defaults to blue
+  fields?: DiscordField[];
+  footer?: string;              // defaults to "NextStep Diagnostics"
+  content?: string;             // raw message above embed (used for role mentions)
+}): Promise<void>;
+```
 
-This guarantees no protected route renders for a non-approved user, satisfying "do not rely solely on hiding navigation."
+Behavior:
+- If `webhookUrl` is falsy → silently return (no log noise).
+- Builds one embed with `timestamp = new Date().toISOString()`, footer text + small NextStep logo icon (`https://nextstepdiag.com/icon.png` or equivalent public asset; falls back to footer text only if asset URL unavailable).
+- Enforces Discord limits by truncating: field `name` ≤ 256, field `value` ≤ 1024, `title` ≤ 256, `description` ≤ 4096, max 25 fields, total embed ≤ 6000 chars. Long values get `…` suffix.
+- `fetch(webhookUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content, embeds: [embed], allowed_mentions: { parse: [], roles: content ? extractedRoleIds : [] } }), signal: AbortSignal.timeout(3000) })`.
+- Whole thing wrapped in try/catch. Failures → `console.warn("[discord] notify failed", err)`. **Never throws.**
+- No retries (best-effort; webhook spam on retry storms is worse than a dropped event).
 
-### 4. Owner Dashboard — Beta Program Tab
+### 3. Beta Application wiring
 
-In `src/components/owner/beta-program-tab.tsx`:
-- Join applicant rows with `user_access` (when `user_id` is set).
-- New **Access** column with badge: 🟡 Pending / 🟢 Approved / 🔴 Denied / ⚫ Suspended.
-- New filter dropdown: All / Pending / Approved / Denied / Suspended.
-- Per-row quick actions: **Approve**, **Deny**, **Suspend**, **Revoke Access** (revoke = back to `pending`).
-  - Clicking Approve sets `user_access.access_status = 'approved'` immediately — no email/invite step required.
-  - Also mirror the change to `beta_applications.status` where it makes sense (approve→active, deny→rejected) to keep the existing workflow coherent. Existing "Send Invite" action stays.
-- All actions go through a new owner-only server function `setUserAccessStatus({ userId, status, reason? })` that verifies `has_role('owner')` before writing and logs `status_changed_by/at`.
+Edit `src/lib/beta-applications.functions.ts` → at the end of `submitBetaApplication`'s `.handler()`, **after** the successful insert, fire-and-forget:
 
-### 5. Files to Add / Edit
+```ts
+const roleId = process.env.DISCORD_OWNER_ROLE_ID;
+void sendDiscordNotification({
+  webhookUrl: process.env.DISCORD_BETA_WEBHOOK_URL,
+  title: "🚀 New Beta Application",
+  url: "https://nextstepdiag.com/owner?tab=beta",
+  color: DISCORD_COLORS.blue,
+  content: roleId ? `<@&${roleId}>` : undefined,
+  description: "**Review Application:** https://nextstepdiag.com/owner?tab=beta",
+  fields: [
+    { name: "Name",         value: `${firstName} ${lastName}`, inline: true },
+    { name: "Email",        value: email, inline: true },
+    { name: "Company",      value: company || "—", inline: true },
+    { name: "Location",     value: location, inline: true },
+    { name: "Experience",   value: `${experienceYears} yrs`, inline: true },
+    { name: "Role",         value: role, inline: true },
+    { name: "Calls / Week", value: String(callsPerWeek), inline: true },
+    { name: "Brands",       value: primaryBrands.join(", ") },
+    { name: "Reason",       value: reason },
+  ],
+  footer: "NextStep Diagnostics Beta Program",
+});
+```
 
-Add:
-- Migration: `user_access` table + enum + RLS + grants + `get_my_access_status()` RPC + `handle_new_user` update + backfill.
-- `src/lib/user-access.functions.ts` — `getMyAccessStatus`, `setUserAccessStatus` (owner-only).
-- `src/routes/pending-approval.tsx`, `src/routes/access-denied.tsx`, `src/routes/access-suspended.tsx`.
+Key points:
+- `void` + no `await` → the response returns immediately; Discord latency never delays the user.
+- The helper's internal try/catch guarantees no throw escapes into the server fn.
+- Skipped entirely on the duplicate-email branch (only fires on real new inserts).
+- `allowed_mentions.roles` is set from the role ID in `content` so role pings actually notify.
 
-Edit:
-- `src/routes/_authenticated/route.tsx` — add status gate in `beforeLoad`.
-- `src/components/owner/beta-program-tab.tsx` — badges, filter, action buttons.
-- `src/lib/beta-applications.functions.ts` — include joined access status in the list query.
+### 4. Future event readiness (not implemented)
 
-### 6. Preserved (unchanged)
+The generic signature means future wiring is one call per site, no helper changes:
 
-Sign-up, login, Google OAuth, `/auth`, existing beta application form/flow, existing invite/wave logic, existing owner dashboard structure.
+| Event | Webhook | Color | Trigger site |
+|---|---|---|---|
+| Confirmed Repair | SYSTEM (or dedicated) | green | `diagnostic-outcomes.functions.ts` on `confirmed` |
+| Bug Report | BUG | red | `feedback.functions.ts` kind=`bug` |
+| Feature Request | FEATURE | amber | `feedback.functions.ts` kind=`feature` |
+| High-Value Feedback | SYSTEM | purple | `feedback.functions.ts` (long body / active tester) |
+| Tech Sheet Upload | SYSTEM | purple | `tech-sheets/lookup.functions.ts` after upsert |
+| New Diagnostic Session | SYSTEM | blue | session-start server fn |
+| API Failures | SYSTEM | red | inside existing catch branches (RapidAPI, Firecrawl, AI gateway) |
+| Owner Alerts / Health | SYSTEM | purple | future access-gate + health probes |
 
-### Notes
+### Files
 
-- The gate runs client-side in `beforeLoad` (the layout is already `ssr: false`), so a paused/denied user can never see protected UI even momentarily.
-- Owner is identified via the existing `user_roles` + `has_role()` pattern — no new role logic.
+- **Add:** `src/lib/discord.server.ts`
+- **Edit:** `src/lib/beta-applications.functions.ts` (one call after insert; dynamic `await import("@/lib/discord.server")` inside the handler to keep the server-only module off the client graph)
+- **Secrets:** request the 5 listed above via `add_secret`
+
+### Out of scope
+
+- Wiring any non-beta event
+- Adding a "Referral Source" field (not in current form/schema)
+- Persisting a notification log table — can add later if needed
