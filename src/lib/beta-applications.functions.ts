@@ -764,6 +764,7 @@ export type TesterMetrics = {
   bugReports: number;
   featureRequests: number;
   feedbackEntries: number;
+  techSheetsUploaded: number;
   lastActivity: string | null;
   healthScore: number;
   badge: { stars: number; label: string };
@@ -804,6 +805,7 @@ export const getBetaTesterMetrics = createServerFn({ method: "POST" })
       bugReports: 0,
       featureRequests: 0,
       feedbackEntries: 0,
+      techSheetsUploaded: 0,
       lastActivity: null,
       healthScore: 0,
       badge: badgeFor(0),
@@ -813,7 +815,7 @@ export const getBetaTesterMetrics = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const uid = app.user_id;
 
-    const [authUserRes, sessionsRes, outcomesRes, feedbackRes] = await Promise.all([
+    const [authUserRes, sessionsRes, outcomesRes, feedbackRes, techSheetsRes] = await Promise.all([
       supabaseAdmin.auth.admin.getUserById(uid),
       supabaseAdmin
         .from("diagnostic_sessions")
@@ -824,6 +826,7 @@ export const getBetaTesterMetrics = createServerFn({ method: "POST" })
         .select("outcome,created_at")
         .eq("user_id", uid),
       supabaseAdmin.from("feedback").select("kind,created_at").eq("user_id", uid),
+      supabaseAdmin.from("tech_sheets").select("id", { count: "exact", head: true }).eq("uploaded_by", uid),
     ]);
 
     const authUser = authUserRes.data?.user;
@@ -838,6 +841,7 @@ export const getBetaTesterMetrics = createServerFn({ method: "POST" })
     const bugReports = feedback.filter((f) => f.kind === "bug").length;
     const featureRequests = feedback.filter((f) => f.kind === "feature").length;
     const feedbackEntries = feedback.length;
+    const techSheetsUploaded = techSheetsRes.count ?? 0;
 
     const datesMs = [
       authUser?.last_sign_in_at,
@@ -885,6 +889,7 @@ export const getBetaTesterMetrics = createServerFn({ method: "POST" })
       bugReports,
       featureRequests,
       feedbackEntries,
+      techSheetsUploaded,
       lastActivity,
       healthScore,
       badge: badgeFor(healthScore),
