@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { normalizeLocation } from "@/lib/beta/normalize-location";
 
 // ---------- Public submission ----------
 
@@ -55,12 +56,16 @@ export const submitBetaApplication = createServerFn({ method: "POST" })
       email: data.email.toLowerCase(),
       company: data.company || null,
       location: data.location,
+      location_raw: data.location,
+      state: normalizeLocation(data.location).state,
       experience_years: data.experienceYears,
       role: data.role,
       calls_per_week: data.callsPerWeek,
       primary_brands: data.primaryBrands,
       reason: data.reason,
       status: "pending" as const,
+      application_status: "pending" as const,
+      access_status: "not_invited" as const,
       beta_wave: 1,
       source: "public_form",
     };
