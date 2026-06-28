@@ -644,6 +644,9 @@ export const sendBetaInvite = createServerFn({ method: "POST" })
 
 export type BetaProgramStats = {
   totals: Record<string, number> & { total: number };
+  applicationTotals: Record<"pending" | "approved" | "waitlisted" | "declined", number>;
+  accessTotals: Record<"not_invited" | "invited" | "active" | "suspended" | "deactivated", number>;
+  activeTesters: number;
   byWave: Array<{ wave: number; count: number }>;
   byExperience: Array<{ bucket: string; count: number }>;
   byBrand: Array<{ brand: string; count: number }>;
@@ -659,7 +662,7 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
     const { data: rows, error } = await context.supabase
       .from("beta_applications")
       .select(
-        "status,beta_wave,experience_years,calls_per_week,primary_brands,location",
+        "status,application_status,access_status,user_id,beta_wave,experience_years,calls_per_week,primary_brands,state,location",
       )
       .limit(10000);
     if (error) throw new Error(error.message);
@@ -673,16 +676,29 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
       declined: 0,
       total: 0,
     };
+    const applicationTotals = { pending: 0, approved: 0, waitlisted: 0, declined: 0 } as Record<"pending" | "approved" | "waitlisted" | "declined", number>;
+    const accessTotals = { not_invited: 0, invited: 0, active: 0, suspended: 0, deactivated: 0 } as Record<"not_invited" | "invited" | "active" | "suspended" | "deactivated", number>;
     const waves = new Map<number, number>();
     const buckets = { "0-2": 0, "3-5": 0, "6-10": 0, "10+": 0 } as Record<string, number>;
     const brands = new Map<string, number>();
     const regions = new Map<string, number>();
     let expSum = 0;
     let callsSum = 0;
+    let activeTesters = 0;
+    let activeUserIds: string[] = [];
 
     for (const r of rows ?? []) {
       totals.total += 1;
       totals[r.status] = (totals[r.status] ?? 0) + 1;
+      if (r.application_status && (r.application_status as string) in applicationTotals) {
+        applicationTotals[r.application_status as keyof typeof applicationTotals] += 1;
+      }
+      if (r.access_status && (r.access_status as string) in accessTotals) {
+        accessTotals[r.access_status as keyof typeof accessTotals] += 1;
+      }
+      if (r.access_status === "active" && r.user_id) {
+        activeUserIds.push(r.user_id as string);
+      }
       waves.set(r.beta_wave, (waves.get(r.beta_wave) ?? 0) + 1);
       const yrs = r.experience_years ?? 0;
       expSum += yrs;
@@ -693,16 +709,29 @@ export const getBetaProgramStats = createServerFn({ method: "POST" })
       else buckets["10+"] += 1;
       const bs = Array.isArray(r.primary_brands) ? (r.primary_brands as string[]) : [];
       for (const b of bs) brands.set(b, (brands.get(b) ?? 0) + 1);
-      const loc = (r.location ?? "").trim();
-      if (loc) {
-        const region = loc.split(",").pop()?.trim() || loc;
-        regions.set(region, (regions.get(region) ?? 0) + 1);
+      const region = (r.state ?? "").trim() || (r.location ?? "").split(",").pop()?.trim() || "";
+      if (region) regions.set(region, (regions.get(region) ?? 0) + 1);
+    }
+
+    // Active testers = access_status='active' AND has logged in at least once.
+    if (activeUserIds.length) {
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const checks = await Promise.all(
+          activeUserIds.map((uid) => supabaseAdmin.auth.admin.getUserById(uid)),
+        );
+        activeTesters = checks.filter((r) => !!r.data?.user?.last_sign_in_at).length;
+      } catch {
+        activeTesters = activeUserIds.length;
       }
     }
 
     const n = totals.total || 1;
     return {
       totals: totals as BetaProgramStats["totals"],
+      applicationTotals,
+      accessTotals,
+      activeTesters,
       byWave: Array.from(waves.entries())
         .sort((a, b) => a[0] - b[0])
         .map(([wave, count]) => ({ wave, count })),
