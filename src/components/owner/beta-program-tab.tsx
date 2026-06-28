@@ -340,7 +340,7 @@ export function BetaProgramTab() {
             <BulkBtn onClick={() => setConfirm({ action: "activate", ids: Array.from(selected), copy: `Activate ${selected.size} testers?` })} label="Activate" />
             <BulkBtn onClick={() => setConfirm({ action: "suspend", ids: Array.from(selected), copy: `Suspend ${selected.size} testers? They will be signed out.` })} label="Suspend" />
             <BulkBtn onClick={() => setConfirm({ action: "deactivate", ids: Array.from(selected), copy: `Deactivate ${selected.size} testers? They will be signed out.` })} label="Deactivate" />
-            <BulkBtn onClick={() => setConfirm({ action: "delete_pending", ids: Array.from(selected), copy: `Delete ${selected.size} pending/waitlisted/declined applications? History is preserved.` })} label="Delete Pending" destructive />
+            <BulkBtn onClick={() => setConfirm({ action: "delete_pending", ids: Array.from(selected), copy: `Delete ${selected.size} applicant${selected.size === 1 ? "" : "s"} from the beta signup list? Linked user accounts and history are preserved.` })} label="Delete Applicants" destructive />
             <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs" onClick={() => setSelected(new Set())}>Clear</Button>
           </div>
         )}
