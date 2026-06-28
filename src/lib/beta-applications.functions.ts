@@ -214,7 +214,7 @@ export const reviewApplication = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertOwner(context.supabase, context.userId);
     const now = new Date().toISOString();
-    const patch: Record<string, unknown> = {
+    const patch: Database["public"]["Tables"]["beta_applications"]["Update"] = {
       application_status: data.decision,
       status: data.decision === "approved" ? "approved" : data.decision,
       reviewed_by: context.userId,
