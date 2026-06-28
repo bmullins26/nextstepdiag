@@ -331,22 +331,33 @@ export type Database = {
       }
       beta_applications: {
         Row: {
+          access_status: string
           activated_at: string | null
+          application_status: string
           approved_at: string | null
           approved_by: string | null
           beta_wave: number
           calls_per_week: number
           company: string | null
           created_at: string
+          deactivated_at: string | null
           email: string
           experience_years: number
           first_name: string
           id: string
+          invite_accepted_at: string | null
           invite_code: string | null
           invited_at: string | null
           last_name: string
+          last_status_reason: string | null
           location: string
+          location_raw: string | null
           notes: string | null
+          owner_labels: string[]
+          owner_notes: string | null
+          owner_notes_updated_at: string | null
+          owner_notes_updated_by: string | null
+          owner_rating: number | null
           primary_brands: Json
           reason: string
           referred_by: string | null
@@ -354,28 +365,40 @@ export type Database = {
           reviewed_by: string | null
           role: string
           source: string
+          state: string | null
           status: string
+          suspended_at: string | null
           updated_at: string
           user_id: string | null
-          video_interview: string | null
         }
         Insert: {
+          access_status?: string
           activated_at?: string | null
+          application_status?: string
           approved_at?: string | null
           approved_by?: string | null
           beta_wave?: number
           calls_per_week: number
           company?: string | null
           created_at?: string
+          deactivated_at?: string | null
           email: string
           experience_years: number
           first_name: string
           id?: string
+          invite_accepted_at?: string | null
           invite_code?: string | null
           invited_at?: string | null
           last_name: string
+          last_status_reason?: string | null
           location: string
+          location_raw?: string | null
           notes?: string | null
+          owner_labels?: string[]
+          owner_notes?: string | null
+          owner_notes_updated_at?: string | null
+          owner_notes_updated_by?: string | null
+          owner_rating?: number | null
           primary_brands?: Json
           reason: string
           referred_by?: string | null
@@ -383,28 +406,40 @@ export type Database = {
           reviewed_by?: string | null
           role: string
           source?: string
+          state?: string | null
           status?: string
+          suspended_at?: string | null
           updated_at?: string
           user_id?: string | null
-          video_interview?: string | null
         }
         Update: {
+          access_status?: string
           activated_at?: string | null
+          application_status?: string
           approved_at?: string | null
           approved_by?: string | null
           beta_wave?: number
           calls_per_week?: number
           company?: string | null
           created_at?: string
+          deactivated_at?: string | null
           email?: string
           experience_years?: number
           first_name?: string
           id?: string
+          invite_accepted_at?: string | null
           invite_code?: string | null
           invited_at?: string | null
           last_name?: string
+          last_status_reason?: string | null
           location?: string
+          location_raw?: string | null
           notes?: string | null
+          owner_labels?: string[]
+          owner_notes?: string | null
+          owner_notes_updated_at?: string | null
+          owner_notes_updated_by?: string | null
+          owner_rating?: number | null
           primary_brands?: Json
           reason?: string
           referred_by?: string | null
@@ -412,10 +447,11 @@ export type Database = {
           reviewed_by?: string | null
           role?: string
           source?: string
+          state?: string | null
           status?: string
+          suspended_at?: string | null
           updated_at?: string
           user_id?: string | null
-          video_interview?: string | null
         }
         Relationships: []
       }
@@ -895,6 +931,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _beta_guess_state: { Args: { input: string }; Returns: string }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean

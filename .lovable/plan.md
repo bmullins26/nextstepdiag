@@ -1,111 +1,125 @@
-## Discord Notification Service
+# Beta Program Admin v2 + v3 (combined)
 
-Centralized, server-only webhook notifier. Fire-and-forget; never blocks responses or surfaces errors to the user.
+Builds full tester lifecycle controls on top of a clean two-field model: **application_status** (review outcome) and **access_status** (account access). All historical data is preserved — status changes never delete sessions, outcomes, feedback, AI usage, tech sheets, or auth accounts.
 
-### 1. Secrets (via `add_secret`)
+## 1. Schema (single migration)
 
-- `DISCORD_BETA_WEBHOOK_URL` — wired now
-- `DISCORD_BUG_WEBHOOK_URL` — reserved
-- `DISCORD_FEATURE_WEBHOOK_URL` — reserved
-- `DISCORD_SYSTEM_WEBHOOK_URL` — reserved
-- `DISCORD_OWNER_ROLE_ID` — optional; when present, beta notifications prepend `<@&ROLE_ID>` so owners get pinged
+`beta_applications`:
+- Add `application_status text` — `pending | approved | waitlisted | declined`.
+- Add `access_status text` — `not_invited | invited | active | suspended | deactivated`.
+- Back-fill from existing `status`:
+  - pending/waitlisted/declined → `application_status` = same, `access_status` = `not_invited`.
+  - approved → `application_status=approved`, `access_status=not_invited`.
+  - invited → `application_status=approved`, `access_status=invited`.
+  - active → `application_status=approved`, `access_status=active`.
+- Keep old `status` column for now (writes mirror, reads ignore) to avoid breaking any external consumer; remove in a follow-up.
+- Add columns:
+  - `state text` (normalized US state OR country; analytics source of truth)
+  - `location_raw text` (back-filled from `location`)
+  - `owner_notes text`, `owner_notes_updated_at timestamptz`, `owner_notes_updated_by uuid`
+  - `owner_rating smallint` CHECK 1–5
+  - `owner_labels text[]` default `'{}'`
+  - `suspended_at timestamptz`, `deactivated_at timestamptz`, `last_status_reason text`
+  - `invite_accepted_at timestamptz` (set when user_id first links via `handle_new_user`)
+- Drop unused `video_interview` column + CHECK.
+- Trigger: stamp `suspended_at` / `deactivated_at` / clear on reinstate.
+- Update `handle_new_user`: when linking by email, set `access_status='active'` and `invite_accepted_at=now()` (only if currently `invited` or `not_invited` with `application_status='approved'`).
 
-The user will paste each value into the secure form; nothing is hardcoded. Already-saved secrets are skipped automatically.
+No separate `user_access` table — `beta_applications` is the single source of truth.
 
-### 2. Helper — `src/lib/discord.server.ts`
+## 2. Location normalization
 
-`.server.ts` ensures the module is stripped from client bundles.
+`src/lib/beta/normalize-location.ts` (+ tests):
+- US state abbrev/full-name map (case-insensitive) → canonical state.
+- Recognized country aliases → country.
+- Handles "Jefferson OH", "123 Main St, Jefferson, OH 44047", "OHIO", etc.
+- Returns `{ state, isUS }`.
 
-Exports:
+Applied in `submitBetaApplication` (writes `location_raw` + `state`), in an owner mutation `updateApplicantState`, and in the migration back-fill (SQL CASE for common abbreviations; remainder defaults to last comma-segment title-cased and can be hand-corrected via the UI).
 
-```ts
-export const DISCORD_COLORS = {
-  blue:   0x3B82F6, // Beta
-  green:  0x22C55E, // Confirmed Repair
-  red:    0xEF4444, // Bug Report
-  amber:  0xF59E0B, // Feature Request
-  purple: 0xA855F7, // System Alert
-} as const;
+Analytics `byRegion` switches to grouping by `state`.
 
-export type DiscordField = { name: string; value: string; inline?: boolean };
+## 3. Server functions (`src/lib/beta-applications.functions.ts`)
 
-export async function sendDiscordNotification(opts: {
-  webhookUrl: string | undefined;
-  title: string;
-  description?: string;
-  url?: string;                 // makes embed title clickable
-  color?: number;               // defaults to blue
-  fields?: DiscordField[];
-  footer?: string;              // defaults to "NextStep Diagnostics"
-  content?: string;             // raw message above embed (used for role mentions)
-}): Promise<void>;
-```
+`listBetaApplications`:
+- New filters: `applicationStatus?`, `accessStatus?`, `labels?: string[]`, `minRating?`, `sort`.
+- `sort`: `newest | oldest | experience | calls | last_login | health | application_status | access_status`.
+- Search matches first/last name, email, company, **state**, **role**, **brand** (jsonb), and **labels**.
 
-Behavior:
-- If `webhookUrl` is falsy → silently return (no log noise).
-- Builds one embed with `timestamp = new Date().toISOString()`, footer text + small NextStep logo icon (`https://nextstepdiag.com/icon.png` or equivalent public asset; falls back to footer text only if asset URL unavailable).
-- Enforces Discord limits by truncating: field `name` ≤ 256, field `value` ≤ 1024, `title` ≤ 256, `description` ≤ 4096, max 25 fields, total embed ≤ 6000 chars. Long values get `…` suffix.
-- `fetch(webhookUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content, embeds: [embed], allowed_mentions: { parse: [], roles: content ? extractedRoleIds : [] } }), signal: AbortSignal.timeout(3000) })`.
-- Whole thing wrapped in try/catch. Failures → `console.warn("[discord] notify failed", err)`. **Never throws.**
-- No retries (best-effort; webhook spam on retry storms is worse than a dropped event).
+New / updated mutations (all owner-only, all preserve history):
+- `reviewApplication({id, decision: approved|waitlisted|declined|pending, reason?})` — sets `application_status` only. Approving auto-sets `access_status='not_invited'` if currently null.
+- `sendBetaInvite` (existing) — only allowed when `application_status='approved'`. Sets `access_status='invited'`, stamps `invited_at`.
+- `activateBetaTester({id})` — `access_status='active'`. Allowed from `invited`, `suspended`, `deactivated`.
+- `suspendBetaTester({id, reason?})` — `access_status='suspended'` + `supabaseAdmin.auth.admin.signOut(user_id, 'global')`.
+- `deactivateBetaTester({id, reason?})` — `access_status='deactivated'` + global sign-out.
+- `reinstateBetaTester({id})` — back to `active` (or `invited` if `user_id` is null).
+- `deleteBetaApplication({id})` — only when `application_status ∈ {pending, waitlisted, declined}` AND `user_id IS NULL`. Removes only the application row.
+- `bulkApplyAction({ids[], action})` — server-side fan-out of the single-row actions. Validates per-row eligibility, returns per-id results.
+- `updateOwnerNotes({id, notes})` — debounced autosave from UI.
+- `updateOwnerRating({id, rating|null})`.
+- `setOwnerLabels({id, labels[]})`.
+- `updateApplicantState({id, state})`.
+- `exportBetaApplicationsCsv({ids?[]})` — returns CSV string for selected rows (or current filter set).
+- `hasBetaAccess()` — returns `{ ok: boolean, accessStatus, isOwner }`. `ok = isOwner || accessStatus==='active'`.
 
-### 3. Beta Application wiring
+`getBetaProgramStats`:
+- Two totals blocks: `applications` (pending/approved/waitlisted/declined) and `access` (not_invited/invited/active/suspended/deactivated).
+- "Active Testers", health scores, and engagement counts only include rows with `access_status='active'` AND `user_id IS NOT NULL` AND `last_sign_in_at IS NOT NULL`.
+- `byRegion` uses normalized `state`.
 
-Edit `src/lib/beta-applications.functions.ts` → at the end of `submitBetaApplication`'s `.handler()`, **after** the successful insert, fire-and-forget:
+`getBetaTesterMetrics` enriched with `inviteSent`, `inviteAccepted`, `techSheetsUploaded` (count from `tech_sheets` by user_id).
 
-```ts
-const roleId = process.env.DISCORD_OWNER_ROLE_ID;
-void sendDiscordNotification({
-  webhookUrl: process.env.DISCORD_BETA_WEBHOOK_URL,
-  title: "🚀 New Beta Application",
-  url: "https://nextstepdiag.com/owner?tab=beta",
-  color: DISCORD_COLORS.blue,
-  content: roleId ? `<@&${roleId}>` : undefined,
-  description: "**Review Application:** https://nextstepdiag.com/owner?tab=beta",
-  fields: [
-    { name: "Name",         value: `${firstName} ${lastName}`, inline: true },
-    { name: "Email",        value: email, inline: true },
-    { name: "Company",      value: company || "—", inline: true },
-    { name: "Location",     value: location, inline: true },
-    { name: "Experience",   value: `${experienceYears} yrs`, inline: true },
-    { name: "Role",         value: role, inline: true },
-    { name: "Calls / Week", value: String(callsPerWeek), inline: true },
-    { name: "Brands",       value: primaryBrands.join(", ") },
-    { name: "Reason",       value: reason },
-  ],
-  footer: "NextStep Diagnostics Beta Program",
-});
-```
+## 4. Access gate
 
-Key points:
-- `void` + no `await` → the response returns immediately; Discord latency never delays the user.
-- The helper's internal try/catch guarantees no throw escapes into the server fn.
-- Skipped entirely on the duplicate-email branch (only fires on real new inserts).
-- `allowed_mentions.roles` is set from the role ID in `content` so role pings actually notify.
+`src/routes/_authenticated/route.tsx`:
+- After `getUser()`, call `hasBetaAccess`.
+- `isOwner` → allow.
+- `access_status === 'active'` → allow.
+- `access_status ∈ {suspended, deactivated}` → `redirect("/access-denied")`.
+- `access_status ∈ {invited, not_invited}` or no application row → existing dashboard behavior unchanged (they're signed in but not gated out — they simply have nothing beta-specific to do yet).
 
-### 4. Future event readiness (not implemented)
+New public route `src/routes/access-denied.tsx`: "Your beta access is currently inactive. If you believe this is an error, please contact NextStep Diagnostics." + sign-out.
 
-The generic signature means future wiring is one call per site, no helper changes:
+## 5. Owner UI (`src/components/owner/beta-program-tab.tsx`)
 
-| Event | Webhook | Color | Trigger site |
-|---|---|---|---|
-| Confirmed Repair | SYSTEM (or dedicated) | green | `diagnostic-outcomes.functions.ts` on `confirmed` |
-| Bug Report | BUG | red | `feedback.functions.ts` kind=`bug` |
-| Feature Request | FEATURE | amber | `feedback.functions.ts` kind=`feature` |
-| High-Value Feedback | SYSTEM | purple | `feedback.functions.ts` (long body / active tester) |
-| Tech Sheet Upload | SYSTEM | purple | `tech-sheets/lookup.functions.ts` after upsert |
-| New Diagnostic Session | SYSTEM | blue | session-start server fn |
-| API Failures | SYSTEM | red | inside existing catch branches (RapidAPI, Firecrawl, AI gateway) |
-| Owner Alerts / Health | SYSTEM | purple | future access-gate + health probes |
+Stats: two stat strips — Applications row and Access row.
 
-### Files
+Filters bar:
+- Quick-filter chips for Application Status (All/Pending/Approved/Waitlisted/Declined).
+- Quick-filter chips for Access Status (All/Not Invited/Invited/Active/Suspended/Deactivated).
+- Label multi-select, rating ≥ selector.
+- Search box (placeholder: "Search name, email, company, state, brand, role, label").
+- Sort dropdown (7 options listed above).
 
-- **Add:** `src/lib/discord.server.ts`
-- **Edit:** `src/lib/beta-applications.functions.ts` (one call after insert; dynamic `await import("@/lib/discord.server")` inside the handler to keep the server-only module off the client graph)
-- **Secrets:** request the 5 listed above via `add_secret`
+Table:
+- Checkbox column for bulk selection; sticky bulk-action toolbar appears when any row is selected (Approve / Waitlist / Decline / Send Invite / Activate / Suspend / Deactivate / Delete Pending / Export CSV).
+- Two badges per row: `ApplicationPill` and `AccessPill` (distinct color scales).
+- New columns (compact): Last Activity, Last Login, Sessions, Confirmed, Bugs, Features, Tech Sheets, Rating (stars), Labels (chips).
+- Row Actions dropdown (gated by status):
+  - View Application
+  - Approve / Waitlist / Decline (when `application_status='pending'`)
+  - Send Invite / Resend Invite (when `application_status='approved'` and `access_status ∈ {not_invited, invited}`)
+  - Activate, Suspend, Deactivate, Reinstate (gated by `access_status`)
+  - Delete Application (pending/waitlisted/declined + no user_id)
+  - Edit Owner Notes / Rating / Labels
 
-### Out of scope
+Detail dialog redesigned into three sections:
+- **Application**: Submitted, Reviewed, Application Status, Reason, Brands, Original Location, Normalized State (inline editable).
+- **Access**: Invite Sent, Invite Accepted, Access Status, Last Login, Last Activity.
+- **Activity**: Diagnostic Sessions, Confirmed Repairs, Pending Repairs, Feedback, Bug Reports, Feature Requests, Tech Sheet Uploads, Health Score.
+- **Owner-only**: Notes (autosave, last edited by + when), Rating (1–5 stars), Labels (preset chips with add/remove).
 
-- Wiring any non-beta event
-- Adding a "Referral Source" field (not in current form/schema)
-- Persisting a notification log table — can add later if needed
+Preset labels: VIP Tester, Factory Tech, Independent Tech, Service Company, Student, Great Feedback, Needs Follow-up. Owner can add custom labels.
+
+## 6. Preservation guarantee
+
+All access transitions only mutate `beta_applications` + call `auth.admin.signOut`. Deletion is restricted to pre-account application rows. No code path touches `diagnostic_sessions`, `diagnostic_outcomes`, `feedback`, `tech_sheets`, `ai_usage`, or `auth.users` records.
+
+## Files touched
+
+- `supabase/migrations/<new>.sql` (schema + back-fill + trigger + handle_new_user update)
+- `src/lib/beta/normalize-location.ts` (+ test)
+- `src/lib/beta-applications.functions.ts` (split status fields, new mutations, bulk, CSV)
+- `src/routes/_authenticated/route.tsx` (access gate via `hasBetaAccess`)
+- `src/routes/access-denied.tsx` (new)
+- `src/components/owner/beta-program-tab.tsx` (full UI rebuild against new model)

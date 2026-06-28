@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as BetaRouteImport } from './routes/beta'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRepairInsightsTestRouteImport } from './routes/_authenticated/repair-insights-test'
@@ -33,6 +34,11 @@ const BetaRoute = BetaRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccessDeniedRoute = AccessDeniedRouteImport.update({
+  id: '/access-denied',
+  path: '/access-denied',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -104,6 +110,7 @@ const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/access-denied'
     | '/auth'
     | '/beta'
     | '/dashboard'
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/access-denied'
     | '/auth'
     | '/beta'
     | '/dashboard'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/access-denied'
     | '/auth'
     | '/beta'
     | '/_authenticated/dashboard'
@@ -207,6 +219,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AccessDeniedRoute: typeof AccessDeniedRoute
   AuthRoute: typeof AuthRoute
   BetaRoute: typeof BetaRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
@@ -228,6 +241,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/access-denied': {
+      id: '/access-denied'
+      path: '/access-denied'
+      fullPath: '/access-denied'
+      preLoaderRoute: typeof AccessDeniedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -361,6 +381,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AccessDeniedRoute: AccessDeniedRoute,
   AuthRoute: AuthRoute,
   BetaRoute: BetaRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
@@ -370,13 +391,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
