@@ -23,6 +23,7 @@ import { Route as AuthenticatedDiagnoseRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
+import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_authenticated/community.search'
 import { Route as AuthenticatedCommunityBrowseRouteImport } from './routes/_authenticated/community.browse'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
@@ -98,6 +99,12 @@ const AuthenticatedHistoryIdRoute = AuthenticatedHistoryIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AuthenticatedHistoryRoute,
 } as any)
+const AuthenticatedCommunitySearchRoute =
+  AuthenticatedCommunitySearchRouteImport.update({
+    id: '/search',
+    path: '/search',
+    getParentRoute: () => AuthenticatedCommunityRoute,
+  } as any)
 const AuthenticatedCommunityBrowseRoute =
   AuthenticatedCommunityBrowseRouteImport.update({
     id: '/browse',
@@ -135,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/owner': typeof AuthenticatedOwnerRoute
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -154,6 +162,7 @@ export interface FileRoutesByTo {
   '/owner': typeof AuthenticatedOwnerRoute
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -175,6 +184,7 @@ export interface FileRoutesById {
   '/_authenticated/owner': typeof AuthenticatedOwnerRoute
   '/_authenticated/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/_authenticated/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/_authenticated/community/search': typeof AuthenticatedCommunitySearchRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/owner'
     | '/repair-insights-test'
     | '/community/browse'
+    | '/community/search'
     | '/history/$id'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/owner'
     | '/repair-insights-test'
     | '/community/browse'
+    | '/community/search'
     | '/history/$id'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -235,6 +247,7 @@ export interface FileRouteTypes {
     | '/_authenticated/owner'
     | '/_authenticated/repair-insights-test'
     | '/_authenticated/community/browse'
+    | '/_authenticated/community/search'
     | '/_authenticated/history/$id'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -352,6 +365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHistoryIdRouteImport
       parentRoute: typeof AuthenticatedHistoryRoute
     }
+    '/_authenticated/community/search': {
+      id: '/_authenticated/community/search'
+      path: '/search'
+      fullPath: '/community/search'
+      preLoaderRoute: typeof AuthenticatedCommunitySearchRouteImport
+      parentRoute: typeof AuthenticatedCommunityRoute
+    }
     '/_authenticated/community/browse': {
       id: '/_authenticated/community/browse'
       path: '/browse'
@@ -385,11 +405,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedCommunityRouteChildren {
   AuthenticatedCommunityBrowseRoute: typeof AuthenticatedCommunityBrowseRoute
+  AuthenticatedCommunitySearchRoute: typeof AuthenticatedCommunitySearchRoute
 }
 
 const AuthenticatedCommunityRouteChildren: AuthenticatedCommunityRouteChildren =
   {
     AuthenticatedCommunityBrowseRoute: AuthenticatedCommunityBrowseRoute,
+    AuthenticatedCommunitySearchRoute: AuthenticatedCommunitySearchRoute,
   }
 
 const AuthenticatedCommunityRouteWithChildren =
