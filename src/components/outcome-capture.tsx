@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, HelpCircle, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, HelpCircle, Loader2, MessagesSquare, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { recordOutcome } from "@/lib/diagnostic-outcomes.functions";
+import { stitchOutcomeToInsights } from "@/lib/community.functions";
 
 type Choice = "confirmed" | "incorrect" | "partial" | "pending_repair" | null;
 
@@ -29,6 +31,8 @@ export function OutcomeCapture({
   onRecorded: (kind: Exclude<Choice, null>) => void;
 }) {
   const record = useServerFn(recordOutcome);
+  const stitch = useServerFn(stitchOutcomeToInsights);
+  const navigate = useNavigate();
   const [choice, setChoice] = useState<Choice>(null);
   const [actual, setActual] = useState("");
   const [notes, setNotes] = useState("");
@@ -38,7 +42,7 @@ export function OutcomeCapture({
   async function submit(outcome: Exclude<Choice, null>, extra?: { actualFailure?: string; notes?: string }) {
     setBusy(true);
     try {
-      await record({
+      const res = await record({
         data: {
           sessionId,
           manufacturer,
@@ -52,6 +56,12 @@ export function OutcomeCapture({
           notes: extra?.notes ?? null,
         },
       });
+      if (sessionId) {
+        try {
+          await stitch({ data: { sessionId, finalOutcome: outcome } });
+        } catch { /* non-fatal — feedback rows may not exist */ }
+      }
+      void res;
       setDone(outcome);
       onRecorded(outcome);
       if (outcome === "confirmed") toast.success("Thanks! This helps improve future diagnostics.");
@@ -66,14 +76,47 @@ export function OutcomeCapture({
 
   if (done) {
     return (
-      <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-        <div className="flex items-center gap-2 font-semibold">
-          <CheckCircle2 className="h-4 w-4" />
-          {done === "confirmed" && "Confirmed — recorded as a successful repair."}
-          {done === "incorrect" && "Recorded — actual failure logged for learning."}
-          {done === "partial" && "Recorded — partial fix captured."}
-          {done === "pending_repair" && "Saved as Pending Repair. Confirm the result later from History."}
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+          <div className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 className="h-4 w-4" />
+            {done === "confirmed" && "Confirmed — recorded as a successful repair."}
+            {done === "incorrect" && "Recorded — actual failure logged for learning."}
+            {done === "partial" && "Recorded — partial fix captured."}
+            {done === "pending_repair" && "Saved as Pending Repair. Confirm the result later from History."}
+          </div>
         </div>
+        {done === "confirmed" && (
+          <div className="rounded-2xl border border-primary/40 bg-primary/5 p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+              <MessagesSquare className="h-4 w-4 text-primary" />
+              Share this repair with the community?
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Post-fill a Confirmed Repair discussion. Other technicians see it when they diagnose the same fault.
+            </p>
+            <Button
+              className="h-10 w-full"
+              onClick={() =>
+                navigate({
+                  to: "/community/new",
+                  search: {
+                    brand: manufacturer,
+                    applianceType,
+                    model: modelNumber,
+                    complaint,
+                    confirmedFailure: recommendedFailure,
+                    discussionType: "confirmed_repair",
+                    title: `${modelNumber} — ${recommendedFailure}`,
+                    body: `Complaint: ${complaint}\n\nConfirmed failure: ${recommendedFailure}\n\nWhat I did:\n- `,
+                  } as never,
+                })
+              }
+            >
+              <MessagesSquare className="mr-2 h-4 w-4" /> Share with community
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
