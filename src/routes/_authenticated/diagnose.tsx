@@ -617,6 +617,25 @@ function Phase3(props: {
         </div>
       )}
 
+      {step?.evidence && step.evidence.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-bold uppercase tracking-wide text-primary">Evidence Sources</h2>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {step.evidence.length} sources · ranked by tier
+            </span>
+          </div>
+          <EvidenceList
+            items={step.evidence}
+            renderExtras={(item) =>
+              item.sourceType === "community_discussion" || item.sourceType === "community_verified" ? (
+                <InsightFeedbackButtons item={item} sessionId={sessionId} />
+              ) : null
+            }
+          />
+        </div>
+      )}
+
       {step?.done && (step.mostLikelyFailure || (step.mostLikelyFailures?.length ?? 0) > 0) && (
         <OutcomeCapture
           sessionId={sessionId}
