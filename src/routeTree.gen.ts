@@ -21,7 +21,12 @@ import { Route as AuthenticatedErrorCodesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authenticated/documents'
 import { Route as AuthenticatedDiagnoseRouteImport } from './routes/_authenticated/diagnose'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
+import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_authenticated/community.search'
+import { Route as AuthenticatedCommunityNewRouteImport } from './routes/_authenticated/community.new'
+import { Route as AuthenticatedCommunityBrowseRouteImport } from './routes/_authenticated/community.browse'
+import { Route as AuthenticatedCommunityDiscussionIdRouteImport } from './routes/_authenticated/community.$discussionId'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -86,11 +91,40 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCommunityRoute = AuthenticatedCommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedHistoryIdRoute = AuthenticatedHistoryIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => AuthenticatedHistoryRoute,
 } as any)
+const AuthenticatedCommunitySearchRoute =
+  AuthenticatedCommunitySearchRouteImport.update({
+    id: '/search',
+    path: '/search',
+    getParentRoute: () => AuthenticatedCommunityRoute,
+  } as any)
+const AuthenticatedCommunityNewRoute =
+  AuthenticatedCommunityNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AuthenticatedCommunityRoute,
+  } as any)
+const AuthenticatedCommunityBrowseRoute =
+  AuthenticatedCommunityBrowseRouteImport.update({
+    id: '/browse',
+    path: '/browse',
+    getParentRoute: () => AuthenticatedCommunityRoute,
+  } as any)
+const AuthenticatedCommunityDiscussionIdRoute =
+  AuthenticatedCommunityDiscussionIdRouteImport.update({
+    id: '/$discussionId',
+    path: '/$discussionId',
+    getParentRoute: () => AuthenticatedCommunityRoute,
+  } as any)
 const LovableEmailQueueProcessRoute =
   LovableEmailQueueProcessRouteImport.update({
     id: '/lovable/email/queue/process',
@@ -113,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/community': typeof AuthenticatedCommunityRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/diagnose': typeof AuthenticatedDiagnoseRoute
   '/documents': typeof AuthenticatedDocumentsRoute
@@ -120,6 +155,10 @@ export interface FileRoutesByFullPath {
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/owner': typeof AuthenticatedOwnerRoute
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
+  '/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/community/new': typeof AuthenticatedCommunityNewRoute
+  '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -130,6 +169,7 @@ export interface FileRoutesByTo {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/community': typeof AuthenticatedCommunityRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/diagnose': typeof AuthenticatedDiagnoseRoute
   '/documents': typeof AuthenticatedDocumentsRoute
@@ -137,6 +177,10 @@ export interface FileRoutesByTo {
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/owner': typeof AuthenticatedOwnerRoute
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
+  '/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/community/new': typeof AuthenticatedCommunityNewRoute
+  '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -149,6 +193,7 @@ export interface FileRoutesById {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/_authenticated/community': typeof AuthenticatedCommunityRouteWithChildren
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/diagnose': typeof AuthenticatedDiagnoseRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
@@ -156,6 +201,10 @@ export interface FileRoutesById {
   '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
   '/_authenticated/owner': typeof AuthenticatedOwnerRoute
   '/_authenticated/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/_authenticated/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
+  '/_authenticated/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/_authenticated/community/new': typeof AuthenticatedCommunityNewRoute
+  '/_authenticated/community/search': typeof AuthenticatedCommunitySearchRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -168,6 +217,7 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/community'
     | '/dashboard'
     | '/diagnose'
     | '/documents'
@@ -175,6 +225,10 @@ export interface FileRouteTypes {
     | '/history'
     | '/owner'
     | '/repair-insights-test'
+    | '/community/$discussionId'
+    | '/community/browse'
+    | '/community/new'
+    | '/community/search'
     | '/history/$id'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -185,6 +239,7 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/community'
     | '/dashboard'
     | '/diagnose'
     | '/documents'
@@ -192,6 +247,10 @@ export interface FileRouteTypes {
     | '/history'
     | '/owner'
     | '/repair-insights-test'
+    | '/community/$discussionId'
+    | '/community/browse'
+    | '/community/new'
+    | '/community/search'
     | '/history/$id'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -203,6 +262,7 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/_authenticated/community'
     | '/_authenticated/dashboard'
     | '/_authenticated/diagnose'
     | '/_authenticated/documents'
@@ -210,6 +270,10 @@ export interface FileRouteTypes {
     | '/_authenticated/history'
     | '/_authenticated/owner'
     | '/_authenticated/repair-insights-test'
+    | '/_authenticated/community/$discussionId'
+    | '/_authenticated/community/browse'
+    | '/_authenticated/community/new'
+    | '/_authenticated/community/search'
     | '/_authenticated/history/$id'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -313,12 +377,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/community': {
+      id: '/_authenticated/community'
+      path: '/community'
+      fullPath: '/community'
+      preLoaderRoute: typeof AuthenticatedCommunityRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/history/$id': {
       id: '/_authenticated/history/$id'
       path: '/$id'
       fullPath: '/history/$id'
       preLoaderRoute: typeof AuthenticatedHistoryIdRouteImport
       parentRoute: typeof AuthenticatedHistoryRoute
+    }
+    '/_authenticated/community/search': {
+      id: '/_authenticated/community/search'
+      path: '/search'
+      fullPath: '/community/search'
+      preLoaderRoute: typeof AuthenticatedCommunitySearchRouteImport
+      parentRoute: typeof AuthenticatedCommunityRoute
+    }
+    '/_authenticated/community/new': {
+      id: '/_authenticated/community/new'
+      path: '/new'
+      fullPath: '/community/new'
+      preLoaderRoute: typeof AuthenticatedCommunityNewRouteImport
+      parentRoute: typeof AuthenticatedCommunityRoute
+    }
+    '/_authenticated/community/browse': {
+      id: '/_authenticated/community/browse'
+      path: '/browse'
+      fullPath: '/community/browse'
+      preLoaderRoute: typeof AuthenticatedCommunityBrowseRouteImport
+      parentRoute: typeof AuthenticatedCommunityRoute
+    }
+    '/_authenticated/community/$discussionId': {
+      id: '/_authenticated/community/$discussionId'
+      path: '/$discussionId'
+      fullPath: '/community/$discussionId'
+      preLoaderRoute: typeof AuthenticatedCommunityDiscussionIdRouteImport
+      parentRoute: typeof AuthenticatedCommunityRoute
     }
     '/lovable/email/queue/process': {
       id: '/lovable/email/queue/process'
@@ -344,6 +443,27 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedCommunityRouteChildren {
+  AuthenticatedCommunityDiscussionIdRoute: typeof AuthenticatedCommunityDiscussionIdRoute
+  AuthenticatedCommunityBrowseRoute: typeof AuthenticatedCommunityBrowseRoute
+  AuthenticatedCommunityNewRoute: typeof AuthenticatedCommunityNewRoute
+  AuthenticatedCommunitySearchRoute: typeof AuthenticatedCommunitySearchRoute
+}
+
+const AuthenticatedCommunityRouteChildren: AuthenticatedCommunityRouteChildren =
+  {
+    AuthenticatedCommunityDiscussionIdRoute:
+      AuthenticatedCommunityDiscussionIdRoute,
+    AuthenticatedCommunityBrowseRoute: AuthenticatedCommunityBrowseRoute,
+    AuthenticatedCommunityNewRoute: AuthenticatedCommunityNewRoute,
+    AuthenticatedCommunitySearchRoute: AuthenticatedCommunitySearchRoute,
+  }
+
+const AuthenticatedCommunityRouteWithChildren =
+  AuthenticatedCommunityRoute._addFileChildren(
+    AuthenticatedCommunityRouteChildren,
+  )
+
 interface AuthenticatedHistoryRouteChildren {
   AuthenticatedHistoryIdRoute: typeof AuthenticatedHistoryIdRoute
 }
@@ -356,6 +476,7 @@ const AuthenticatedHistoryRouteWithChildren =
   AuthenticatedHistoryRoute._addFileChildren(AuthenticatedHistoryRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedCommunityRoute: typeof AuthenticatedCommunityRouteWithChildren
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDiagnoseRoute: typeof AuthenticatedDiagnoseRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
@@ -366,6 +487,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedCommunityRoute: AuthenticatedCommunityRouteWithChildren,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDiagnoseRoute: AuthenticatedDiagnoseRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,

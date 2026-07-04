@@ -455,6 +455,281 @@ export type Database = {
         }
         Relationships: []
       }
+      community_attachments: {
+        Row: {
+          created_at: string
+          discussion_id: string | null
+          id: string
+          mime_type: string
+          reply_id: string | null
+          size_bytes: number
+          storage_path: string
+          uploader_id: string
+        }
+        Insert: {
+          created_at?: string
+          discussion_id?: string | null
+          id?: string
+          mime_type: string
+          reply_id?: string | null
+          size_bytes?: number
+          storage_path: string
+          uploader_id: string
+        }
+        Update: {
+          created_at?: string
+          discussion_id?: string | null
+          id?: string
+          mime_type?: string
+          reply_id?: string | null
+          size_bytes?: number
+          storage_path?: string
+          uploader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_attachments_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "community_discussions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_attachments_reply_id_fkey"
+            columns: ["reply_id"]
+            isOneToOne: false
+            referencedRelation: "community_replies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_discussions: {
+        Row: {
+          appliance_type: string
+          author_id: string
+          body: string
+          brand: string
+          complaint: string
+          confirmed_failure: string | null
+          confirmed_failure_count: number
+          confirmed_success_count: number
+          created_at: string
+          discussion_type: string
+          error_code: string | null
+          family_key: string | null
+          helpful_count: number
+          id: string
+          like_count: number
+          model_number: string
+          reply_count: number
+          solved_reply_id: string | null
+          success_rate: number | null
+          tags: string[]
+          title: string
+          updated_at: string
+          verified_outcome_id: string | null
+          view_count: number
+        }
+        Insert: {
+          appliance_type: string
+          author_id: string
+          body?: string
+          brand: string
+          complaint: string
+          confirmed_failure?: string | null
+          confirmed_failure_count?: number
+          confirmed_success_count?: number
+          created_at?: string
+          discussion_type: string
+          error_code?: string | null
+          family_key?: string | null
+          helpful_count?: number
+          id?: string
+          like_count?: number
+          model_number: string
+          reply_count?: number
+          solved_reply_id?: string | null
+          success_rate?: number | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+          verified_outcome_id?: string | null
+          view_count?: number
+        }
+        Update: {
+          appliance_type?: string
+          author_id?: string
+          body?: string
+          brand?: string
+          complaint?: string
+          confirmed_failure?: string | null
+          confirmed_failure_count?: number
+          confirmed_success_count?: number
+          created_at?: string
+          discussion_type?: string
+          error_code?: string | null
+          family_key?: string | null
+          helpful_count?: number
+          id?: string
+          like_count?: number
+          model_number?: string
+          reply_count?: number
+          solved_reply_id?: string | null
+          success_rate?: number | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          verified_outcome_id?: string | null
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_discussions_verified_outcome_id_fkey"
+            columns: ["verified_outcome_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_outcomes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_insight_feedback: {
+        Row: {
+          created_at: string
+          discussion_id: string
+          final_outcome: string | null
+          id: string
+          insight_snapshot: Json
+          session_id: string | null
+          updated_at: string
+          user_id: string
+          user_response: string | null
+        }
+        Insert: {
+          created_at?: string
+          discussion_id: string
+          final_outcome?: string | null
+          id?: string
+          insight_snapshot?: Json
+          session_id?: string | null
+          updated_at?: string
+          user_id: string
+          user_response?: string | null
+        }
+        Update: {
+          created_at?: string
+          discussion_id?: string
+          final_outcome?: string | null
+          id?: string
+          insight_snapshot?: Json
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string
+          user_response?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_insight_feedback_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "community_discussions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_insight_feedback_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_reactions: {
+        Row: {
+          created_at: string
+          id: string
+          reaction: string
+          target_id: string
+          target_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reaction: string
+          target_id: string
+          target_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reaction?: string
+          target_id?: string
+          target_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      community_replies: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          discussion_id: string
+          edited_at: string | null
+          helpful_count: number
+          id: string
+          is_solved: boolean
+          like_count: number
+          not_helpful_count: number
+          parent_reply_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          discussion_id: string
+          edited_at?: string | null
+          helpful_count?: number
+          id?: string
+          is_solved?: boolean
+          like_count?: number
+          not_helpful_count?: number
+          parent_reply_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          discussion_id?: string
+          edited_at?: string | null
+          helpful_count?: number
+          id?: string
+          is_solved?: boolean
+          like_count?: number
+          not_helpful_count?: number
+          parent_reply_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_replies_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "community_discussions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_replies_parent_reply_id_fkey"
+            columns: ["parent_reply_id"]
+            isOneToOne: false
+            referencedRelation: "community_replies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diagnostic_outcomes: {
         Row: {
           actual_failure: string | null
@@ -518,6 +793,7 @@ export type Database = {
           complaint: string
           created_at: string
           current_findings_summary: string
+          evidence_used: Json
           findings: Json
           history: Json
           id: string
@@ -540,6 +816,7 @@ export type Database = {
           complaint?: string
           created_at?: string
           current_findings_summary?: string
+          evidence_used?: Json
           findings?: Json
           history?: Json
           id?: string
@@ -562,6 +839,7 @@ export type Database = {
           complaint?: string
           created_at?: string
           current_findings_summary?: string
+          evidence_used?: Json
           findings?: Json
           history?: Json
           id?: string
@@ -932,6 +1210,14 @@ export type Database = {
     }
     Functions: {
       _beta_guess_state: { Args: { input: string }; Returns: string }
+      _community_recompute_success: {
+        Args: { disc_id: string }
+        Returns: undefined
+      }
+      community_family_key: {
+        Args: { brand: string; model: string }
+        Returns: string
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean

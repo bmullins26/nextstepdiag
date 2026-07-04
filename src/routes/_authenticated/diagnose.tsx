@@ -27,6 +27,9 @@ import {
 import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
 import { ApplianceTypeEditor } from "@/components/appliance-type-editor";
 import { OutcomeCapture } from "@/components/outcome-capture";
+import { EvidenceList } from "@/components/evidence/evidence-list";
+import { InsightFeedbackButtons } from "@/components/community/insight-feedback-buttons";
+import type { EvidenceItem } from "@/lib/evidence/types";
 import {
   upsertSession,
   getSession,
@@ -77,6 +80,7 @@ type Step = {
     totals: { confirmed: number; incorrect: number; partial: number };
     ranked: Array<{ failure: string; share: number; weightedCount: number; rawCount: number }>;
   } | null;
+  evidence?: EvidenceItem[];
 };
 
 type ResumeRow = {
@@ -267,6 +271,7 @@ function DiagnosePage() {
           complaint,
           history: h,
           currentFindings: f,
+          sessionId: sessionId ?? null,
         },
       });
       setStep(r as Step);
@@ -609,6 +614,25 @@ function Phase3(props: {
           </div>
           <FindingCard label="Recommended Next Test" value={step.recommendedNextTest || "—"} accent="secondary" />
           {step.groundingSource && <GroundingCaption source={step.groundingSource} />}
+        </div>
+      )}
+
+      {step?.evidence && step.evidence.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-bold uppercase tracking-wide text-primary">Evidence Sources</h2>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {step.evidence.length} sources · ranked by tier
+            </span>
+          </div>
+          <EvidenceList
+            items={step.evidence}
+            renderExtras={(item) =>
+              item.sourceType === "community_discussion" || item.sourceType === "community_verified" ? (
+                <InsightFeedbackButtons item={item} sessionId={sessionId} />
+              ) : null
+            }
+          />
         </div>
       )}
 
