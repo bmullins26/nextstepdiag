@@ -9,6 +9,7 @@ import {
   History as HistoryIcon,
   LogOut,
   Shield,
+  MessagesSquare,
 } from "lucide-react";
 import {
   Sidebar,
@@ -30,6 +31,7 @@ const NAV = [
   { to: "/diagnose", label: "Diagnose", icon: Stethoscope },
   { to: "/error-codes", label: "Error Codes", icon: AlertTriangle },
   { to: "/documents", label: "Documents", icon: FileText },
+  { to: "/community", label: "Community", icon: MessagesSquare },
   { to: "/history", label: "History", icon: HistoryIcon },
 ] as const;
 
