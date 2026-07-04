@@ -34,7 +34,7 @@ function AuthenticatedLayout() {
     <SidebarProvider defaultOpen={false}>
       <AppSidebar />
       <SidebarInset className="bg-background">
-        <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border bg-background/85 px-3 backdrop-blur md:hidden">
+        <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border bg-background/85 px-3 backdrop-blur">
           <SidebarTrigger />
           <BrandLogo variant="pocket" size={32} />
         </header>
