@@ -27,6 +27,14 @@ export const EVIDENCE_TIER_LABEL: Record<EvidenceSourceType, string> = {
   external_repair_guide: "External Repair Guide",
 };
 
+export type EvidenceMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | EvidenceMetaValue[]
+  | { [k: string]: EvidenceMetaValue };
+
 export interface EvidenceItem {
   id: string;
   sourceType: EvidenceSourceType;
@@ -38,7 +46,7 @@ export interface EvidenceItem {
   supportingVerifiedRepairCount?: number;
   lastUpdated: string; // ISO
   link?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: { [k: string]: EvidenceMetaValue };
 }
 
 export interface EvidenceQuery {
