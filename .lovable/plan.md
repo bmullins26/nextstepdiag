@@ -1,125 +1,168 @@
-# Beta Program Admin v2 + v3 (combined)
+# NextStep Community — Phase 1 + Community Intelligence
 
-Builds full tester lifecycle controls on top of a clean two-field model: **application_status** (review outcome) and **access_status** (account access). All historical data is preserved — status changes never delete sessions, outcomes, feedback, AI usage, tech sheets, or auth accounts.
+Community as an evidence-anchored knowledge network. Every discussion is tied to Brand → Appliance Type → Model → Complaint, and every Community Insight flows into the diagnostic engine through the same interface used for manufacturer docs, tech sheets, verified outcomes, and service bulletins.
 
-## 1. Schema (single migration)
+Access: any signed-in user reads and posts. Sidebar gains a `Community` item (MessagesSquare icon).
 
-`beta_applications`:
-- Add `application_status text` — `pending | approved | waitlisted | declined`.
-- Add `access_status text` — `not_invited | invited | active | suspended | deactivated`.
-- Back-fill from existing `status`:
-  - pending/waitlisted/declined → `application_status` = same, `access_status` = `not_invited`.
-  - approved → `application_status=approved`, `access_status=not_invited`.
-  - invited → `application_status=approved`, `access_status=invited`.
-  - active → `application_status=approved`, `access_status=active`.
-- Keep old `status` column for now (writes mirror, reads ignore) to avoid breaking any external consumer; remove in a follow-up.
-- Add columns:
-  - `state text` (normalized US state OR country; analytics source of truth)
-  - `location_raw text` (back-filled from `location`)
-  - `owner_notes text`, `owner_notes_updated_at timestamptz`, `owner_notes_updated_by uuid`
-  - `owner_rating smallint` CHECK 1–5
-  - `owner_labels text[]` default `'{}'`
-  - `suspended_at timestamptz`, `deactivated_at timestamptz`, `last_status_reason text`
-  - `invite_accepted_at timestamptz` (set when user_id first links via `handle_new_user`)
-- Drop unused `video_interview` column + CHECK.
-- Trigger: stamp `suspended_at` / `deactivated_at` / clear on reinstate.
-- Update `handle_new_user`: when linking by email, set `access_status='active'` and `invite_accepted_at=now()` (only if currently `invited` or `not_invited` with `application_status='approved'`).
+## 1. Unified Evidence Engine
 
-No separate `user_access` table — `beta_applications` is the single source of truth.
+New module `src/lib/evidence/` — a provider-based pipeline that replaces ad-hoc lookups inside `diagnostics.functions.ts`.
 
-## 2. Location normalization
+```ts
+// src/lib/evidence/types.ts
+export type EvidenceSourceType =
+  | 'manufacturer_doc' | 'service_bulletin' | 'verified_repair'
+  | 'community_verified' | 'community_discussion' | 'tech_sheet'
+  | 'external_repair_guide';
 
-`src/lib/beta/normalize-location.ts` (+ tests):
-- US state abbrev/full-name map (case-insensitive) → canonical state.
-- Recognized country aliases → country.
-- Handles "Jefferson OH", "123 Main St, Jefferson, OH 44047", "OHIO", etc.
-- Returns `{ state, isUS }`.
+export interface EvidenceItem {
+  id: string;
+  sourceType: EvidenceSourceType;
+  title: string;
+  summary: string;                 // one-line takeaway
+  detail?: string;                 // optional richer body for AI prompt
+  confidence: number;              // 0..1, provider-normalized
+  supportingDiscussionCount?: number;
+  supportingVerifiedRepairCount?: number;
+  lastUpdated: string;             // ISO
+  link?: string;                   // in-app or external URL
+  metadata?: Record<string, unknown>;
+}
 
-Applied in `submitBetaApplication` (writes `location_raw` + `state`), in an owner mutation `updateApplicantState`, and in the migration back-fill (SQL CASE for common abbreviations; remainder defaults to last comma-segment title-cased and can be hand-corrected via the UI).
+export interface EvidenceQuery {
+  brand: string;
+  applianceType: string;
+  model: string;
+  complaint: string;
+  errorCode?: string | null;
+  sessionId?: string | null;
+}
 
-Analytics `byRegion` switches to grouping by `state`.
+export interface EvidenceProvider {
+  sourceType: EvidenceSourceType;
+  priority: number;                // lower = higher rank
+  fetch(q: EvidenceQuery): Promise<EvidenceItem[]>;
+}
+```
 
-## 3. Server functions (`src/lib/beta-applications.functions.ts`)
+Priority ranks (lower first):
+1 `manufacturer_doc` · 2 `service_bulletin` · 3 `verified_repair` · 4 `community_verified` · 5 `community_discussion` · 6 `external_repair_guide` · `tech_sheet` slots at 1.5 (structured OEM data).
 
-`listBetaApplications`:
-- New filters: `applicationStatus?`, `accessStatus?`, `labels?: string[]`, `minRating?`, `sort`.
-- `sort`: `newest | oldest | experience | calls | last_login | health | application_status | access_status`.
-- Search matches first/last name, email, company, **state**, **role**, **brand** (jsonb), and **labels**.
+`src/lib/evidence/registry.ts` — registers providers. Initial concrete providers wrap existing code paths:
+- `techSheetProvider` — wraps `tech-sheets/lookup.functions.ts`.
+- `verifiedRepairProvider` — reads `diagnostic_outcomes` where `outcome='confirmed'` matching brand + family + complaint.
+- `communityVerifiedProvider` and `communityDiscussionProvider` — see §3.
+- Stubs `manufacturerDocProvider`, `serviceBulletinProvider`, `externalRepairGuideProvider` return `[]` today but exist so the registry order matches spec.
 
-New / updated mutations (all owner-only, all preserve history):
-- `reviewApplication({id, decision: approved|waitlisted|declined|pending, reason?})` — sets `application_status` only. Approving auto-sets `access_status='not_invited'` if currently null.
-- `sendBetaInvite` (existing) — only allowed when `application_status='approved'`. Sets `access_status='invited'`, stamps `invited_at`.
-- `activateBetaTester({id})` — `access_status='active'`. Allowed from `invited`, `suspended`, `deactivated`.
-- `suspendBetaTester({id, reason?})` — `access_status='suspended'` + `supabaseAdmin.auth.admin.signOut(user_id, 'global')`.
-- `deactivateBetaTester({id, reason?})` — `access_status='deactivated'` + global sign-out.
-- `reinstateBetaTester({id})` — back to `active` (or `invited` if `user_id` is null).
-- `deleteBetaApplication({id})` — only when `application_status ∈ {pending, waitlisted, declined}` AND `user_id IS NULL`. Removes only the application row.
-- `bulkApplyAction({ids[], action})` — server-side fan-out of the single-row actions. Validates per-row eligibility, returns per-id results.
-- `updateOwnerNotes({id, notes})` — debounced autosave from UI.
-- `updateOwnerRating({id, rating|null})`.
-- `setOwnerLabels({id, labels[]})`.
-- `updateApplicantState({id, state})`.
-- `exportBetaApplicationsCsv({ids?[]})` — returns CSV string for selected rows (or current filter set).
-- `hasBetaAccess()` — returns `{ ok: boolean, accessStatus, isOwner }`. `ok = isOwner || accessStatus==='active'`.
+`src/lib/evidence/engine.ts` — `gatherEvidence(query)` calls every provider in parallel, tags each item with priority, and returns a single ranked `EvidenceItem[]` (sort: priority asc, then confidence desc, then lastUpdated desc). This ranked list is the sole input to the diagnostic prompt's evidence section — no more direct fetches inside `diagnostics.functions.ts`.
 
-`getBetaProgramStats`:
-- Two totals blocks: `applications` (pending/approved/waitlisted/declined) and `access` (not_invited/invited/active/suspended/deactivated).
-- "Active Testers", health scores, and engagement counts only include rows with `access_status='active'` AND `user_id IS NOT NULL` AND `last_sign_in_at IS NOT NULL`.
-- `byRegion` uses normalized `state`.
+## 2. Evidence Priority in the AI Prompt
 
-`getBetaTesterMetrics` enriched with `inviteSent`, `inviteAccepted`, `techSheetsUploaded` (count from `tech_sheets` by user_id).
+`src/lib/diagnostics.functions.ts` is updated so the system prompt now contains an explicit "Evidence hierarchy" block:
 
-## 4. Access gate
+> Weight evidence in this exact order: Manufacturer Documentation > Service Bulletins > Verified Repair Outcomes > Community Verified Repairs > Community Discussions > External Repair Guides. Community evidence may strengthen a recommendation when it corroborates higher-tier sources, but must NEVER override manufacturer documentation or a verified repair outcome. When higher-tier evidence conflicts with community evidence, follow the higher tier and note the disagreement.
 
-`src/routes/_authenticated/route.tsx`:
-- After `getUser()`, call `hasBetaAccess`.
-- `isOwner` → allow.
-- `access_status === 'active'` → allow.
-- `access_status ∈ {suspended, deactivated}` → `redirect("/access-denied")`.
-- `access_status ∈ {invited, not_invited}` or no application row → existing dashboard behavior unchanged (they're signed in but not gated out — they simply have nothing beta-specific to do yet).
+Evidence is injected into the prompt grouped by tier with counts, so the model sees exactly which tier each fact came from. The returned recommendation stores which `EvidenceItem.id`s it used → `diagnostic_sessions.evidence_used jsonb[]`.
 
-New public route `src/routes/access-denied.tsx`: "Your beta access is currently inactive. If you believe this is an error, please contact NextStep Diagnostics." + sign-out.
+## 3. Platform / Model Families
 
-## 5. Owner UI (`src/components/owner/beta-program-tab.tsx`)
+`src/lib/appliance/model-family.ts`
+```ts
+export function normalizeModel(m: string): string; // upper, strip whitespace/dashes
+export function modelFamilyKey(brand: string, model: string): string; // e.g. WHIRLPOOL:WRF555SDF
+export function candidateModels(brand: string, model: string): {
+  exact: string;
+  family: string;   // stem used for prefix match
+  brandType: true;  // signals fallback
+};
+```
 
-Stats: two stat strips — Applications row and Access row.
+Family stem = brand-specific rule (reuses logic in `src/lib/tech-sheets/platform-families.ts` when a match exists) + generic fallback that trims trailing variant suffixes (last 1–3 alnum characters — configurable). Example: `WRF555SDFZ | WRF555SDFW | WRF555SDHV | WRF555SDFM` all resolve to family stem `WRF555SD`.
 
-Filters bar:
-- Quick-filter chips for Application Status (All/Pending/Approved/Waitlisted/Declined).
-- Quick-filter chips for Access Status (All/Not Invited/Invited/Active/Suspended/Deactivated).
-- Label multi-select, rating ≥ selector.
-- Search box (placeholder: "Search name, email, company, state, brand, role, label").
-- Sort dropdown (7 options listed above).
+Community search & the diagnostic engine both search four tiers and merge results, tagging each hit:
+- `match_tier: 'exact' | 'family' | 'brand_type' | 'brand'` — used for evidence `confidence` weighting (exact=1.0, family=0.75, brand_type=0.5, brand=0.3 base, then adjusted by success rate — see §4).
 
-Table:
-- Checkbox column for bulk selection; sticky bulk-action toolbar appears when any row is selected (Approve / Waitlist / Decline / Send Invite / Activate / Suspend / Deactivate / Delete Pending / Export CSV).
-- Two badges per row: `ApplicationPill` and `AccessPill` (distinct color scales).
-- New columns (compact): Last Activity, Last Login, Sessions, Confirmed, Bugs, Features, Tech Sheets, Rating (stars), Labels (chips).
-- Row Actions dropdown (gated by status):
-  - View Application
-  - Approve / Waitlist / Decline (when `application_status='pending'`)
-  - Send Invite / Resend Invite (when `application_status='approved'` and `access_status ∈ {not_invited, invited}`)
-  - Activate, Suspend, Deactivate, Reinstate (gated by `access_status`)
-  - Delete Application (pending/waitlisted/declined + no user_id)
-  - Edit Owner Notes / Rating / Labels
+## 4. Community Learning Loop
 
-Detail dialog redesigned into three sections:
-- **Application**: Submitted, Reviewed, Application Status, Reason, Brands, Original Location, Normalized State (inline editable).
-- **Access**: Invite Sent, Invite Accepted, Access Status, Last Login, Last Activity.
-- **Activity**: Diagnostic Sessions, Confirmed Repairs, Pending Repairs, Feedback, Bug Reports, Feature Requests, Tech Sheet Uploads, Health Score.
-- **Owner-only**: Notes (autosave, last edited by + when), Rating (1–5 stars), Labels (preset chips with add/remove).
+New table `community_insight_feedback`:
+- `id`, `session_id` fk `diagnostic_sessions`, `discussion_id` fk `community_discussions`, `insight_snapshot jsonb` (title, summary, match_tier, confidence at time-of-use), `user_response` (`helpful | not_helpful | null`), `final_outcome` (`confirmed | incorrect | partial | pending | null`), `created_at`, `updated_at`.
 
-Preset labels: VIP Tester, Factory Tech, Independent Tech, Service Company, Student, Great Feedback, Needs Follow-up. Owner can add custom labels.
+Flow:
+1. When `gatherEvidence` returns community items and the AI cites them, the diagnose page renders each Community Insight with a thumbs up/down control. Clicking it inserts/updates a `community_insight_feedback` row keyed on `(session_id, discussion_id)`.
+2. When the user later confirms/rejects the diagnosis via `outcome-capture.tsx`, the outcome is stitched into the same feedback row (`final_outcome`).
+3. `community_discussions` gains derived columns updated by trigger:
+   - `confirmed_success_count int` — feedback rows where `final_outcome='confirmed'`
+   - `confirmed_failure_count int` — where `final_outcome='incorrect'`
+   - `success_rate float` — `confirmed / (confirmed + failure)` when denom ≥ 3, else null
+4. `communityDiscussionProvider.fetch` computes confidence as:
+   ```
+   base = 0.4 * matchTierWeight
+   successAdj = success_rate != null ? (success_rate - 0.5) * 0.5 : 0
+   popularityAdj = clamp(helpful_count / 20, 0, 0.1)   // capped so popularity never dominates
+   confidence = clamp(base + successAdj + popularityAdj, 0.05, 0.95)
+   ```
+   Popularity contribution is capped at 0.1; confirmed-success-rate contribution is up to ±0.25. Discussions with repeated failed outcomes fall below the display threshold (0.2) and are filtered out.
 
-## 6. Preservation guarantee
+## 5. Evidence Card + Source Attribution
 
-All access transitions only mutate `beta_applications` + call `auth.admin.signOut`. Deletion is restricted to pre-account application rows. No code path touches `diagnostic_sessions`, `diagnostic_outcomes`, `feedback`, `tech_sheets`, `ai_usage`, or `auth.users` records.
+Shared component `src/components/evidence/evidence-card.tsx` renders any `EvidenceItem`. Header = source type badge (color per tier) + title. Body = `summary`. Footer row shows:
+- Source (e.g. `Community · Discussion`)
+- Supporting: `N discussions · M verified repairs` (when applicable)
+- Last updated (relative)
+- Confidence bar (0–100%)
+- Link → in-app discussion route (community items) or external URL (docs/guides)
+
+`evidence-list.tsx` groups cards by tier with a divider label ("Manufacturer", "Service Bulletins", "Verified Repairs", "Community — Verified", "Community — Discussions", "External Guides"). Used on the diagnose result screen — no evidence is rendered anywhere else without going through this component, so attribution is guaranteed.
+
+## 6. Community core (Phase 1 baseline)
+
+Routes under `src/routes/_authenticated/`: `community.tsx` (home), `community.browse.tsx`, `community.search.tsx`, `community.new.tsx`, `community.$discussionId.tsx`.
+
+Home sections: Recent Discussions, Popular Repairs (by `helpful_count`), Recently Confirmed Repairs (linked to confirmed outcomes), Most Active Contributors (last 30d), Trending Models (last 14d), Newest Uploads, search bar.
+
+Strict composer (`community/discussion-composer.tsx`): Brand → Type → Model → Complaint all required. Model must exist in `diagnostic_sessions` OR user confirms "exact model" (uppercased, stored as-typed). Discussion type badge required: `general | repair_tip | question | confirmed_repair | diagnostic_advice | part_recommendation | installation_tip | tech_sheet | service_bulletin`.
+
+Replies: threaded one level. Reactions: `like | helpful | solved | not_helpful`. Sort by `helpful - not_helpful` desc; `solved` reply pins to top. Only the discussion author or an owner marks `solved`.
+
+Verified Repair badge: set only when `verified_outcome_id` references a `diagnostic_outcomes` row owned by the author with `outcome='confirmed'`.
+
+Auto-create from confirmed outcome: `outcome-capture.tsx` appends a "Share this repair with the community?" prompt after a `confirmed` submission → navigates to `/community/new` with pre-filled state.
+
+## Database (single migration)
+
+- `community_discussions` — id, author_id, brand, appliance_type, model_number, `family_key` (generated stored via `modelFamilyKey`), complaint (normalized), error_code, confirmed_failure, discussion_type, title, body, verified_outcome_id fk, view_count, reply_count, like_count, helpful_count, solved_reply_id, tags text[], `confirmed_success_count int default 0`, `confirmed_failure_count int default 0`, `success_rate float`, created_at, updated_at.
+- `community_replies` — id, discussion_id fk, author_id, parent_reply_id, body, like_count, helpful_count, not_helpful_count, is_solved, created_at, updated_at, edited_at.
+- `community_reactions` — id, user_id, target_type ('discussion'|'reply'), target_id, reaction. Unique(user_id, target_type, target_id, reaction).
+- `community_attachments` — id, discussion_id / reply_id, storage_path, mime, size, created_at. Public bucket `community-attachments`.
+- `community_insight_feedback` — as in §4.
+- `diagnostic_sessions` — add `evidence_used jsonb default '[]'::jsonb`.
+
+Indexes on `(brand, appliance_type, model_number)`, `(brand, family_key)`, `(model_number, complaint)`, `discussion_id`, `(target_type, target_id)`, GIN on `tags`. Triggers keep denorm counters and `success_rate` current. RLS: SELECT to `authenticated` on all community tables; INSERT/UPDATE/DELETE scoped to `auth.uid()`; owners can moderate any row.
+
+## Server functions (`src/lib/community.functions.ts`, all `requireSupabaseAuth`)
+
+`listCommunityHome`, `searchKnownModels`, `listComplaintsForModel`, `browseCommunity`, `searchCommunity`, `getDiscussion`, `createDiscussion`, `updateDiscussion`, `deleteDiscussion`, `createReply`, `updateReply`, `deleteReply`, `toggleReaction`, `markSolved`, `recordInsightFeedback({ sessionId, discussionId, insightSnapshot, userResponse })`.
+
+`src/lib/evidence/evidence.functions.ts`: `gatherEvidenceForSession({ sessionId })` — used by `diagnose.tsx` to render the evidence list.
 
 ## Files touched
 
-- `supabase/migrations/<new>.sql` (schema + back-fill + trigger + handle_new_user update)
-- `src/lib/beta/normalize-location.ts` (+ test)
-- `src/lib/beta-applications.functions.ts` (split status fields, new mutations, bulk, CSV)
-- `src/routes/_authenticated/route.tsx` (access gate via `hasBetaAccess`)
-- `src/routes/access-denied.tsx` (new)
-- `src/components/owner/beta-program-tab.tsx` (full UI rebuild against new model)
+**New**
+- Migration `supabase/migrations/<ts>_community_evidence.sql`
+- `src/lib/evidence/types.ts`, `registry.ts`, `engine.ts`, `evidence.functions.ts`
+- `src/lib/evidence/providers/{tech-sheet,verified-repair,community-verified,community-discussion,manufacturer-doc,service-bulletin,external-repair-guide}.ts`
+- `src/lib/community.functions.ts`, `src/lib/community/normalize.ts`
+- `src/lib/appliance/model-family.ts`
+- `src/components/evidence/evidence-card.tsx`, `evidence-list.tsx`, `source-type-badge.tsx`
+- `src/components/community/{discussion-composer,discussion-card,discussion-type-badge,reply-thread,reaction-bar,model-picker,insight-feedback-buttons}.tsx`
+- Routes: `community.tsx`, `community.browse.tsx`, `community.search.tsx`, `community.new.tsx`, `community.$discussionId.tsx`
+
+**Edited**
+- `src/components/app-sidebar.tsx` — add Community nav
+- `src/components/outcome-capture.tsx` — post-confirm share prompt + backfill `final_outcome` on any `community_insight_feedback` rows for this session
+- `src/lib/diagnostics.functions.ts` — call `gatherEvidence`, inject tiered evidence block into prompt with explicit hierarchy rule, persist `evidence_used`
+- `src/routes/_authenticated/diagnose.tsx` — render `<EvidenceList>` (grouped by tier) and thumbs feedback on each Community Insight
+
+## Explicitly deferred (follow-up phase)
+
+Reputation scores, badge tiers, moderator tools (pin/lock/merge/feature/mark-official/suspend), owner analytics dashboard, @mentions, video/code-snippet attachments, and the concrete implementations of `manufacturerDocProvider` / `serviceBulletinProvider` / `externalRepairGuideProvider` (registered but empty for now so the pipeline is ready when data arrives).
