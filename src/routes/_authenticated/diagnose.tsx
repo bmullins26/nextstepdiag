@@ -27,6 +27,9 @@ import {
 import { VerifyAppliance, type DecodedAppliance } from "@/components/verify-appliance";
 import { ApplianceTypeEditor } from "@/components/appliance-type-editor";
 import { OutcomeCapture } from "@/components/outcome-capture";
+import { EvidenceList } from "@/components/evidence/evidence-list";
+import { InsightFeedbackButtons } from "@/components/community/insight-feedback-buttons";
+import type { EvidenceItem } from "@/lib/evidence/types";
 import {
   upsertSession,
   getSession,
@@ -77,6 +80,7 @@ type Step = {
     totals: { confirmed: number; incorrect: number; partial: number };
     ranked: Array<{ failure: string; share: number; weightedCount: number; rawCount: number }>;
   } | null;
+  evidence?: EvidenceItem[];
 };
 
 type ResumeRow = {
@@ -267,6 +271,7 @@ function DiagnosePage() {
           complaint,
           history: h,
           currentFindings: f,
+          sessionId: sessionId ?? null,
         },
       });
       setStep(r as Step);
