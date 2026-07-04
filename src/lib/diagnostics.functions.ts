@@ -7,6 +7,8 @@ import { logAiUsage } from "./ai-usage-log.server";
 import { getTechSheet } from "./tech-sheets/lookup.functions";
 import type { GroundingResult } from "./tech-sheets/types";
 import { loadOutcomeStats } from "./diagnostic-outcomes.server";
+import { gatherEvidence, tieredPromptBlock } from "./evidence/engine";
+import type { EvidenceItem } from "./evidence/types";
 
 const ApplianceInput = z.object({
   brand: z.string().min(1),
@@ -166,6 +168,25 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
       ? `Source trust tier: ${grounding.sourceTrust} (${grounding.trustLabel}).`
       : "No verified source — operating in symptom-based mode.";
 
+    // --- Unified evidence pipeline (community + verified repairs + docs) ----
+    let evidence: EvidenceItem[] = [];
+    try {
+      evidence = await gatherEvidence(
+        {
+          brand: data.appliance.manufacturer,
+          applianceType: data.appliance.applianceType,
+          model: data.appliance.modelNumber,
+          complaint: data.complaint,
+          userId: context.userId,
+        },
+        { supabase: context.supabase },
+      );
+    } catch (err) {
+      console.warn("[diagnose] evidence pipeline failed:", err);
+    }
+    const evidenceBlock = tieredPromptBlock(evidence);
+    const hierarchyRule = `\nEVIDENCE HIERARCHY (weight in this exact order):\n1) Manufacturer Documentation  2) Tech Sheet  3) Service Bulletins  4) Verified Repair Outcomes  5) Community — Verified Repairs  6) Community — Discussions  7) External Repair Guides.\nCommunity evidence may strengthen a recommendation when it corroborates higher-tier sources but MUST NEVER override manufacturer documentation or a verified repair outcome. When higher-tier evidence conflicts with community evidence, follow the higher tier and note the disagreement.\n`;
+
     const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
       schema: z.object({
@@ -181,6 +202,7 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
         }),
       }),
       system: `You are an appliance diagnostic assistant guiding a senior tech on-site. The product question is always: "What should I test next?"
+${hierarchyRule}
 
 CRITICAL OUTPUT RULE:
 - mostLikelyFailures MUST contain at least one entry. Never return it empty.
@@ -223,10 +245,32 @@ ${historyText}
 GROUNDING DATA (mode=${mode}, confidence=${rawConfidence}, source=${grounding?.sourceUrl ?? grounding?.displayLabel ?? "(none — symptom-based)"}):
 ${groundingExcerpt || "(no extracted content — reason from symptoms and architecture only; still output failures + next test)"}
 
+RANKED EVIDENCE (grouped by tier):
+${evidenceBlock}
+
 ${data.documentExcerpt ? `Additional tech sheet / wiring diagram excerpt (uploaded by technician):\n${data.documentExcerpt.slice(0, 4000)}\n` : ""}
 Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.${historicalBlock}`,
     });
     await logAiUsage({ userId: context.userId, feature: "next_diagnostic_step", model: DEFAULT_MODEL, usage });
+
+    // Persist which evidence items informed this diagnosis
+    try {
+      const evidenceIds = evidence.slice(0, 20).map((e) => ({
+        id: e.id,
+        sourceType: e.sourceType,
+        confidence: e.confidence,
+      }));
+      if (evidenceIds.length && (data as { sessionId?: string }).sessionId) {
+        // Best-effort — do not fail the diagnosis on write errors.
+        await context.supabase
+          .from("diagnostic_sessions")
+          .update({ evidence_used: evidenceIds })
+          .eq("id", (data as { sessionId?: string }).sessionId!);
+      }
+    } catch (err) {
+      console.warn("[diagnose] evidence_used update failed:", err);
+    }
+
     return {
       ...object,
       groundingMode: mode,
@@ -252,6 +296,7 @@ Decide the single next diagnostic question, or finalize the call. Reminder: answ
               ranked: outcomeStats.ranked.slice(0, 5),
             }
           : null,
+      evidence: evidence.slice(0, 12),
     };
   });
 
