@@ -397,7 +397,7 @@ export const updateDiscussion = createServerFn({ method: "POST" })
     if (data.tags != null) patch.tags = normalizeTags(data.tags);
     if (data.errorCode !== undefined) patch.error_code = data.errorCode?.trim() || null;
     if (data.confirmedFailure !== undefined) patch.confirmed_failure = data.confirmedFailure?.trim() || null;
-    const { error } = await context.supabase
+    const { error } = await (context.supabase as any)
       .from("community_discussions")
       .update(patch)
       .eq("id", data.id);
