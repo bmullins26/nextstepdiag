@@ -54,6 +54,7 @@ const StepInput = z.object({
   history: z.array(QAItem).default([]),
   documentExcerpt: z.string().optional().default(""),
   currentFindings: z.array(z.string()).default([]),
+  sessionId: z.string().uuid().nullable().optional(),
 });
 
 export const nextDiagnosticStep = createServerFn({ method: "POST" })
