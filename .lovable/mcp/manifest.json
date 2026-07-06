@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://qqnrltbljgbxjizlrmzp.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "nextstep-diagnostics-mcp",
+      "version": "0.1.0",
+      "title": "NextStep Diagnostics"
+    },
+    "tools": [
+      {
+        "name": "list_diagnostic_sessions",
+        "title": "List diagnostic sessions",
+        "description": "List the signed-in technician's diagnostic sessions. Supports optional text search and status filter.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "search": {
+              "description": "Optional substring match against brand, appliance type, model, serial, or complaint.",
+              "type": "string"
+            },
+            "status": {
+              "description": "Filter by session status. Defaults to all.",
+              "type": "string",
+              "enum": [
+                "active",
+                "completed",
+                "abandoned",
+                "all"
+              ]
+            },
+            "favoritesOnly": {
+              "description": "Only return favorited sessions.",
+              "type": "boolean"
+            },
+            "limit": {
+              "description": "Max number of sessions to return (default 25).",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_diagnostic_session",
+        "title": "Get diagnostic session",
+        "description": "Fetch a single diagnostic session by id, including findings, history, and recommended next steps.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "The diagnostic session id."
+            }
+          },
+          "required": [
+            "id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_community_discussions",
+        "title": "Search community discussions",
+        "description": "Search the technician community for discussions matching a brand, appliance type, model number, or free-text query.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "query": {
+              "description": "Free-text search across title and body.",
+              "type": "string"
+            },
+            "brand": {
+              "description": "Filter by brand (e.g. Whirlpool, LG).",
+              "type": "string"
+            },
+            "appliance_type": {
+              "description": "Filter by appliance type (e.g. washer, dryer).",
+              "type": "string"
+            },
+            "model_number": {
+              "description": "Filter by exact model number.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Max results to return (default 20).",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
