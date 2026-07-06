@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as BetaRouteImport } from './routes/beta'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AccessDeniedRouteImport } from './routes/access-denied'
@@ -22,15 +23,23 @@ import { Route as AuthenticatedDocumentsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDiagnoseRouteImport } from './routes/_authenticated/diagnose'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
 import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_authenticated/community.search'
 import { Route as AuthenticatedCommunityNewRouteImport } from './routes/_authenticated/community.new'
 import { Route as AuthenticatedCommunityBrowseRouteImport } from './routes/_authenticated/community.browse'
 import { Route as AuthenticatedCommunityDiscussionIdRouteImport } from './routes/_authenticated/community.$discussionId'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BetaRoute = BetaRouteImport.update({
   id: '/beta',
   path: '/beta',
@@ -96,6 +105,18 @@ const AuthenticatedCommunityRoute = AuthenticatedCommunityRouteImport.update({
   path: '/community',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedHistoryIdRoute = AuthenticatedHistoryIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -125,6 +146,12 @@ const AuthenticatedCommunityDiscussionIdRoute =
     path: '/$discussionId',
     getParentRoute: () => AuthenticatedCommunityRoute,
   } as any)
+const Char91DotmcpChar93InvokeToolToolRoute =
+  Char91DotmcpChar93InvokeToolToolRouteImport.update({
+    id: '/.mcp/invoke-tool/$tool',
+    path: '/.mcp/invoke-tool/$tool',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const LovableEmailQueueProcessRoute =
   LovableEmailQueueProcessRouteImport.update({
     id: '/lovable/email/queue/process',
@@ -147,6 +174,9 @@ export interface FileRoutesByFullPath {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/community': typeof AuthenticatedCommunityRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/diagnose': typeof AuthenticatedDiagnoseRoute
@@ -155,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/owner': typeof AuthenticatedOwnerRoute
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
   '/community/browse': typeof AuthenticatedCommunityBrowseRoute
   '/community/new': typeof AuthenticatedCommunityNewRoute
@@ -169,6 +200,9 @@ export interface FileRoutesByTo {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/community': typeof AuthenticatedCommunityRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/diagnose': typeof AuthenticatedDiagnoseRoute
@@ -177,6 +211,7 @@ export interface FileRoutesByTo {
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/owner': typeof AuthenticatedOwnerRoute
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
   '/community/browse': typeof AuthenticatedCommunityBrowseRoute
   '/community/new': typeof AuthenticatedCommunityNewRoute
@@ -193,6 +228,9 @@ export interface FileRoutesById {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_authenticated/community': typeof AuthenticatedCommunityRouteWithChildren
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/diagnose': typeof AuthenticatedDiagnoseRoute
@@ -201,6 +239,7 @@ export interface FileRoutesById {
   '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
   '/_authenticated/owner': typeof AuthenticatedOwnerRoute
   '/_authenticated/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
   '/_authenticated/community/browse': typeof AuthenticatedCommunityBrowseRoute
   '/_authenticated/community/new': typeof AuthenticatedCommunityNewRoute
@@ -217,6 +256,9 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/community'
     | '/dashboard'
     | '/diagnose'
@@ -225,6 +267,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/owner'
     | '/repair-insights-test'
+    | '/.mcp/invoke-tool/$tool'
     | '/community/$discussionId'
     | '/community/browse'
     | '/community/new'
@@ -239,6 +282,9 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/community'
     | '/dashboard'
     | '/diagnose'
@@ -247,6 +293,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/owner'
     | '/repair-insights-test'
+    | '/.mcp/invoke-tool/$tool'
     | '/community/$discussionId'
     | '/community/browse'
     | '/community/new'
@@ -262,6 +309,9 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/_authenticated/community'
     | '/_authenticated/dashboard'
     | '/_authenticated/diagnose'
@@ -270,6 +320,7 @@ export interface FileRouteTypes {
     | '/_authenticated/history'
     | '/_authenticated/owner'
     | '/_authenticated/repair-insights-test'
+    | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/community/$discussionId'
     | '/_authenticated/community/browse'
     | '/_authenticated/community/new'
@@ -286,6 +337,10 @@ export interface RootRouteChildren {
   AccessDeniedRoute: typeof AccessDeniedRoute
   AuthRoute: typeof AuthRoute
   BetaRoute: typeof BetaRoute
+  McpRoute: typeof McpRoute
+  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
@@ -293,6 +348,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/beta': {
       id: '/beta'
       path: '/beta'
@@ -384,6 +446,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCommunityRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/history/$id': {
       id: '/_authenticated/history/$id'
       path: '/$id'
@@ -418,6 +494,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/community/$discussionId'
       preLoaderRoute: typeof AuthenticatedCommunityDiscussionIdRouteImport
       parentRoute: typeof AuthenticatedCommunityRoute
+    }
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/lovable/email/queue/process': {
       id: '/lovable/email/queue/process'
@@ -506,6 +589,11 @@ const rootRouteChildren: RootRouteChildren = {
   AccessDeniedRoute: AccessDeniedRoute,
   AuthRoute: AuthRoute,
   BetaRoute: BetaRoute,
+  McpRoute: McpRoute,
+  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
