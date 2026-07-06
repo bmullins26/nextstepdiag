@@ -16,11 +16,23 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "Sign in to your NextStep Diagnostics account." },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : "",
+  }),
   component: AuthPage,
 });
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
+  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "";
+  const goNext = () => {
+    if (safeNext) {
+      window.location.href = safeNext;
+    } else {
+      navigate({ to: "/diagnose" });
+    }
+  };
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,19 +40,23 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/diagnose" });
+      if (data.user) goNext();
     });
-  }, [navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
       if (mode === "signup") {
+        const emailRedirectTo = safeNext
+          ? window.location.origin + safeNext
+          : window.location.origin;
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo },
         });
         if (error) throw error;
         toast.success("Account created. You're signed in.");
@@ -48,7 +64,7 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      navigate({ to: "/diagnose" });
+      goNext();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Auth failed.");
     } finally {
@@ -59,8 +75,9 @@ function AuthPage() {
   async function handleGoogle() {
     setBusy(true);
     try {
+      const redirect_uri = window.location.origin + (safeNext || "/diagnose");
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin + "/diagnose",
+        redirect_uri,
       });
       if (result.error) {
         toast.error(result.error.message ?? "Google sign-in failed");
@@ -68,7 +85,7 @@ function AuthPage() {
         return;
       }
       if (result.redirected) return;
-      navigate({ to: "/diagnose" });
+      goNext();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Google sign-in failed.");
       setBusy(false);
@@ -78,8 +95,9 @@ function AuthPage() {
   async function handleApple() {
     setBusy(true);
     try {
+      const redirect_uri = window.location.origin + (safeNext || "/diagnose");
       const result = await lovable.auth.signInWithOAuth("apple", {
-        redirect_uri: window.location.origin + "/diagnose",
+        redirect_uri,
       });
       if (result.error) {
         toast.error(result.error.message ?? "Apple sign-in failed");
@@ -87,7 +105,7 @@ function AuthPage() {
         return;
       }
       if (result.redirected) return;
-      navigate({ to: "/diagnose" });
+      goNext();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Apple sign-in failed.");
       setBusy(false);
