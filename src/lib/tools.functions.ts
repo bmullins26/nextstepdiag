@@ -26,7 +26,7 @@ export type ToolRow = {
   affiliate_url: string | null;
   notes: string | null;
   active: boolean;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, any>;
   created_by: string | null;
   created_at: string;
   updated_at: string;
