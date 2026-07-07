@@ -1183,6 +1183,54 @@ export type Database = {
         }
         Relationships: []
       }
+      tools: {
+        Row: {
+          active: boolean
+          affiliate_url: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          metadata: Json
+          notes: string | null
+          quantity: number
+          subcategory: string | null
+          tool_name: string
+          tool_type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          affiliate_url?: string | null
+          category: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          quantity?: number
+          subcategory?: string | null
+          tool_name: string
+          tool_type: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          affiliate_url?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          quantity?: number
+          subcategory?: string | null
+          tool_name?: string
+          tool_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
