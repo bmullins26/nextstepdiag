@@ -83,3 +83,55 @@ const whirlpoolYearDigit: Rule = {
 };
 
 export const whirlpoolRules: Rule[] = [whirlpoolLetterWeek, whirlpoolYearDigit];
+
+/**
+ * Whirlpool/Maytag/Amana 9-character modern format (used ~2020+ on many
+ * platforms including current Maytag laundry, e.g. MED7230HWx):
+ *
+ *   [PP][WW][Y][SSSS]
+ *   PP   – 2-letter plant code (ME=Marion OH, MF=Marion, etc.)
+ *   WW   – 2-digit week of year (01..53)
+ *   Y    – 1-digit year-of-decade
+ *   SSSS – 4-digit sequence
+ *
+ * Example: ME0305172 → plant=ME, week=03, year-digit=5, sequence=0172.
+ * Year-digit 5 resolves to 2025 (current decade) or 2015 (previous),
+ * disambiguated by recency + corroboration.
+ */
+const whirlpoolModern9: Rule = {
+  id: "whirlpool.modern-9char",
+  name: "Whirlpool/Maytag 9-char Modern Decoder",
+  family: "Whirlpool",
+  pattern: /^[A-Z]{2}\d{7}$/,
+  weight: 0.75,
+  extract: (serial) => {
+    const s = serial.toUpperCase();
+    const week = parseInt(s.slice(2, 4), 10);
+    const yDigit = parseInt(s.slice(4, 5), 10);
+    if (!Number.isFinite(week) || week < 1 || week > 53) return [];
+    if (!Number.isFinite(yDigit)) return [];
+    const now = new Date().getFullYear();
+    const wk = week;
+    // Approx month from week number.
+    const month = Math.min(12, Math.max(1, Math.ceil(wk / 4.345)));
+    const baseDecade = Math.floor(now / 10) * 10;
+    const decades = [baseDecade, baseDecade - 10];
+    const candidates: DateCandidate[] = [];
+    for (let i = 0; i < decades.length; i++) {
+      const year = decades[i] + yDigit;
+      if (year > now + 1) continue;
+      // Prefer current decade; heavy recency weighting.
+      const score = i === 0 ? 0.7 : 0.35;
+      candidates.push({ year, week: wk, month, score });
+    }
+    return candidates;
+  },
+  explain: (serial, c) => {
+    const s = serial.toUpperCase();
+    return `Whirlpool 9-char: plant '${s.slice(0, 2)}', week ${s.slice(2, 4)}, year-digit '${s.slice(4, 5)}' → ${c.year}${c.month ? `, ~${c.month}/${c.year}` : ""}. Decade chosen by recency + corroboration.`;
+  },
+};
+
+// Prepend the more specific 9-char rule so it wins over the generic
+// [Letter][Letter]... regex on typical Maytag/Whirlpool serials.
+whirlpoolRules.unshift(whirlpoolModern9);
