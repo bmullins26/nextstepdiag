@@ -150,9 +150,13 @@ const whirlpoolModern9: Rule = {
       push(yearFromDigit(yB, 1), wwB, 0.25);
     }
     // Layout C candidates (2-digit year, unambiguous).
+    // Also emit decade cycles because Whirlpool has recycled 2-digit "05"
+    // for '05, '15, '25 on some plants.
     if (Number.isFinite(yyC) && Number.isFinite(wwC)) {
-      const year2 = yyC >= 70 ? 1900 + yyC : 2000 + yyC;
-      push(year2, wwC, 0.60);
+      const base = yyC >= 70 ? 1900 + yyC : 2000 + yyC;
+      push(base, wwC, 0.60);           // literal 2-digit year
+      push(base + 10, wwC, 0.45);      // +1 decade cycle
+      push(base + 20, wwC, 0.55);      // +2 decade cycle (recency bump)
     }
 
     return candidates;
