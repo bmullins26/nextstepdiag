@@ -598,9 +598,14 @@ export function VerifyAppliance({
           )}
 
           {result.manufactureDate?.year ? (
-            <details className="rounded-lg border border-border bg-background/40 p-3">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Know the actual year? Help us improve
+            <details
+              className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3"
+              open={result.confidence === "Low" || result.reconciled?.disagreement}
+            >
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-amber-200">
+                {result.reconciled?.groundTruthLocked
+                  ? "Update the known year"
+                  : "Not right? Report the correct year"}
               </summary>
               {truthSubmitted ? (
                 <p className="mt-2 text-xs text-emerald-300">
