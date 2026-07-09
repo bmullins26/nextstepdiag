@@ -82,8 +82,6 @@ const whirlpoolYearDigit: Rule = {
     `Whirlpool: plant '${serial[0]}', year-of-decade '${serial[1]}' → ${c.year}${c.week ? `, week ${c.week}` : ""}. Decade chosen by recency.`,
 };
 
-export const whirlpoolRules: Rule[] = [whirlpoolLetterWeek, whirlpoolYearDigit];
-
 /**
  * Whirlpool/Maytag/Amana 9-character modern format (used ~2020+ on many
  * platforms including current Maytag laundry, e.g. MED7230HWx):
