@@ -103,25 +103,58 @@ const whirlpoolModern9: Rule = {
   pattern: /^[A-Z]{2}\d{7}$/,
   weight: 0.75,
   extract: (serial) => {
+    // The exact position of the year-digit and week-digits in Whirlpool's
+    // 9-char post-2020 scheme varies across plants and platforms — some are
+    // `PP WW Y SSSS`, some are `PP W YY SSSS`, some are `PP Y WW SSSS`. We
+    // emit every plausible (year, week) candidate and let the reconciler +
+    // Firecrawl corroboration disambiguate.
     const s = serial.toUpperCase();
-    const week = parseInt(s.slice(2, 4), 10);
-    const yDigit = parseInt(s.slice(4, 5), 10);
-    if (!Number.isFinite(week) || week < 1 || week > 53) return [];
-    if (!Number.isFinite(yDigit)) return [];
+    const digits = s.slice(2); // 7 digits
     const now = new Date().getFullYear();
-    const wk = week;
-    // Approx month from week number.
-    const month = Math.min(12, Math.max(1, Math.ceil(wk / 4.345)));
     const baseDecade = Math.floor(now / 10) * 10;
-    const decades = [baseDecade, baseDecade - 10];
     const candidates: DateCandidate[] = [];
-    for (let i = 0; i < decades.length; i++) {
-      const year = decades[i] + yDigit;
-      if (year > now + 1) continue;
-      // Prefer current decade; heavy recency weighting.
-      const score = i === 0 ? 0.7 : 0.35;
+    const seen = new Set<string>();
+
+    const yearFromDigit = (d: number, decadesBack: number) =>
+      baseDecade - decadesBack * 10 + d;
+
+    // Layout A: WW Y SSSS  (week at 0-1, year-digit at 2)
+    const wwA = parseInt(digits.slice(0, 2), 10);
+    const yA = parseInt(digits.slice(2, 3), 10);
+    // Layout B: Y WW SSSS  (year-digit at 0, week at 1-2)
+    const yB = parseInt(digits.slice(0, 1), 10);
+    const wwB = parseInt(digits.slice(1, 3), 10);
+    // Layout C: WW YY SSS  (week at 0-1, 2-digit year at 2-3)
+    const wwC = parseInt(digits.slice(0, 2), 10);
+    const yyC = parseInt(digits.slice(2, 4), 10);
+
+    const push = (year: number, wk: number, score: number) => {
+      if (!Number.isFinite(year) || !Number.isFinite(wk)) return;
+      if (year < 2000 || year > now + 1) return;
+      if (wk < 1 || wk > 53) return;
+      const key = `${year}:${wk}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const month = Math.min(12, Math.max(1, Math.ceil(wk / 4.345)));
       candidates.push({ year, week: wk, month, score });
+    };
+
+    // Layout A candidates — most common current layout.
+    if (Number.isFinite(yA) && Number.isFinite(wwA)) {
+      push(yearFromDigit(yA, 0), wwA, 0.55); // current decade
+      push(yearFromDigit(yA, 1), wwA, 0.30); // previous decade
     }
+    // Layout B candidates.
+    if (Number.isFinite(yB) && Number.isFinite(wwB)) {
+      push(yearFromDigit(yB, 0), wwB, 0.50);
+      push(yearFromDigit(yB, 1), wwB, 0.25);
+    }
+    // Layout C candidates (2-digit year, unambiguous).
+    if (Number.isFinite(yyC) && Number.isFinite(wwC)) {
+      const year2 = yyC >= 70 ? 1900 + yyC : 2000 + yyC;
+      push(year2, wwC, 0.60);
+    }
+
     return candidates;
   },
   explain: (serial, c) => {
