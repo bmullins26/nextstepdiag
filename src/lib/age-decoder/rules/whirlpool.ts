@@ -132,4 +132,4 @@ const whirlpoolModern9: Rule = {
 
 // Prepend the more specific 9-char rule so it wins over the generic
 // [Letter][Letter]... regex on typical Maytag/Whirlpool serials.
-whirlpoolRules.unshift(whirlpoolModern9);
+export const whirlpoolRules: Rule[] = [whirlpoolModern9, whirlpoolLetterWeek, whirlpoolYearDigit];
