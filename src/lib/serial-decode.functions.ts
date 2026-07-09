@@ -10,6 +10,7 @@ import { resolveBrand } from "./age-decoder";
 import { decodeSerial as legacyDecodeSerial, pickBestCandidate as legacyPick } from "./serial-decode.legacy";
 import { lookupApplianceAgeWithCache } from "./appliance-age.functions";
 import { applyTypeOverrideServerSide } from "./appliance-type-overrides.functions";
+import { reconcileAge, type ReconcileSource } from "./age-verify/reconcile.server";
 
 const DecodeInput = z.object({
   brand: z.string().min(1),
@@ -143,10 +144,10 @@ export const decodeAppliance = createServerFn({ method: "POST" })
         outcome = decodeAge({ brand: data.brand, model: data.modelNumber, serial });
         const brandKey = resolveBrand(data.brand) ?? data.brand.toLowerCase();
         const candidateYears = outcome.candidates.map((c) => c.year);
-        const shouldCorroborate =
-          candidateYears.length >= 1 &&
-          (outcome.candidates.length > 1 || outcome.confidencePercent < 65) &&
-          candidateYears.length <= 8;
+        // ALWAYS corroborate when a serial is present — cross-referencing web
+        // evidence is what protects against a single provider (RapidAPI or
+        // local rule) confidently returning the wrong year.
+        const shouldCorroborate = candidateYears.length >= 1 && candidateYears.length <= 12;
         if (shouldCorroborate) {
           let corroboration = await loadCorroborationCache(context.supabase, brandKey, data.modelNumber);
           if (!corroboration) {
@@ -253,29 +254,61 @@ Identify the appliance. Do not state any date or age.`,
 
     // 5) Build the response. PRIMARY provider = Appliance Age Finder API.
     //    Local decoder result is used only when the API failed (fallback).
-    const localManufactureDate =
-      outcome && outcome.status === "ok"
-        ? {
-            year: outcome.manufactureYear,
-            month: outcome.manufactureMonth,
-            rangeStart: `${outcome.manufactureYear}-${String(outcome.manufactureMonth ?? 1).padStart(2, "0")}`,
-            rangeEnd: `${outcome.manufactureYear}-${String(outcome.manufactureMonth ?? 12).padStart(2, "0")}`,
-          }
-        : null;
-    const localAgeYears = outcome && outcome.status === "ok" ? outcome.ageYears : null;
-
-    const manufactureDate = apiLookup?.ok && apiLookup.manufactureYear
-      ? {
-          year: apiLookup.manufactureYear,
-          month: apiLookup.manufactureMonth,
-          rangeStart: `${apiLookup.manufactureYear}-${String(apiLookup.manufactureMonth ?? 1).padStart(2, "0")}`,
-          rangeEnd: `${apiLookup.manufactureYear}-${String(apiLookup.manufactureMonth ?? 12).padStart(2, "0")}`,
+    // Reconcile every available source (API + local + web + ground truth).
+    // No single source can win when the others disagree.
+    let groundTruth: { year: number; month?: number | null; source?: string | null } | null = null;
+    if (hasSerial) {
+      try {
+        const { data: gt } = await context.supabase
+          .from("age_decode_ground_truth")
+          .select("known_year, known_month, source")
+          .eq("manufacturer", data.brand)
+          .eq("serial_number", serial)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (gt?.known_year) {
+          groundTruth = { year: gt.known_year, month: gt.known_month, source: gt.source };
         }
-      : localManufactureDate;
-    const ageYears = apiLookup?.ok && apiLookup.manufactureYear
-      ? (Date.now() - new Date(apiLookup.manufactureYear, (apiLookup.manufactureMonth ?? 1) - 1, 1).getTime()) /
+      } catch (e) {
+        console.warn("[age-finder] ground-truth lookup failed:", e);
+      }
+    }
+
+    const apiNormalized = apiLookup?.ok
+      ? {
+          manufactureYear: apiLookup.manufactureYear,
+          manufactureMonth: apiLookup.manufactureMonth,
+          confidencePercent: apiLookup.confidencePercent,
+          alternativeYears: apiLookup.alternativeYears,
+          source: apiLookup.source ?? "appliance_age_api",
+          description: apiLookup.description,
+          rawProvider: null,
+        }
+      : null;
+
+    const reconciled = hasSerial
+      ? reconcileAge({
+          api: apiNormalized as any,
+          apiOk: !!apiLookup?.ok,
+          local: outcome,
+          corroboration: outcome?.corroboration ?? null,
+          groundTruth,
+        })
+      : null;
+
+    const manufactureDate = reconciled?.bestYear
+      ? {
+          year: reconciled.bestYear,
+          month: reconciled.bestMonth,
+          rangeStart: `${reconciled.bestYear}-${String(reconciled.bestMonth ?? 1).padStart(2, "0")}`,
+          rangeEnd: `${reconciled.bestYear}-${String(reconciled.bestMonth ?? 12).padStart(2, "0")}`,
+        }
+      : null;
+    const ageYears = reconciled?.bestYear
+      ? (Date.now() - new Date(reconciled.bestYear, (reconciled.bestMonth ?? 1) - 1, 1).getTime()) /
         (365.25 * 24 * 3600 * 1000)
-      : localAgeYears;
+      : null;
     const appliedRule = outcome?.appliedRule ?? null;
 
     console.log(
@@ -294,12 +327,8 @@ Identify the appliance. Do not state any date or age.`,
       applianceType: finalApplianceType,
       platform: finalPlatform,
       typeSource,
-      confidence: apiLookup?.ok && apiLookup.confidencePercent != null
-        ? (apiLookup.confidencePercent >= 70 ? "High" : apiLookup.confidencePercent >= 40 ? "Medium" : "Low")
-        : (outcome?.confidence ?? "Unknown"),
-      confidencePercent: apiLookup?.ok && apiLookup.confidencePercent != null
-        ? apiLookup.confidencePercent
-        : (outcome?.confidencePercent ?? 0),
+      confidence: reconciled?.confidenceLabel ?? "Unknown",
+      confidencePercent: reconciled?.confidencePercent ?? 0,
       decodedBreakdown: outcome?.breakdown ?? "",
       notes:
         outcome?.status === "ok"
@@ -310,6 +339,27 @@ Identify the appliance. Do not state any date or age.`,
               : "Age lookup is optional and does not affect diagnostics.")),
       manufactureDate,
       ageYears,
+      reconciled: reconciled
+        ? {
+            bestYear: reconciled.bestYear,
+            bestMonth: reconciled.bestMonth,
+            confidenceLabel: reconciled.confidenceLabel,
+            confidencePercent: reconciled.confidencePercent,
+            agreementCount: reconciled.agreementCount,
+            disagreement: reconciled.disagreement,
+            sources: reconciled.sources as ReconcileSource[],
+            groundTruthLocked: !!groundTruth,
+          }
+        : null,
+      apiStatus: apiLookup
+        ? {
+            ok: !!apiLookup.ok,
+            statusCode: apiLookup.statusCode,
+            source: apiLookup.source,
+            error: apiLookup.error ?? null,
+            responseTimeMs: apiLookup.responseTimeMs,
+          }
+        : { ok: false, statusCode: 0, source: null, error: hasSerial ? "no_serial_or_skipped" : null, responseTimeMs: 0 },
       ageProvider: apiLookup?.ok
         ? {
             source: apiLookup.source ?? "appliance_age_api",
