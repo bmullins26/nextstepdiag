@@ -101,6 +101,12 @@ async function callOnce(opts: {
 
 function isSuccessfulResponse(statusCode: number, raw: unknown): boolean {
   if (statusCode < 200 || statusCode >= 300) return false;
+  // Reject HTML/redirect payloads even when status is 2xx (RapidAPI edge
+  // gateway sometimes 200s a login-redirect HTML page when auth is stale).
+  if (typeof raw === "string") {
+    const s = raw.trim().toLowerCase();
+    if (s.startsWith("<") || s.includes("<html") || s.includes("homespy")) return false;
+  }
   const r = raw as RawApiResponse | null;
   if (!r || typeof r !== "object") return false;
   const decoded = r.result?.decoded;
@@ -210,6 +216,7 @@ export async function callApplianceAgeApi(input: { make: string; model: string; 
   rawResponse: unknown;
   responseTimeMs: number;
   error?: string;
+  authMethodUsed?: AuthMethod;
 }> {
   const rapidApiKey = process.env.RAPIDAPI_APPLIANCE_AGE_KEY;
   const apiToken = process.env.RAPIDAPI_APPLIANCE_AGE_TOKEN;
@@ -224,25 +231,53 @@ export async function callApplianceAgeApi(input: { make: string; model: string; 
     };
   }
 
-  try {
-    const r = await callOnce({ ...input, authMethod: "both", rapidApiKey, apiToken });
-    const ok = isSuccessfulResponse(r.statusCode, r.rawResponse);
-    const normalized = ok ? normalizeApiResponse(r.rawResponse, "appliance_age_api") : null;
-    return {
-      ok: ok && !!normalized?.manufactureYear,
-      statusCode: r.statusCode,
-      normalized,
-      rawResponse: r.rawResponse,
-      responseTimeMs: r.responseTimeMs,
-    };
-  } catch (e) {
-    return {
-      ok: false,
-      statusCode: 0,
-      normalized: null,
-      rawResponse: null,
-      responseTimeMs: 0,
-      error: e instanceof Error ? e.message : String(e),
-    };
+  // Auth-method fallback: `both` is verified working, but if the provider
+  // flips behavior or the plan lapses, try the other two before giving up.
+  const methods: AuthMethod[] = ["both", "headers", "api_token"];
+  let last: { statusCode: number; rawResponse: unknown; responseTimeMs: number; error?: string; method: AuthMethod } | null = null;
+  const totalStart = Date.now();
+  for (const method of methods) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await callOnce({ ...input, authMethod: method, rapidApiKey, apiToken });
+        last = { ...r, method };
+        const ok = isSuccessfulResponse(r.statusCode, r.rawResponse);
+        if (ok) {
+          const normalized = normalizeApiResponse(r.rawResponse, "appliance_age_api");
+          if (normalized?.manufactureYear) {
+            return {
+              ok: true,
+              statusCode: r.statusCode,
+              normalized,
+              rawResponse: r.rawResponse,
+              responseTimeMs: Date.now() - totalStart,
+              authMethodUsed: method,
+            };
+          }
+        }
+        // Retry only on transient 5xx / 429 / 0; otherwise move to next method.
+        if (![0, 429, 500, 502, 503, 504].includes(r.statusCode)) break;
+        await new Promise((res) => setTimeout(res, 400 * (attempt + 1)));
+      } catch (e) {
+        last = {
+          statusCode: 0,
+          rawResponse: null,
+          responseTimeMs: 0,
+          method,
+          error: e instanceof Error ? e.message : String(e),
+        };
+        await new Promise((res) => setTimeout(res, 400 * (attempt + 1)));
+      }
+    }
   }
+
+  return {
+    ok: false,
+    statusCode: last?.statusCode ?? 0,
+    normalized: null,
+    rawResponse: last?.rawResponse ?? null,
+    responseTimeMs: Date.now() - totalStart,
+    error: last?.error ?? `All auth methods failed (last status ${last?.statusCode ?? "n/a"})`,
+    authMethodUsed: last?.method,
+  };
 }

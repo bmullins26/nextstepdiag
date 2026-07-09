@@ -1,111 +1,84 @@
 
-## Tool Manager — Phase 1 (Foundation)
+## Problem
 
-Builds the master Tool Intelligence foundation. No import, no automatic tool recommendations, no affiliate integration yet — those are later phases. Extensibility is baked into the schema so those phases don't require a redesign.
+`Maytag MED7230HW3 / ME0305172` (real DOM 01/2025) is coming back wrong. Root causes to address:
 
-### 1. Database
+1. `callApplianceAgeApi` runs only once against `authMethod="both"`. If RapidAPI is degraded, returns a redirect/HTML, or the plan quota lapses, we silently fall through to the local decoder with no visibility.
+2. Local Whirlpool/Maytag rules and API result are never reconciled — whichever one "wins" the priority ladder is shown as truth, even if the other two disagree.
+3. Web corroboration only runs when the local decoder has ambiguous candidates. If the API returns confidently-wrong data, nothing challenges it.
+4. There's no user-facing way to correct a bad year even though `age_decode_ground_truth` already exists.
 
-New table `public.tools`:
+## Fix
 
-- `id uuid pk`
-- `tool_type text not null` — coarse taxonomy (Test Equipment, Hand Tool, Refrigeration, Safety, Consumable, Power Tool, Specialty, Other). Distinct from `category`; drives future kit/recommendation grouping.
-- `category text not null` — finer bucket owned by data entry (e.g. "Multimeters", "Wrenches")
-- `subcategory text` (nullable)
-- `tool_name text not null`
-- `quantity integer not null default 1`
-- `affiliate_url text`
-- `notes text`
-- `active boolean not null default true`
-- `metadata jsonb not null default '{}'` — forward-compatible slot (Amazon ASIN, required-vs-recommended, image URL, etc.) so future phases don't need `ALTER TABLE`
-- `created_at`, `updated_at`, `created_by uuid` (auth.users, `on delete set null`)
+### 1. Harden the RapidAPI client (`src/lib/appliance-age-api.server.ts`)
 
-Constraints & indexes:
-- `unique (lower(tool_name), lower(category))` — dedupes across case variants so a future import upserts on `(tool_name, category)` instead of creating twins
-- `idx_tools_tool_type (tool_type)`
-- `idx_tools_category (category)`
-- `idx_tools_tool_name (tool_name)`
-- `idx_tools_active (active)`
-- `updated_at` trigger via existing `public.set_updated_at()`
+- Retry with exponential backoff (2 tries) on 5xx / network / timeout.
+- Follow the auth-method fallback chain automatically inside `callApplianceAgeApi`: try `both` → `headers` → `api_token`. If all three fail, return a structured `error` with the last status body so the caller sees why.
+- Treat HTML/redirect responses (302, `<html`, homespy login page) as failures even when status is 2xx.
+- Add a lightweight `pingApplianceAgeApi()` used by the owner diagnostics panel and by a scheduled health check (logged to `appliance_age_api_log` with `event='health_check'`).
 
-RLS + grants:
-- `GRANT SELECT, INSERT, UPDATE, DELETE ON public.tools TO authenticated; GRANT ALL TO service_role;`
-- Enable RLS
-- SELECT (active only) for any authenticated user — future diagnostic/community pipelines need reads
-- INSERT / UPDATE / DELETE / read-inactive restricted to owners via `has_role(auth.uid(), 'owner')`
+### 2. Always cross-reference (`src/lib/serial-decode.functions.ts` + new `src/lib/age-verify/reconcile.server.ts`)
 
-Reserved (not created this phase, documented in migration comment): `tool_repair_links`, `tool_appliance_type_links`, `tool_reviews`, `tool_ownership`, `tool_videos`.
+Replace the current "API wins if present" logic with a reconciler that runs on **every** decode when a serial is provided:
 
-### 2. Server functions
+```text
+Sources (parallel):
+  A. Cache lookup (unchanged)
+  B. RapidAPI (hardened; A/B tested)
+  C. Local decoder (unchanged)
+  D. Firecrawl web sweep (existing corroborateAge, ALWAYS on when serial present)
 
-New `src/lib/tools.functions.ts`, all `requireSupabaseAuth` + owner check inside handler:
+Reconcile:
+  - Collect (year, month?, confidence, weight, sourceType) tuples.
+  - Weights: OEM manual/spec sheet 1.0, RapidAPI 0.85, retailer listing 0.6,
+    local rule 0.55, review/community 0.35.
+  - Score each candidate year = Σ(weight × confidence). Bonus if ≥2 source
+    types agree; penalty if a high-weight source explicitly contradicts.
+  - Pick highest score. Confidence tier: High (≥2 independent sources agree
+    AND top score >> second), Medium (single strong source or weak agreement),
+    Low (only one source or conflict unresolved).
+  - Record every source & score in the response for the UI's "Sources" list
+    and in `age_decode_attempts.metadata` for later analysis.
+```
 
-- `listTools({ search?, toolType?, category?, status?, page?, pageSize? })` → `{ rows, total, categories, toolTypes }`
-- `getTool({ id })`
-- `createTool(input)` / `updateTool({ id, patch })` — surfaces unique-constraint violation as a friendly "A tool with this name+category already exists" error
-- `duplicateTool({ id })` — copies row, appends " (Copy)" to name to sidestep the unique index
-- `setToolActive({ id, active })`
-- `deleteTool({ id })`
-- `exportTools()` — CSV string for client download
-- `getToolsByIds({ ids })` — stable hydrator so future Diagnostics/Community/Repair modules can resolve `ToolRef = { id: string }` without a redesign
+Existing helpers reused: `corroborateAge()` (already Firecrawl-backed with source-type weights), `decodeAge()`, `lookupApplianceAgeWithCache()`. New file only contains the reconciler + scorer.
 
-Zod-validated inputs; `tool_type` restricted to the enum list above (extensible by editing one constant).
+### 3. Fix the specific Maytag failure
 
-### 3. Owner navigation
+`ME0305172` — leading letters `ME` are a Whirlpool/Maytag plant code (Marion, OH), digits `03` = week 03, `05` looks like year but Whirlpool 12-digit Maytag serials from 2020+ use a different offset. Add a rule for the current 9-char `LL#######` Amana/Maytag format (used since ~2015) that decodes positions 3–4 as year and 5–6 as week, and register it in `src/lib/age-decoder/rules/whirlpool.ts`. Reconciler + web search will catch anything the rule still misses.
 
-- New tab **Tool Manager** in `OwnerPanels`.
-- Dedicated routes for depth: `/_authenticated/owner/tools` (list) and `/_authenticated/owner/tools/$toolId` (detail), both mirroring the owner guard in `owner.tsx`.
+### 4. "Report wrong year" (UI)
 
-### 4. Tool Manager screen
+- In the age card (`src/components/verify-appliance.tsx` region), when a decoded year is shown, add a small "Not right?" button.
+- Opens a `Dialog` with: correct year (required), correct month (optional), source (data plate / receipt / owner manual / other), notes.
+- On submit, calls existing `submitKnownYear` server fn (already in `src/lib/age-ground-truth.functions.ts`), then re-runs decode with a `groundTruthHint` flag that boosts the user-provided year in the reconciler and refreshes the display.
+- Shows a subtle "Thanks — updated" toast; the corrected value is now the source of truth for this (brand, model, serial) via the existing upsert.
 
-`src/routes/_authenticated/owner/tools.tsx` — styled to match `owner-panels.tsx` tables/cards.
+### 5. Owner diagnostics
 
-Toolbar:
-- Debounced search (name / category / notes)
-- Tool Type `<Select>` filter
-- Category `<Select>` filter (all + distinct existing values)
-- Status filter (All / Active / Inactive)
-- **Add Tool** → create dialog
-- **Import** — disabled button, tooltip + toast: "Tool import will be enabled in the next phase."
-- **Export** → CSV download
+Extend the existing owner API tester (`testApplianceAgeApiFn`) response so the owner panel shows: last successful call time, current auth method working, and cumulative success rate from `appliance_age_api_log` over 24h/7d.
 
-Table columns: Tool Name (links to detail) · Type (badge) · Category (+ subcategory as muted secondary) · Quantity · Status · Actions (View / Edit / Duplicate / Disable-Enable / Delete with `AlertDialog` confirm).
+## Technical notes
 
-Pagination: 25 per page, prev/next + total, TanStack Query keyed on `{search, toolType, category, status, page}`.
+- No new tables. `age_decode_attempts` already has enough columns; sources list stored in the existing `metadata`-like fields (add a JSONB column if none exists — will confirm via a small migration in step 1 of build).
+- `submitKnownYear` already exists; only wiring up UI + reconciler hint.
+- No new secrets; Firecrawl + RapidAPI keys are already present.
+- Firecrawl cost control: reuse existing 90-day `age_decode_corroborations` cache keyed by `(brand_key, model_number)`; cache hits are free.
+- All logic in server functions; no client-side API keys.
 
-Create/Edit dialog fields: name, tool_type (enum select), category, subcategory, quantity, affiliate URL (URL validation), notes, active toggle.
+## Out of scope
 
-**Recent categories helper:**
-- Keep last 8 categories the current user typed/selected in `localStorage` (`nextstep.tools.recentCategories`), most-recent first, deduped case-insensitively.
-- Category input becomes a combobox: shows a "Recent" group at top, then "All categories" (distinct values from the server), and free-text entry for new ones. Same treatment for `tool_type` is not needed since it's a fixed enum.
+- Rewriting the Firecrawl provider selection or adding new brand rule files beyond the one Maytag/Amana rule.
+- Replacing RapidAPI with a different provider.
+- Batch re-verification of historical `age_decode_attempts`.
 
-### 5. Tool Detail page
+## Files touched (build phase)
 
-`src/routes/_authenticated/owner/tools/$toolId.tsx`
-
-- Header: name · type badge · category/subcategory badges · active badge · Edit / Back
-- Details card: Quantity, Affiliate URL (external link), Notes
-- **Metadata card** — `<details>` / collapsible, collapsed by default, renders `metadata` JSONB as syntax-highlighted read-only `<pre>` for dev inspection
-- Five "Coming Soon" stub cards (real components, empty bodies so later phases only fill them in):
-  - Compatible Repairs
-  - Compatible Appliance Types
-  - Community Reviews
-  - Training Videos
-  - Technician Ownership
-
-### 6. Diagnostic foundation hooks
-
-- Export `ToolRef = { id: string }` from `src/lib/tools.functions.ts`.
-- `getToolsByIds` shipped now so future diagnostic steps can attach tool references without another design pass.
-- No diagnostic UI wired yet.
-
-### 7. Out of scope
-
-Spreadsheet/CSV/Excel import execution, Amazon product matching, community reviews content, ownership tracking, training video content, automatic recommendations in Diagnose/Community, Required-vs-Recommended UI (schema slot via `metadata` only).
-
-### Technical notes
-
-- Uses existing shadcn primitives (`Dialog`, `AlertDialog`, `DropdownMenu`, `Select`, `Badge`, `Input`, `Textarea`, `Button`, `Collapsible`) — no new design tokens.
-- Owner enforcement in every server-fn handler (defense in depth) in addition to route guard.
-- CSV export runs client-side from fetched data — no new server deps.
-- Unique index is expression-based (`lower(...)`) so imports can safely upsert on `(tool_name, category)` in the next phase.
-- `metadata jsonb` remains the escape hatch for all future non-relational fields.
+- `src/lib/appliance-age-api.server.ts` — retries + auth fallback + HTML detection.
+- `src/lib/appliance-age.functions.ts` — plumb structured errors through.
+- `src/lib/age-verify/reconcile.server.ts` — NEW.
+- `src/lib/serial-decode.functions.ts` — call reconciler, return sources array.
+- `src/lib/age-decoder/rules/whirlpool.ts` — add Maytag 9-char rule.
+- `src/lib/age-ground-truth.functions.ts` — accept optional hint replay flag.
+- `src/components/verify-appliance.tsx` (or the current age card) — "Report wrong year" dialog + sources list.
+- One migration: add `sources JSONB` column to `age_decode_attempts` if not already present.

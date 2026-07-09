@@ -57,6 +57,32 @@ export type DecodedAppliance = {
     retailerSignal?: "discontinued" | "in_stock" | null;
     hits: Array<{ url: string; title?: string; trust: string; sourceType?: string; year?: number; excerpt?: string }>;
   } | null;
+  reconciled?: {
+    bestYear: number | null;
+    bestMonth: number | null;
+    confidenceLabel: "High" | "Medium" | "Low" | "Unknown";
+    confidencePercent: number;
+    agreementCount: number;
+    disagreement: boolean;
+    groundTruthLocked: boolean;
+    sources: Array<{
+      kind: string;
+      year: number;
+      month?: number | null;
+      weight: number;
+      confidence: number;
+      label: string;
+      detail?: string;
+      url?: string;
+    }>;
+  } | null;
+  apiStatus?: {
+    ok: boolean;
+    statusCode: number;
+    source: string | null;
+    error: string | null;
+    responseTimeMs: number;
+  };
 };
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -347,19 +373,33 @@ export function VerifyAppliance({
           />
           {result.ageProvider ? (
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {result.ageProvider.source === "appliance_age_api" || result.ageProvider.source === "cache" ? (
+              {result.reconciled?.groundTruthLocked ? (
+                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                  Verified by user
+                </span>
+              ) : result.ageProvider.source === "appliance_age_api" || result.ageProvider.source === "cache" ? (
                 <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
                   Verified by Appliance Age Finder{result.ageProvider.cached ? " (cached)" : ""}
                 </span>
               ) : result.manufactureDate ? (
                 <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                  Local Decoder Fallback
+                  Cross-referenced (API unavailable)
                 </span>
               ) : (
                 <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Age unavailable
                 </span>
               )}
+              {result.reconciled && result.reconciled.agreementCount >= 2 ? (
+                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  {result.reconciled.agreementCount} sources agree
+                </span>
+              ) : null}
+              {result.reconciled?.disagreement ? (
+                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                  Sources disagree
+                </span>
+              ) : null}
               {result.ageProvider.responseTimeMs ? (
                 <span className="text-[10px] text-muted-foreground">{result.ageProvider.responseTimeMs} ms</span>
               ) : null}
@@ -371,6 +411,46 @@ export function VerifyAppliance({
               </span>
             </div>
           )}
+          {result.apiStatus && !result.apiStatus.ok && result.apiStatus.error && result.serialNumber ? (
+            <p className="text-[10px] text-amber-300/80">
+              Age API: {result.apiStatus.error}. Cross-referenced serial rules + web sources instead.
+            </p>
+          ) : null}
+          {result.reconciled && result.reconciled.sources.length > 0 ? (
+            <details className="rounded-lg border border-border bg-background/40 p-3" open={result.reconciled.disagreement}>
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Sources ({result.reconciled.sources.length}) — verified by cross-reference
+              </summary>
+              <ul className="mt-2 space-y-1.5 text-xs">
+                {result.reconciled.sources
+                  .slice()
+                  .sort((a, b) => b.weight * b.confidence - a.weight * a.confidence)
+                  .map((s, i) => (
+                    <li key={i} className="flex items-start justify-between gap-2 border-b border-border/40 pb-1 last:border-b-0">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-semibold ${s.year === result.reconciled?.bestYear ? "text-primary" : "text-muted-foreground"}`}>
+                            {s.month ? MONTHS[s.month] + " " : ""}{s.year}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.label}</span>
+                        </div>
+                        {s.detail ? (
+                          <div className="truncate text-[10px] text-muted-foreground">{s.detail}</div>
+                        ) : null}
+                        {s.url ? (
+                          <a href={s.url} target="_blank" rel="noreferrer" className="break-all text-[10px] text-primary underline-offset-2 hover:underline">
+                            {s.url}
+                          </a>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                        {(s.weight * s.confidence).toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </details>
+          ) : null}
           {result.ageProvider?.alternativeYears && result.ageProvider.alternativeYears.length > 0 ? (
             <div className="rounded-lg border border-border bg-background/40 p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -518,9 +598,14 @@ export function VerifyAppliance({
           )}
 
           {result.manufactureDate?.year ? (
-            <details className="rounded-lg border border-border bg-background/40 p-3">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Know the actual year? Help us improve
+            <details
+              className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3"
+              open={result.confidence === "Low" || result.reconciled?.disagreement}
+            >
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-amber-200">
+                {result.reconciled?.groundTruthLocked
+                  ? "Update the known year"
+                  : "Not right? Report the correct year"}
               </summary>
               {truthSubmitted ? (
                 <p className="mt-2 text-xs text-emerald-300">
