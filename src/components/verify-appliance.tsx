@@ -57,6 +57,32 @@ export type DecodedAppliance = {
     retailerSignal?: "discontinued" | "in_stock" | null;
     hits: Array<{ url: string; title?: string; trust: string; sourceType?: string; year?: number; excerpt?: string }>;
   } | null;
+  reconciled?: {
+    bestYear: number | null;
+    bestMonth: number | null;
+    confidenceLabel: "High" | "Medium" | "Low" | "Unknown";
+    confidencePercent: number;
+    agreementCount: number;
+    disagreement: boolean;
+    groundTruthLocked: boolean;
+    sources: Array<{
+      kind: string;
+      year: number;
+      month?: number | null;
+      weight: number;
+      confidence: number;
+      label: string;
+      detail?: string;
+      url?: string;
+    }>;
+  } | null;
+  apiStatus?: {
+    ok: boolean;
+    statusCode: number;
+    source: string | null;
+    error: string | null;
+    responseTimeMs: number;
+  };
 };
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
