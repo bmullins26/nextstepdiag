@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getGateway, DEFAULT_MODEL } from "./ai-gateway.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { logAiUsage } from "./ai-usage-log.server";
+import { enforceLookupQuota, QuotaExceededError } from "./billing/quota.server";
 
 const FileInput = z.object({
   fileName: z.string().min(1),
@@ -58,6 +59,22 @@ function buildContent(file: z.infer<typeof FileInput>, text: string): Block[] {
 export const analyzeDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => FileInput.parse(d))
+  .handler(async (ctx) => {
+    try {
+      await enforceLookupQuota(ctx.context.userId);
+    } catch (e) {
+      if (e instanceof QuotaExceededError) {
+        return {
+          quotaExceeded: true as const,
+          quota: { used: e.used, limit: e.limit },
+        } as any;
+      }
+      throw e;
+    }
+    return _analyzeDocumentImpl(ctx);
+  });
+
+async function _analyzeDocumentImpl({ data, context }: any) {
   .handler(async ({ data, context }) => {
     const gateway = getGateway();
     const { object, usage } = await generateObject({
