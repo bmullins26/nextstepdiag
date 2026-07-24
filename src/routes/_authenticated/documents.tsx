@@ -18,6 +18,7 @@ import {
   analyzeDocument,
   askDocumentFollowUp,
 } from "@/lib/document-assistant.functions";
+import { UpgradeDialog } from "@/components/paywall/upgrade-dialog";
 
 export const Route = createFileRoute("/_authenticated/documents")({
   head: () => ({
@@ -98,6 +99,7 @@ function DocumentsPage() {
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
+  const [quotaOpen, setQuotaOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Client-only — avoids SSR hydration mismatch.
@@ -158,8 +160,14 @@ function DocumentsPage() {
       };
       setFile(uploaded);
       setStatus("analyzing");
-      const result = (await analyzeFn({ data: uploaded })) as Analysis;
-      setAnalysis(result);
+      const result = (await analyzeFn({ data: uploaded })) as any;
+      if (result && result.quotaExceeded) {
+        setQuotaOpen(true);
+        setStatus("idle");
+        setFile(null);
+        return;
+      }
+      setAnalysis(result as Analysis);
       setStatus("ready");
     } catch (e) {
       console.error(e);
