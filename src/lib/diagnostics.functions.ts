@@ -9,6 +9,7 @@ import type { GroundingResult } from "./tech-sheets/types";
 import { loadOutcomeStats } from "./diagnostic-outcomes.server";
 import { gatherEvidence, tieredPromptBlock } from "./evidence/engine";
 import type { EvidenceItem } from "./evidence/types";
+import { enforceLookupQuota, QuotaExceededError } from "./billing/quota.server";
 
 const ApplianceInput = z.object({
   brand: z.string().min(1),
@@ -20,6 +21,25 @@ export const verifyAppliance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ApplianceInput.parse(d))
   .handler(async ({ data, context }) => {
+    try {
+      await enforceLookupQuota(context.userId);
+    } catch (e) {
+      if (e instanceof QuotaExceededError) {
+        return {
+          identified: false,
+          manufacturer: "",
+          applianceType: "",
+          confidence: "Unknown" as const,
+          notes: "",
+          brand: data.brand,
+          modelNumber: data.modelNumber,
+          serialNumber: data.serialNumber,
+          quotaExceeded: true as const,
+          quota: { used: e.used, limit: e.limit },
+        };
+      }
+      throw e;
+    }
     const gateway = getGateway();
     const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
