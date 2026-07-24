@@ -17,6 +17,7 @@ export type Entitlements = {
   lookupsLimit: number;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  hasStripeCustomer: boolean;
 };
 
 function periodMonth(): string {
@@ -33,7 +34,7 @@ export const getMyEntitlements = createServerFn({ method: "POST" })
     const { data: subs } = await context.supabase
       .from("subscriptions")
       .select(
-        "tier, plan_type, status, current_period_end, cancel_at_period_end, environment, updated_at",
+        "tier, plan_type, status, current_period_end, cancel_at_period_end, environment, updated_at, stripe_customer_id",
       )
       .eq("user_id", context.userId)
       .order("updated_at", { ascending: false })
@@ -74,6 +75,7 @@ export const getMyEntitlements = createServerFn({ method: "POST" })
       lookupsLimit: isPro ? -1 : 8,
       currentPeriodEnd,
       cancelAtPeriodEnd: !!sub?.cancel_at_period_end,
+      hasStripeCustomer: !!(sub as any)?.stripe_customer_id,
     };
   });
 
