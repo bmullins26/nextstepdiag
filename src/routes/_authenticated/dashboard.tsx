@@ -177,6 +177,10 @@ function DashboardPage() {
           ))}
         </section>
 
+        <section className="mt-8">
+          <BillingPanel />
+        </section>
+
         <section className="mt-8 grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="glass-card p-5">
             <div className="flex items-center justify-between">
