@@ -59,23 +59,15 @@ function buildContent(file: z.infer<typeof FileInput>, text: string): Block[] {
 export const analyzeDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => FileInput.parse(d))
-  .handler(async (ctx) => {
+  .handler(async ({ data, context }) => {
     try {
-      await enforceLookupQuota(ctx.context.userId);
+      await enforceLookupQuota(context.userId);
     } catch (e) {
       if (e instanceof QuotaExceededError) {
-        return {
-          quotaExceeded: true as const,
-          quota: { used: e.used, limit: e.limit },
-        } as any;
+        return { quotaExceeded: true, quota: { used: e.used, limit: e.limit } } as any;
       }
       throw e;
     }
-    return _analyzeDocumentImpl(ctx);
-  });
-
-async function _analyzeDocumentImpl({ data, context }: any) {
-  .handler(async ({ data, context }) => {
     const gateway = getGateway();
     const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
