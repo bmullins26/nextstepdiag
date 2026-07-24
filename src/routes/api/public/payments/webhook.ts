@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { type StripeEnv, verifyWebhook } from "@/lib/stripe.server";
 
-let _supabase: ReturnType<typeof createClient> | null = null;
+let _supabase: SupabaseClient | null = null;
 function getSupabase() {
   if (!_supabase) {
     _supabase = createClient(
@@ -54,7 +54,7 @@ async function upsertSubscription(sub: any, env: StripeEnv) {
         : null,
       cancel_at_period_end: !!sub.cancel_at_period_end,
       updated_at: new Date().toISOString(),
-    },
+    } as any,
     { onConflict: "user_id" },
   );
 }
@@ -69,7 +69,7 @@ async function markCanceled(sub: any, env: StripeEnv) {
       status: "canceled",
       plan_type: null,
       updated_at: new Date().toISOString(),
-    })
+    } as any)
     .eq("user_id", userId)
     .eq("environment", env);
 }
@@ -95,7 +95,7 @@ async function handleCheckoutCompleted(session: any, env: StripeEnv) {
       current_period_end: periodEnd,
       cancel_at_period_end: true,
       updated_at: new Date().toISOString(),
-    },
+    } as any,
     { onConflict: "user_id" },
   );
 }
