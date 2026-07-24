@@ -16,6 +16,7 @@ import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CheckoutReturnRouteImport } from './routes/checkout.return'
+import { Route as AuthenticatedTechTalkRouteImport } from './routes/_authenticated/tech-talk'
 import { Route as AuthenticatedRepairInsightsTestRouteImport } from './routes/_authenticated/repair-insights-test'
 import { Route as AuthenticatedOwnerRouteImport } from './routes/_authenticated/owner'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
@@ -73,6 +74,11 @@ const CheckoutReturnRoute = CheckoutReturnRouteImport.update({
   id: '/checkout/return',
   path: '/checkout/return',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedTechTalkRoute = AuthenticatedTechTalkRouteImport.update({
+  id: '/tech-talk',
+  path: '/tech-talk',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedRepairInsightsTestRoute =
   AuthenticatedRepairInsightsTestRouteImport.update({
@@ -217,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/owner': typeof AuthenticatedOwnerRouteWithChildren
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/tech-talk': typeof AuthenticatedTechTalkRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByTo {
   '/history': typeof AuthenticatedHistoryRouteWithChildren
   '/owner': typeof AuthenticatedOwnerRouteWithChildren
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/tech-talk': typeof AuthenticatedTechTalkRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -281,6 +289,7 @@ export interface FileRoutesById {
   '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
   '/_authenticated/owner': typeof AuthenticatedOwnerRouteWithChildren
   '/_authenticated/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
+  '/_authenticated/tech-talk': typeof AuthenticatedTechTalkRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -314,6 +323,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/owner'
     | '/repair-insights-test'
+    | '/tech-talk'
     | '/checkout/return'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/owner'
     | '/repair-insights-test'
+    | '/tech-talk'
     | '/checkout/return'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -377,6 +388,7 @@ export interface FileRouteTypes {
     | '/_authenticated/history'
     | '/_authenticated/owner'
     | '/_authenticated/repair-insights-test'
+    | '/_authenticated/tech-talk'
     | '/checkout/return'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -461,6 +473,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/checkout/return'
       preLoaderRoute: typeof CheckoutReturnRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/tech-talk': {
+      id: '/_authenticated/tech-talk'
+      path: '/tech-talk'
+      fullPath: '/tech-talk'
+      preLoaderRoute: typeof AuthenticatedTechTalkRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/repair-insights-test': {
       id: '/_authenticated/repair-insights-test'
@@ -692,6 +711,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
   AuthenticatedOwnerRoute: typeof AuthenticatedOwnerRouteWithChildren
   AuthenticatedRepairInsightsTestRoute: typeof AuthenticatedRepairInsightsTestRoute
+  AuthenticatedTechTalkRoute: typeof AuthenticatedTechTalkRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -703,6 +723,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
   AuthenticatedOwnerRoute: AuthenticatedOwnerRouteWithChildren,
   AuthenticatedRepairInsightsTestRoute: AuthenticatedRepairInsightsTestRoute,
+  AuthenticatedTechTalkRoute: AuthenticatedTechTalkRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
