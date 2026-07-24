@@ -27,13 +27,26 @@ function periodMonth(): string {
 export const getMyEntitlements = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<Entitlements> => {
-    const { data: sub } = await context.supabase
+    // Grandfathered rows have environment='sandbox' by default; keep the
+    // most recent row regardless of env so a returning live user still
+    // sees their sandbox trial state until the live row lands.
+    const { data: subs } = await context.supabase
       .from("subscriptions")
       .select(
-        "tier, plan_type, status, current_period_end, cancel_at_period_end",
+        "tier, plan_type, status, current_period_end, cancel_at_period_end, environment, updated_at",
       )
       .eq("user_id", context.userId)
-      .maybeSingle();
+      .order("updated_at", { ascending: false })
+      .limit(5);
+    // Prefer an active pro row over an older canceled one.
+    const sub =
+      (subs ?? []).find(
+        (s) =>
+          s.tier === "pro" &&
+          (s.plan_type === "grandfathered" ||
+            (s.current_period_end &&
+              new Date(s.current_period_end as string) > new Date())),
+      ) ?? (subs ?? [])[0];
 
     const { data: usage } = await context.supabase
       .from("usage_counters")
@@ -167,6 +180,9 @@ export const createBillingPortalSession = createServerFn({ method: "POST" })
         .from("subscriptions")
         .select("stripe_customer_id")
         .eq("user_id", context.userId)
+        .eq("environment", data.environment)
+        .order("updated_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (!sub?.stripe_customer_id) {
