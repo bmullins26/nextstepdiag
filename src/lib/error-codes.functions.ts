@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { enforceLookupQuota, QuotaExceededError } from "./billing/quota.server";
 
 const Input = z.object({
   brand: z.string().min(1),
@@ -61,6 +62,21 @@ export const researchErrorCode = createServerFn({ method: "POST" })
         source: "cache" as const,
         result: cached as unknown as ErrorCodeResult,
       };
+    }
+
+    // 2a) Quota check — only bill on fresh AI research, not cache hits.
+    try {
+      await enforceLookupQuota(context.userId);
+    } catch (e) {
+      if (e instanceof QuotaExceededError) {
+        return {
+          notFound: true as const,
+          source: "quota" as const,
+          quotaExceeded: true,
+          quota: { used: e.used, limit: e.limit },
+        } as any;
+      }
+      throw e;
     }
 
     // 2) Research with Lovable AI
