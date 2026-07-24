@@ -452,6 +452,11 @@ function DocumentsPage() {
           </div>
         </section>
       </div>
+      <UpgradeDialog
+        open={quotaOpen}
+        onOpenChange={setQuotaOpen}
+        reason="You've reached your free monthly AI lookup limit. Upgrade to keep analyzing documents."
+      />
     </main>
   );
 }
