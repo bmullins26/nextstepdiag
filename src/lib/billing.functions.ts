@@ -203,9 +203,12 @@ export const createBillingPortalSession = createServerFn({ method: "POST" })
     },
   );
 
-// Record a week-pass purchase into subscriptions on successful checkout
-// (used by the return page as a client fallback in addition to the webhook).
-export const finalizeWeekPass = createServerFn({ method: "POST" })
+// Client-side fallback for the /checkout/return page. The webhook is the
+// source of truth; this only nudges the DB if webhook delivery is delayed.
+// Handles both week-pass (one-time) and subscription checkouts, and honors
+// week-pass stacking by extending current_period_end when a pass is still
+// active.
+export const finalizeCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z.object({
@@ -217,21 +220,49 @@ export const finalizeWeekPass = createServerFn({ method: "POST" })
     try {
       const stripe = createStripeClient(data.environment as StripeEnv);
       const session = await stripe.checkout.sessions.retrieve(data.sessionId);
-      if (session.payment_status !== "paid" || session.mode !== "payment") {
-        return { ok: false, error: "Session not paid" };
+      // Subscription checkouts flip to "paid" only after the subscription
+      // becomes active; treat them as ok once Stripe accepts the session
+      // and rely on the webhook for canonical state.
+      if (
+        session.status !== "complete" &&
+        session.payment_status !== "paid"
+      ) {
+        return { ok: false, error: "Session not complete" };
       }
       const metadataUserId = session.metadata?.userId;
       if (metadataUserId !== context.userId) {
         return { ok: false, error: "User mismatch" };
+      }
+      // For subscription mode, the webhook writes the row — nothing else
+      // to do here.
+      if (session.mode !== "payment") {
+        return { ok: true };
       }
       const customerId =
         typeof session.customer === "string"
           ? session.customer
           : session.customer?.id ?? null;
       const priceId = session.metadata?.priceId ?? "pro_week";
-      const periodEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      // Week-pass stacking: if an active week_pass already exists in this
+      // env, extend its current_period_end by 7 more days rather than
+      // overwrite.
+      const { data: existing } = await supabaseAdmin
+        .from("subscriptions")
+        .select("current_period_end, plan_type, status")
+        .eq("user_id", context.userId)
+        .eq("environment", data.environment)
+        .maybeSingle();
+      const now = Date.now();
+      const activeUntil =
+        existing?.plan_type === "week_pass" &&
+        existing?.current_period_end &&
+        new Date(existing.current_period_end as string).getTime() > now
+          ? new Date(existing.current_period_end as string).getTime()
+          : now;
+      const periodEnd = new Date(activeUntil + 7 * 24 * 60 * 60 * 1000).toISOString();
+
       await supabaseAdmin.from("subscriptions").upsert(
         {
           user_id: context.userId,
@@ -241,7 +272,7 @@ export const finalizeWeekPass = createServerFn({ method: "POST" })
           stripe_customer_id: customerId,
           price_id: priceId,
           environment: data.environment,
-          current_period_start: new Date().toISOString(),
+          current_period_start: new Date(now).toISOString(),
           current_period_end: periodEnd,
           cancel_at_period_end: true,
           updated_at: new Date().toISOString(),
@@ -250,7 +281,10 @@ export const finalizeWeekPass = createServerFn({ method: "POST" })
       );
       return { ok: true };
     } catch (error) {
-      console.error("[billing] finalize week pass error:", error);
+      console.error("[billing] finalize error:", error);
       return { ok: false, error: getStripeErrorMessage(error) };
     }
   });
+
+// Backwards-compat alias so any existing imports still resolve.
+export const finalizeWeekPass = finalizeCheckout;
