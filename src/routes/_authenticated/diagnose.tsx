@@ -274,6 +274,10 @@ function DiagnosePage() {
           sessionId: sessionId ?? null,
         },
       });
+      if (r && (r as any).quotaExceeded) {
+        setQuotaOpen(true);
+        return;
+      }
       setStep(r as Step);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Diagnostic engine error.");
