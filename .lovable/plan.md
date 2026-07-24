@@ -1,84 +1,73 @@
 
-## Problem
+## Paywall Structure — Free vs Pro (with grandfathering)
 
-`Maytag MED7230HW3 / ME0305172` (real DOM 01/2025) is coming back wrong. Root causes to address:
+### Grandfathering rule
 
-1. `callApplianceAgeApi` runs only once against `authMethod="both"`. If RapidAPI is degraded, returns a redirect/HTML, or the plan quota lapses, we silently fall through to the local decoder with no visibility.
-2. Local Whirlpool/Maytag rules and API result are never reconciled — whichever one "wins" the priority ladder is shown as truth, even if the other two disagree.
-3. Web corroboration only runs when the local decoder has ambiguous candidates. If the API returns confidently-wrong data, nothing challenges it.
-4. There's no user-facing way to correct a bad year even though `age_decode_ground_truth` already exists.
+Every user who exists at the time this ships is unaffected by the paywall:
+- Migration inserts a `subscriptions` row for **every existing `auth.users` id** with `tier='pro'`, `status='active'`, `plan_type='grandfathered'`, `current_period_end=null` (never expires), `stripe_customer_id=null`.
+- `has_pro_access()` treats `plan_type='grandfathered'` as always Pro (no period-end check).
+- New signups after deploy start on Free with the 8/mo quota unless they subscribe.
+- Owner dashboard gets a "Grandfathered" filter and the ability to revoke a specific user's grandfathered status if ever needed.
 
-## Fix
+### Tiers
 
-### 1. Harden the RapidAPI client (`src/lib/appliance-age-api.server.ts`)
+**Free** (new signups only) — 8 AI-powered lookups per calendar month across diagnose, age verify, error code lookup, document assistant. Full Community, history, outcome capture. No tech sheet upload, no Tech Talk.
 
-- Retry with exponential backoff (2 tries) on 5xx / network / timeout.
-- Follow the auth-method fallback chain automatically inside `callApplianceAgeApi`: try `both` → `headers` → `api_token`. If all three fail, return a structured `error` with the last status body so the caller sees why.
-- Treat HTML/redirect responses (302, `<html`, homespy login page) as failures even when status is 2xx.
-- Add a lightweight `pingApplianceAgeApi()` used by the owner diagnostics panel and by a scheduled health check (logged to `appliance_age_api_log` with `event='health_check'`).
+**Pro** — $1 / 7-day pass · $9.99 / month · $99 / year (2 months free). Unlimited lookups, Tech Sheet upload, Tech Talk.
 
-### 2. Always cross-reference (`src/lib/serial-decode.functions.ts` + new `src/lib/age-verify/reconcile.server.ts`)
+### Data model (migration)
 
-Replace the current "API wins if present" logic with a reconciler that runs on **every** decode when a serial is provided:
+`public.subscriptions`
+- `user_id uuid PK → auth.users`
+- `tier` (`free` | `pro`), `status` (`active` | `canceled` | `past_due` | `trialing` | `grandfathered`)
+- `plan_type` (`week_pass` | `monthly` | `annual` | `grandfathered`)
+- `stripe_customer_id`, `stripe_subscription_id`
+- `current_period_end timestamptz` (nullable for grandfathered)
+- `cancel_at_period_end bool`, timestamps
+- RLS: user selects own; service_role full
+- **Backfill INSERT** for every existing `auth.users.id` as grandfathered Pro
+- Trigger on `auth.users` insert: new users get a `tier='free'` row (no grandfather)
 
-```text
-Sources (parallel):
-  A. Cache lookup (unchanged)
-  B. RapidAPI (hardened; A/B tested)
-  C. Local decoder (unchanged)
-  D. Firecrawl web sweep (existing corroborateAge, ALWAYS on when serial present)
+`public.usage_counters` — `(user_id, period_month date)` PK, `lookups_used int`. RLS: own row.
 
-Reconcile:
-  - Collect (year, month?, confidence, weight, sourceType) tuples.
-  - Weights: OEM manual/spec sheet 1.0, RapidAPI 0.85, retailer listing 0.6,
-    local rule 0.55, review/community 0.35.
-  - Score each candidate year = Σ(weight × confidence). Bonus if ≥2 source
-    types agree; penalty if a high-weight source explicitly contradicts.
-  - Pick highest score. Confidence tier: High (≥2 independent sources agree
-    AND top score >> second), Medium (single strong source or weak agreement),
-    Low (only one source or conflict unresolved).
-  - Record every source & score in the response for the UI's "Sources" list
-    and in `age_decode_attempts.metadata` for later analysis.
-```
+`public.tech_talk_messages` — `id`, `user_id`, `channel`, `body`, `parent_id`, `created_at`. RLS gated by `has_pro_access(auth.uid())`.
 
-Existing helpers reused: `corroborateAge()` (already Firecrawl-backed with source-type weights), `decodeAge()`, `lookupApplianceAgeWithCache()`. New file only contains the reconciler + scorer.
+Functions:
+- `has_pro_access(_user_id uuid)` — true if row exists with `tier='pro'` AND (`plan_type='grandfathered'` OR `current_period_end > now()`).
+- `increment_lookup(_user_id uuid)` — bypasses when Pro; else atomically bumps monthly counter under limit 8; returns `{allowed, used, limit}`.
 
-### 3. Fix the specific Maytag failure
+### Server functions (`src/lib/billing.functions.ts`)
 
-`ME0305172` — leading letters `ME` are a Whirlpool/Maytag plant code (Marion, OH), digits `03` = week 03, `05` looks like year but Whirlpool 12-digit Maytag serials from 2020+ use a different offset. Add a rule for the current 9-char `LL#######` Amana/Maytag format (used since ~2015) that decodes positions 3–4 as year and 5–6 as week, and register it in `src/lib/age-decoder/rules/whirlpool.ts`. Reconciler + web search will catch anything the rule still misses.
+- `getMyEntitlements()` → `{ tier, planType, isGrandfathered, lookupsUsed, lookupsLimit, currentPeriodEnd, cancelAtPeriodEnd }`
+- `createCheckoutSession({ plan })` — Stripe Checkout
+- `createBillingPortalSession()` — Stripe customer portal
+- Wrap `runDiagnostic`, serial decode/age verify, error code lookup, document assistant with `increment_lookup`; return `{ error: 'quota_exceeded' }` on deny.
 
-### 4. "Report wrong year" (UI)
+Public route `src/routes/api/public/stripe-webhook.ts` — HMAC verify, upsert subscription on `checkout.session.completed`, `customer.subscription.updated/deleted`; `week_pass` sets `current_period_end = now() + 7 days`.
 
-- In the age card (`src/components/verify-appliance.tsx` region), when a decoded year is shown, add a small "Not right?" button.
-- Opens a `Dialog` with: correct year (required), correct month (optional), source (data plate / receipt / owner manual / other), notes.
-- On submit, calls existing `submitKnownYear` server fn (already in `src/lib/age-ground-truth.functions.ts`), then re-runs decode with a `groundTruthHint` flag that boosts the user-provided year in the reconciler and refreshes the display.
-- Shows a subtle "Thanks — updated" toast; the corrected value is now the source of truth for this (brand, model, serial) via the existing upsert.
+### UI
 
-### 5. Owner diagnostics
+- `paywall/upgrade-dialog.tsx` — three plan cards (Week $1 / Monthly $9.99 / Annual $99 "2 months free")
+- `paywall/usage-meter.tsx` — "X of 8 lookups used" chip; hidden for Pro/grandfathered
+- Account Settings dialog: shows "Grandfathered — thanks for being an early user" for grandfathered accounts; "Upgrade" for Free; "Manage subscription" (Stripe portal) for paid Pro
+- Tech Sheet upload gated by `has_pro_access`
+- New route `src/routes/_authenticated/tech-talk.tsx` + sidebar link (lock badge for Free)
+- Diagnose / Age Verify / Error Codes / Documents: intercept `quota_exceeded` → open upgrade dialog
+- Owner dashboard: subscribers tab with filter incl. Grandfathered, revoke action
 
-Extend the existing owner API tester (`testApplianceAgeApiFn`) response so the owner panel shows: last successful call time, current auth method working, and cumulative success rate from `appliance_age_api_log` over 24h/7d.
+### Stripe setup
 
-## Technical notes
+- `stripe--enable_stripe_payments` (seamless)
+- Three prices: Week Pass ($1 one-time, 7-day access), Monthly ($9.99 recurring), Annual ($99 recurring)
+- Secrets: `STRIPE_PRICE_WEEK`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `STRIPE_WEBHOOK_SECRET`
 
-- No new tables. `age_decode_attempts` already has enough columns; sources list stored in the existing `metadata`-like fields (add a JSONB column if none exists — will confirm via a small migration in step 1 of build).
-- `submitKnownYear` already exists; only wiring up UI + reconciler hint.
-- No new secrets; Firecrawl + RapidAPI keys are already present.
-- Firecrawl cost control: reuse existing 90-day `age_decode_corroborations` cache keyed by `(brand_key, model_number)`; cache hits are free.
-- All logic in server functions; no client-side API keys.
+### Rollout
 
-## Out of scope
-
-- Rewriting the Firecrawl provider selection or adding new brand rule files beyond the one Maytag/Amana rule.
-- Replacing RapidAPI with a different provider.
-- Batch re-verification of historical `age_decode_attempts`.
-
-## Files touched (build phase)
-
-- `src/lib/appliance-age-api.server.ts` — retries + auth fallback + HTML detection.
-- `src/lib/appliance-age.functions.ts` — plumb structured errors through.
-- `src/lib/age-verify/reconcile.server.ts` — NEW.
-- `src/lib/serial-decode.functions.ts` — call reconciler, return sources array.
-- `src/lib/age-decoder/rules/whirlpool.ts` — add Maytag 9-char rule.
-- `src/lib/age-ground-truth.functions.ts` — accept optional hint replay flag.
-- `src/components/verify-appliance.tsx` (or the current age card) — "Report wrong year" dialog + sources list.
-- One migration: add `sources JSONB` column to `age_decode_attempts` if not already present.
+1. Enable Stripe payments
+2. Migration (tables + `has_pro_access` + `increment_lookup` + backfill all existing users as grandfathered + new-user trigger)
+3. Billing server fns + Stripe webhook
+4. Quota wrap on 4 AI server fns
+5. Paywall UI + Account Settings integration
+6. Tech Sheet upload gate
+7. Tech Talk route
+8. QA: existing account stays unlimited with "Grandfathered" badge; new test account hits cap → upgrade → week pass → webhook grants Pro → Tech Talk accessible → cancel via portal
