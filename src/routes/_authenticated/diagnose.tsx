@@ -37,6 +37,7 @@ import {
   setSessionStatus,
 } from "@/lib/sessions.functions";
 import { z } from "zod";
+import { UpgradeDialog } from "@/components/paywall/upgrade-dialog";
 
 export const Route = createFileRoute("/_authenticated/diagnose")({
   head: () => ({
@@ -428,6 +429,11 @@ function DiagnosePage() {
           </div>
         )}
       </div>
+      <UpgradeDialog
+        open={quotaOpen}
+        onOpenChange={setQuotaOpen}
+        reason="You've reached your free monthly AI lookup limit. Upgrade to keep diagnosing."
+      />
     </main>
   );
 }
