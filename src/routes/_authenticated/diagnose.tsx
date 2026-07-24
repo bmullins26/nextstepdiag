@@ -120,6 +120,7 @@ function DiagnosePage() {
   const [step, setStep] = useState<Step | null>(null);
   const [thinking, setThinking] = useState(false);
   const [freeText, setFreeText] = useState("");
+  const [quotaOpen, setQuotaOpen] = useState(false);
   const next = useServerFn(nextDiagnosticStep);
 
   // Current Findings (things the tech has already verified before/during the call)
