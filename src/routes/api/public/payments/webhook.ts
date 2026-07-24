@@ -81,7 +81,21 @@ async function handleCheckoutCompleted(session: any, env: StripeEnv) {
   if (!userId) return;
   if (planTypeFor(priceId) !== "week_pass") return;
 
-  const periodEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  // Stacking: extend an active week-pass rather than overwrite it.
+  const { data: existing } = await getSupabase()
+    .from("subscriptions")
+    .select("current_period_end, plan_type")
+    .eq("user_id", userId)
+    .eq("environment", env)
+    .maybeSingle();
+  const now = Date.now();
+  const activeUntil =
+    (existing as any)?.plan_type === "week_pass" &&
+    (existing as any)?.current_period_end &&
+    new Date((existing as any).current_period_end).getTime() > now
+      ? new Date((existing as any).current_period_end).getTime()
+      : now;
+  const periodEnd = new Date(activeUntil + 7 * 24 * 60 * 60 * 1000).toISOString();
   await getSupabase().from("subscriptions").upsert(
     {
       user_id: userId,
@@ -91,7 +105,7 @@ async function handleCheckoutCompleted(session: any, env: StripeEnv) {
       stripe_customer_id: session.customer,
       price_id: priceId,
       environment: env,
-      current_period_start: new Date().toISOString(),
+      current_period_start: new Date(now).toISOString(),
       current_period_end: periodEnd,
       cancel_at_period_end: true,
       updated_at: new Date().toISOString(),

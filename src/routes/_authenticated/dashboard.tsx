@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { OwnerPanels } from "@/components/owner-panels";
 import { PendingRepairs } from "@/components/pending-repairs";
+import { BillingPanel } from "@/components/paywall/billing-panel";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -174,6 +175,10 @@ function DashboardPage() {
               </div>
             </Link>
           ))}
+        </section>
+
+        <section className="mt-8">
+          <BillingPanel />
         </section>
 
         <section className="mt-8 grid gap-4 lg:grid-cols-[1fr_320px]">

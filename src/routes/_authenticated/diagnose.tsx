@@ -37,6 +37,7 @@ import {
   setSessionStatus,
 } from "@/lib/sessions.functions";
 import { z } from "zod";
+import { UpgradeDialog } from "@/components/paywall/upgrade-dialog";
 
 export const Route = createFileRoute("/_authenticated/diagnose")({
   head: () => ({
@@ -120,6 +121,7 @@ function DiagnosePage() {
   const [step, setStep] = useState<Step | null>(null);
   const [thinking, setThinking] = useState(false);
   const [freeText, setFreeText] = useState("");
+  const [quotaOpen, setQuotaOpen] = useState(false);
   const next = useServerFn(nextDiagnosticStep);
 
   // Current Findings (things the tech has already verified before/during the call)
@@ -274,6 +276,10 @@ function DiagnosePage() {
           sessionId: sessionId ?? null,
         },
       });
+      if (r && (r as any).quotaExceeded) {
+        setQuotaOpen(true);
+        return;
+      }
       setStep(r as Step);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Diagnostic engine error.");
@@ -423,6 +429,11 @@ function DiagnosePage() {
           </div>
         )}
       </div>
+      <UpgradeDialog
+        open={quotaOpen}
+        onOpenChange={setQuotaOpen}
+        reason="You've reached your free monthly AI lookup limit. Upgrade to keep diagnosing."
+      />
     </main>
   );
 }

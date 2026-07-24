@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { APPLIANCE_BRANDS } from "@/lib/appliance-brands";
+import { UpgradeDialog } from "@/components/paywall/upgrade-dialog";
 import {
   researchErrorCode,
   type ErrorCodeResult,
@@ -58,6 +59,7 @@ function ErrorCodesPage() {
   const [modelNumber, setModelNumber] = useState("");
   const [code, setCode] = useState("");
   const [result, setResult] = useState<Result>({ kind: "idle" });
+  const [quotaOpen, setQuotaOpen] = useState(false);
 
   async function onLookup(e: React.FormEvent) {
     e.preventDefault();
@@ -76,6 +78,11 @@ function ErrorCodesPage() {
       const r = await research({
         data: { brand, applianceType, modelNumber: m, code: c },
       });
+      if ((r as any).quotaExceeded) {
+        setQuotaOpen(true);
+        setResult({ kind: "idle" });
+        return;
+      }
       if (r.notFound) setResult({ kind: "missing", brand, code: c });
       else setResult({ kind: "found", row: r.result, source: r.source });
     } catch (err) {
@@ -188,6 +195,11 @@ function ErrorCodesPage() {
           </section>
         </div>
       </div>
+      <UpgradeDialog
+        open={quotaOpen}
+        onOpenChange={setQuotaOpen}
+        reason="You've reached your free monthly AI lookup limit. Upgrade to continue."
+      />
     </main>
   );
 }

@@ -114,7 +114,12 @@ export function UpgradeDialog({
 
         <PaymentTestModeBanner />
 
-        {clientSecret ? (
+        {!configured ? (
+          <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+            Payments aren't set up in this environment yet. Once billing is
+            configured you'll be able to upgrade here.
+          </div>
+        ) : clientSecret ? (
           <div className="mt-4">
             <Button
               variant="ghost"
