@@ -195,6 +195,11 @@ function ErrorCodesPage() {
           </section>
         </div>
       </div>
+      <UpgradeDialog
+        open={quotaOpen}
+        onOpenChange={setQuotaOpen}
+        reason="You've reached your free monthly AI lookup limit. Upgrade to continue."
+      />
     </main>
   );
 }
