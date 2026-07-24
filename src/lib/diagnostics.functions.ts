@@ -81,6 +81,27 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => StepInput.parse(d))
   .handler(async ({ data, context }) => {
+    try {
+      await enforceLookupQuota(context.userId);
+    } catch (e) {
+      if (e instanceof QuotaExceededError) {
+        return {
+          done: true,
+          currentFindings: "",
+          mostLikelyFailure: "",
+          mostLikelyFailures: [] as string[],
+          recommendedNextTest: "",
+          nextQuestion: { text: "", choices: [] as string[], allowFreeText: false },
+          groundingMode: "unknown" as const,
+          groundingSource: null,
+          historicalOutcomes: null,
+          evidence: [] as EvidenceItem[],
+          quotaExceeded: true as const,
+          quota: { used: e.used, limit: e.limit },
+        };
+      }
+      throw e;
+    }
     const gateway = getGateway();
     const historyText = data.history.length
       ? data.history.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join("\n")
