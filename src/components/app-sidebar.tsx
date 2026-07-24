@@ -10,6 +10,8 @@ import {
   LogOut,
   Shield,
   MessagesSquare,
+  MessageCircle,
+  CreditCard,
 } from "lucide-react";
 import {
   Sidebar,
@@ -25,6 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { BrandLogo } from "@/components/brand-logo";
 import { supabase } from "@/integrations/supabase/client";
+import { UsageMeter } from "@/components/paywall/usage-meter";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -32,6 +35,7 @@ const NAV = [
   { to: "/error-codes", label: "Error Codes", icon: AlertTriangle },
   { to: "/documents", label: "Documents", icon: FileText },
   { to: "/community", label: "Community", icon: MessagesSquare },
+  { to: "/tech-talk", label: "Tech Talk", icon: MessageCircle },
   { to: "/history", label: "History", icon: HistoryIcon },
 ] as const;
 
@@ -150,6 +154,21 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
+          {!collapsed && (
+            <SidebarMenuItem>
+              <div className="px-2 py-1.5">
+                <UsageMeter />
+              </div>
+            </SidebarMenuItem>
+          )}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Billing">
+              <Link to="/dashboard" className="flex items-center gap-3">
+                <CreditCard className="h-4 w-4 shrink-0" />
+                <span>Billing</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip={email ?? "Account"}
