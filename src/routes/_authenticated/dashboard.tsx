@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { OwnerPanels } from "@/components/owner-panels";
 import { PendingRepairs } from "@/components/pending-repairs";
+import { BillingPanel } from "@/components/paywall/billing-panel";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
