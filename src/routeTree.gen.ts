@@ -27,6 +27,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedCommunityRouteImport } from './routes/_authenticated/community'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as AuthenticatedOwnerIndexRouteImport } from './routes/_authenticated/owner/index'
 import { Route as AuthenticatedOwnerToolsRouteImport } from './routes/_authenticated/owner/tools'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
 import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_authenticated/community.search'
@@ -133,6 +134,11 @@ const Char91DotmcpChar93ListToolsRoute =
     path: '/.mcp/list-tools',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedOwnerIndexRoute = AuthenticatedOwnerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedOwnerRoute,
+} as any)
 const AuthenticatedOwnerToolsRoute = AuthenticatedOwnerToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
@@ -233,6 +239,7 @@ export interface FileRoutesByFullPath {
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
+  '/owner/': typeof AuthenticatedOwnerIndexRoute
   '/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -253,7 +260,6 @@ export interface FileRoutesByTo {
   '/documents': typeof AuthenticatedDocumentsRoute
   '/error-codes': typeof AuthenticatedErrorCodesRoute
   '/history': typeof AuthenticatedHistoryRouteWithChildren
-  '/owner': typeof AuthenticatedOwnerRouteWithChildren
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/tech-talk': typeof AuthenticatedTechTalkRoute
   '/checkout/return': typeof CheckoutReturnRoute
@@ -265,6 +271,7 @@ export interface FileRoutesByTo {
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
+  '/owner': typeof AuthenticatedOwnerIndexRoute
   '/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -299,6 +306,7 @@ export interface FileRoutesById {
   '/_authenticated/community/search': typeof AuthenticatedCommunitySearchRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
   '/_authenticated/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
+  '/_authenticated/owner/': typeof AuthenticatedOwnerIndexRoute
   '/_authenticated/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -333,6 +341,7 @@ export interface FileRouteTypes {
     | '/community/search'
     | '/history/$id'
     | '/owner/tools'
+    | '/owner/'
     | '/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
@@ -353,7 +362,6 @@ export interface FileRouteTypes {
     | '/documents'
     | '/error-codes'
     | '/history'
-    | '/owner'
     | '/repair-insights-test'
     | '/tech-talk'
     | '/checkout/return'
@@ -365,6 +373,7 @@ export interface FileRouteTypes {
     | '/community/search'
     | '/history/$id'
     | '/owner/tools'
+    | '/owner'
     | '/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
@@ -398,6 +407,7 @@ export interface FileRouteTypes {
     | '/_authenticated/community/search'
     | '/_authenticated/history/$id'
     | '/_authenticated/owner/tools'
+    | '/_authenticated/owner/'
     | '/_authenticated/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
@@ -551,6 +561,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/owner/': {
+      id: '/_authenticated/owner/'
+      path: '/'
+      fullPath: '/owner/'
+      preLoaderRoute: typeof AuthenticatedOwnerIndexRouteImport
+      parentRoute: typeof AuthenticatedOwnerRoute
+    }
     '/_authenticated/owner/tools': {
       id: '/_authenticated/owner/tools'
       path: '/tools'
@@ -693,10 +710,12 @@ const AuthenticatedOwnerToolsRouteWithChildren =
 
 interface AuthenticatedOwnerRouteChildren {
   AuthenticatedOwnerToolsRoute: typeof AuthenticatedOwnerToolsRouteWithChildren
+  AuthenticatedOwnerIndexRoute: typeof AuthenticatedOwnerIndexRoute
 }
 
 const AuthenticatedOwnerRouteChildren: AuthenticatedOwnerRouteChildren = {
   AuthenticatedOwnerToolsRoute: AuthenticatedOwnerToolsRouteWithChildren,
+  AuthenticatedOwnerIndexRoute: AuthenticatedOwnerIndexRoute,
 }
 
 const AuthenticatedOwnerRouteWithChildren =
