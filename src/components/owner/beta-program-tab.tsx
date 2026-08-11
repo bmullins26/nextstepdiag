@@ -15,8 +15,10 @@ import {
   PlayCircle,
   Ban,
   RotateCcw,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EmailComposeDialog, type ComposeTarget } from "@/components/owner/email-compose-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -494,6 +496,7 @@ function ApplicationRow({ app, onOpen, selected, onToggle }: { app: any; onOpen:
   const accStatus = app.access_status as string;
   const labels = (app.owner_labels ?? []) as string[];
   const rating = app.owner_rating as number | null;
+  const [emailTarget, setEmailTarget] = useState<ComposeTarget>(null);
 
   return (
     <tr className="border-t border-border/60 align-middle">
@@ -516,6 +519,7 @@ function ApplicationRow({ app, onOpen, selected, onToggle }: { app: any; onOpen:
       </td>
       <td className="py-2 pr-2 text-xs text-muted-foreground">{fmtDate(app.created_at)}</td>
       <td className="py-2 pr-2 text-right">
+        <EmailComposeDialog target={emailTarget} onOpenChange={(o) => !o && setEmailTarget(null)} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline" disabled={busy} className="h-7 text-xs">
@@ -524,6 +528,9 @@ function ApplicationRow({ app, onOpen, selected, onToggle }: { app: any; onOpen:
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onOpen}>View Application</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setEmailTarget({ email: app.email, name: `${app.first_name ?? ""} ${app.last_name ?? ""}`.trim() || null })}>
+              <Mail className="mr-2 h-4 w-4" /> Send email
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             {appStatus === "pending" || appStatus === "waitlisted" ? (
               <DropdownMenuItem onClick={() => review.mutate("approved")}>
