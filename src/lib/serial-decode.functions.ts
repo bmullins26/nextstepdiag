@@ -283,13 +283,26 @@ Identify the appliance. Do not state any date or age.`,
                 confidence: outcome.confidence,
                 year: outcome.manufactureYear,
                 month: outcome.manufactureMonth,
+                confidencePercent: outcome.confidencePercent,
+                rejectedCount: outcome.rejected.length,
               }
             : {
                 status: "unknown",
                 ruleId: outcome.appliedRule?.id ?? null,
                 unknownReason: outcome.unknownReason,
+                rejectedCount: outcome.rejected.length,
+                rejectionReason: outcome.rejected[0]?.reason ?? null,
               },
       });
+    }
+
+    if (hasSerial && outcome && outcome.rejected.length) {
+      console.log(
+        `[age-decoder/rejected] brand=${data.brand} model=${data.modelNumber} serial=${serial} ` +
+          outcome.rejected
+            .map((r) => `${r.ruleId}:${r.year}${r.month ? `-${r.month}` : ""}(${r.reason})`)
+            .join(" "),
+      );
     }
 
     // 5) Build the response. PRIMARY provider = Appliance Age Finder API.
@@ -429,6 +442,19 @@ Identify the appliance. Do not state any date or age.`,
       ruleName: appliedRule?.name ?? "No rule matched",
       ruleBreakdown: outcome?.breakdown ?? "",
       unknownReason: outcome?.status === "unknown" ? outcome.unknownReason : null,
+      decodeLogic: outcome
+        ? {
+            status: outcome.status,
+            ruleId: outcome.appliedRule?.id ?? null,
+            ruleName: outcome.appliedRule?.name ?? null,
+            steps: outcome.steps,
+            validation: outcome.validation,
+            rejected: outcome.rejected,
+            attemptedRules: outcome.attemptedRules,
+            confidenceBreakdown: outcome.confidenceBreakdown,
+            communityConfirmations: 0,
+          }
+        : null,
       candidates: (outcome?.candidates ?? []).map((c) => ({
         year: c.year,
         month: c.month ?? null,
