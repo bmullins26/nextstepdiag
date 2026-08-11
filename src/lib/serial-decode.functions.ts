@@ -29,8 +29,22 @@ async function logAttempt(opts: {
   modelNumber: string;
   serialNumber: string;
   outcome:
-    | { status: "ok"; ruleId: string; confidence: string; year: number; month: number | null }
-    | { status: "unknown"; ruleId?: string | null; unknownReason: string };
+    | {
+        status: "ok";
+        ruleId: string;
+        confidence: string;
+        year: number;
+        month: number | null;
+        confidencePercent?: number;
+        rejectedCount?: number;
+      }
+    | {
+        status: "unknown";
+        ruleId?: string | null;
+        unknownReason: string;
+        rejectedCount?: number;
+        rejectionReason?: string | null;
+      };
 }) {
   try {
     await opts.supabase.from("age_decode_attempts").insert({
@@ -46,6 +60,11 @@ async function logAttempt(opts: {
       manufacture_year: opts.outcome.status === "ok" ? opts.outcome.year : null,
       manufacture_month: opts.outcome.status === "ok" ? opts.outcome.month : null,
       unknown_reason: opts.outcome.status === "unknown" ? opts.outcome.unknownReason : null,
+      confidence_percent: opts.outcome.status === "ok" ? opts.outcome.confidencePercent ?? null : null,
+      rejected_count: opts.outcome.rejectedCount ?? 0,
+      rejection_reason:
+        opts.outcome.status === "unknown" ? opts.outcome.rejectionReason ?? null : null,
+      format_id: opts.outcome.status === "ok" ? opts.outcome.ruleId : opts.outcome.ruleId ?? null,
     });
   } catch (e) {
     console.warn("[age-finder] failed to log decode attempt:", e);
@@ -140,8 +159,22 @@ export const decodeAppliance = createServerFn({ method: "POST" })
         apiLookup = null;
       }
 
+      // Model production window + technician cross-checks feed validation and
+      // the weighted confidence engine. Both fail soft to null.
+      const { loadModelWindow, loadCrossChecks } = await import("./age-decoder/model-windows.server");
+      const [modelWindow, crossChecks] = await Promise.all([
+        loadModelWindow(context.supabase, data.brand, data.modelNumber),
+        loadCrossChecks({
+          supabase: context.supabase,
+          manufacturer: data.brand,
+          model: data.modelNumber,
+          serial,
+          apiYear: apiLookup?.manufactureYear ?? null,
+        }),
+      ]);
+
       try {
-        outcome = decodeAge({ brand: data.brand, model: data.modelNumber, serial });
+        outcome = decodeAge({ brand: data.brand, model: data.modelNumber, serial, modelWindow, crossChecks });
         const brandKey = resolveBrand(data.brand) ?? data.brand.toLowerCase();
         const candidateYears = outcome.candidates.map((c) => c.year);
         // ALWAYS corroborate when a serial is present — cross-referencing web
@@ -157,7 +190,14 @@ export const decodeAppliance = createServerFn({ method: "POST" })
               await saveCorroborationCache(brandKey, data.modelNumber, corroboration);
             }
           }
-          outcome = decodeAge({ brand: data.brand, model: data.modelNumber, serial, corroboration });
+          outcome = decodeAge({
+            brand: data.brand,
+            model: data.modelNumber,
+            serial,
+            corroboration,
+            modelWindow,
+            crossChecks,
+          });
         }
       } catch (e) {
         console.warn("[age-decoder] local decode threw — continuing without age:", e);
