@@ -28,6 +28,10 @@ function whirlpoolYearsFromLetter(letter: string): number[] {
  */
 const whirlpoolLetterWeek: Rule = {
   id: "whirlpool.year-letter-week",
+  formatId: "whirlpool.year-letter-week",
+  effectiveFrom: 1973,
+  effectiveTo: null,
+  priority: 90,
   name: "Whirlpool Year-Letter / Week Decoder",
   family: "Whirlpool",
   pattern: /^[A-Z][ABCDEFGHJKLMNPRSTVWXY]\d{2}\d+$/,
@@ -61,6 +65,10 @@ const whirlpoolLetterWeek: Rule = {
  */
 const whirlpoolYearDigit: Rule = {
   id: "whirlpool.year-digit",
+  formatId: "whirlpool.year-digit",
+  effectiveFrom: 1980,
+  effectiveTo: null,
+  priority: 30,
   name: "Whirlpool Year-of-Decade Decoder",
   family: "Whirlpool",
   pattern: /^[A-Z]\d{2}\d+$/,
@@ -98,6 +106,10 @@ const whirlpoolYearDigit: Rule = {
  */
 const whirlpoolModern9: Rule = {
   id: "whirlpool.modern-9char",
+  formatId: "whirlpool.modern-9char",
+  effectiveFrom: 2003,
+  effectiveTo: null,
+  priority: 80,
   name: "Whirlpool/Maytag 9-char Modern Decoder",
   family: "Whirlpool",
   pattern: /^[A-Z]{2}\d{7}$/,

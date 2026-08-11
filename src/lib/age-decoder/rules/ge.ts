@@ -4,6 +4,10 @@ const GE_LETTERS = "ABCDEFGHJKLM"; // 12 letters, skips I
 
 const geMonthYear: Rule = {
   id: "ge.month-year-letters",
+  formatId: "ge.month-year-letters",
+  effectiveFrom: 1970,
+  effectiveTo: null,
+  priority: 80,
   name: "GE Month/Year Letter Decoder",
   family: "GE",
   pattern: /^[ABCDEFGHJKLM][ABCDEFGHJKLM].*/,
