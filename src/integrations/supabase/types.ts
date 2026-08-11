@@ -18,13 +18,17 @@ export type Database = {
         Row: {
           appliance_type: string | null
           confidence: string | null
+          confidence_percent: number | null
           created_at: string
           decoder_version: string
+          format_id: string | null
           id: string
           manufacture_month: number | null
           manufacture_year: number | null
           manufacturer: string
           model_number: string
+          rejected_count: number
+          rejection_reason: string | null
           rule_id: string | null
           serial_number: string
           status: string
@@ -34,13 +38,17 @@ export type Database = {
         Insert: {
           appliance_type?: string | null
           confidence?: string | null
+          confidence_percent?: number | null
           created_at?: string
           decoder_version: string
+          format_id?: string | null
           id?: string
           manufacture_month?: number | null
           manufacture_year?: number | null
           manufacturer: string
           model_number: string
+          rejected_count?: number
+          rejection_reason?: string | null
           rule_id?: string | null
           serial_number: string
           status: string
@@ -50,13 +58,17 @@ export type Database = {
         Update: {
           appliance_type?: string | null
           confidence?: string | null
+          confidence_percent?: number | null
           created_at?: string
           decoder_version?: string
+          format_id?: string | null
           id?: string
           manufacture_month?: number | null
           manufacture_year?: number | null
           manufacturer?: string
           model_number?: string
+          rejected_count?: number
+          rejection_reason?: string | null
           rule_id?: string | null
           serial_number?: string
           status?: string
@@ -1024,6 +1036,48 @@ export type Database = {
           subject?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      model_production_windows: {
+        Row: {
+          brand: string | null
+          created_at: string
+          created_by: string | null
+          discontinued_year: number | null
+          id: string
+          introduced_year: number | null
+          manufacturer: string
+          model_prefix: string
+          replacement_series: string | null
+          source: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          created_by?: string | null
+          discontinued_year?: number | null
+          id?: string
+          introduced_year?: number | null
+          manufacturer: string
+          model_prefix: string
+          replacement_series?: string | null
+          source?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          created_by?: string | null
+          discontinued_year?: number | null
+          id?: string
+          introduced_year?: number | null
+          manufacturer?: string
+          model_prefix?: string
+          replacement_series?: string | null
+          source?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
