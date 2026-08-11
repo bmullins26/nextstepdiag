@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as CheckoutReturnRouteImport } from './routes/checkout.return'
 import { Route as AuthenticatedTechTalkRouteImport } from './routes/_authenticated/tech-talk'
 import { Route as AuthenticatedRepairInsightsTestRouteImport } from './routes/_authenticated/repair-insights-test'
@@ -28,6 +29,7 @@ import { Route as AuthenticatedCommunityRouteImport } from './routes/_authentica
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as AuthenticatedOwnerIndexRouteImport } from './routes/_authenticated/owner/index'
+import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as AuthenticatedOwnerToolsRouteImport } from './routes/_authenticated/owner/tools'
 import { Route as AuthenticatedOwnerPaymentsRouteImport } from './routes/_authenticated/owner/payments'
 import { Route as AuthenticatedOwnerEmailsRouteImport } from './routes/_authenticated/owner/emails'
@@ -38,6 +40,8 @@ import { Route as AuthenticatedCommunityBrowseRouteImport } from './routes/_auth
 import { Route as AuthenticatedCommunityDiscussionIdRouteImport } from './routes/_authenticated/community.$discussionId'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
+import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
+import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -71,6 +75,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
+  id: '/email/unsubscribe',
+  path: '/email/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutReturnRoute = CheckoutReturnRouteImport.update({
@@ -141,6 +150,11 @@ const AuthenticatedOwnerIndexRoute = AuthenticatedOwnerIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedOwnerRoute,
 } as any)
+const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
+  id: '/lovable/email/suppression',
+  path: '/lovable/email/suppression',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedOwnerToolsRoute = AuthenticatedOwnerToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
@@ -198,6 +212,18 @@ const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
   path: '/.lovable/oauth/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LovableEmailTransactionalSendRoute =
+  LovableEmailTransactionalSendRouteImport.update({
+    id: '/lovable/email/transactional/send',
+    path: '/lovable/email/transactional/send',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const LovableEmailTransactionalPreviewRoute =
+  LovableEmailTransactionalPreviewRouteImport.update({
+    id: '/lovable/email/transactional/preview',
+    path: '/lovable/email/transactional/preview',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const LovableEmailQueueProcessRoute =
   LovableEmailQueueProcessRouteImport.update({
     id: '/lovable/email/queue/process',
@@ -245,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/tech-talk': typeof AuthenticatedTechTalkRoute
   '/checkout/return': typeof CheckoutReturnRoute
+  '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
@@ -255,12 +282,15 @@ export interface FileRoutesByFullPath {
   '/owner/emails': typeof AuthenticatedOwnerEmailsRoute
   '/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
+  '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/owner/': typeof AuthenticatedOwnerIndexRoute
   '/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -279,6 +309,7 @@ export interface FileRoutesByTo {
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/tech-talk': typeof AuthenticatedTechTalkRoute
   '/checkout/return': typeof CheckoutReturnRoute
+  '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
@@ -289,12 +320,15 @@ export interface FileRoutesByTo {
   '/owner/emails': typeof AuthenticatedOwnerEmailsRoute
   '/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
+  '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/owner': typeof AuthenticatedOwnerIndexRoute
   '/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -316,6 +350,7 @@ export interface FileRoutesById {
   '/_authenticated/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/_authenticated/tech-talk': typeof AuthenticatedTechTalkRoute
   '/checkout/return': typeof CheckoutReturnRoute
+  '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
@@ -326,12 +361,15 @@ export interface FileRoutesById {
   '/_authenticated/owner/emails': typeof AuthenticatedOwnerEmailsRoute
   '/_authenticated/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/_authenticated/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
+  '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/_authenticated/owner/': typeof AuthenticatedOwnerIndexRoute
   '/_authenticated/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
+  '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -353,6 +391,7 @@ export interface FileRouteTypes {
     | '/repair-insights-test'
     | '/tech-talk'
     | '/checkout/return'
+    | '/email/unsubscribe'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/community/$discussionId'
@@ -363,12 +402,15 @@ export interface FileRouteTypes {
     | '/owner/emails'
     | '/owner/payments'
     | '/owner/tools'
+    | '/lovable/email/suppression'
     | '/owner/'
     | '/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/lovable/email/transactional/preview'
+    | '/lovable/email/transactional/send'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -387,6 +429,7 @@ export interface FileRouteTypes {
     | '/repair-insights-test'
     | '/tech-talk'
     | '/checkout/return'
+    | '/email/unsubscribe'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/community/$discussionId'
@@ -397,12 +440,15 @@ export interface FileRouteTypes {
     | '/owner/emails'
     | '/owner/payments'
     | '/owner/tools'
+    | '/lovable/email/suppression'
     | '/owner'
     | '/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/lovable/email/transactional/preview'
+    | '/lovable/email/transactional/send'
   id:
     | '__root__'
     | '/'
@@ -423,6 +469,7 @@ export interface FileRouteTypes {
     | '/_authenticated/repair-insights-test'
     | '/_authenticated/tech-talk'
     | '/checkout/return'
+    | '/email/unsubscribe'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/community/$discussionId'
@@ -433,12 +480,15 @@ export interface FileRouteTypes {
     | '/_authenticated/owner/emails'
     | '/_authenticated/owner/payments'
     | '/_authenticated/owner/tools'
+    | '/lovable/email/suppression'
     | '/_authenticated/owner/'
     | '/_authenticated/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
+    | '/lovable/email/transactional/preview'
+    | '/lovable/email/transactional/send'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -451,12 +501,16 @@ export interface RootRouteChildren {
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   CheckoutReturnRoute: typeof CheckoutReturnRoute
+  EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
+  LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
+  LovableEmailTransactionalSendRoute: typeof LovableEmailTransactionalSendRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -501,6 +555,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/email/unsubscribe': {
+      id: '/email/unsubscribe'
+      path: '/email/unsubscribe'
+      fullPath: '/email/unsubscribe'
+      preLoaderRoute: typeof EmailUnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkout/return': {
@@ -594,6 +655,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOwnerIndexRouteImport
       parentRoute: typeof AuthenticatedOwnerRoute
     }
+    '/lovable/email/suppression': {
+      id: '/lovable/email/suppression'
+      path: '/lovable/email/suppression'
+      fullPath: '/lovable/email/suppression'
+      preLoaderRoute: typeof LovableEmailSuppressionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/owner/tools': {
       id: '/_authenticated/owner/tools'
       path: '/tools'
@@ -662,6 +730,20 @@ declare module '@tanstack/react-router' {
       path: '/.lovable/oauth/consent'
       fullPath: '/.lovable/oauth/consent'
       preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lovable/email/transactional/send': {
+      id: '/lovable/email/transactional/send'
+      path: '/lovable/email/transactional/send'
+      fullPath: '/lovable/email/transactional/send'
+      preLoaderRoute: typeof LovableEmailTransactionalSendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lovable/email/transactional/preview': {
+      id: '/lovable/email/transactional/preview'
+      path: '/lovable/email/transactional/preview'
+      fullPath: '/lovable/email/transactional/preview'
+      preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lovable/email/queue/process': {
@@ -803,12 +885,16 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   CheckoutReturnRoute: CheckoutReturnRoute,
+  EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
+  LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
+  LovableEmailTransactionalSendRoute: LovableEmailTransactionalSendRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
