@@ -119,7 +119,7 @@ export function computeConfidence(opts: {
 
   // Ambiguity penalty: each additional surviving year makes the answer weaker.
   if (!clearWinner && candidates.length > 1) {
-    const penalty = -Math.min(20, (candidates.length - 1) * 7);
+    const penalty = -Math.min(12, (candidates.length - 1) * 4);
     points.push({
       label: "Ambiguous year cycle",
       points: penalty,
