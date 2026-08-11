@@ -174,7 +174,7 @@ export const getAgeDecoderStats = createServerFn({ method: "POST" })
     const { data: rows, error } = await supabaseAdmin
       .from("age_decode_attempts")
       .select(
-        "decoder_version, manufacturer, status, confidence, rule_id, unknown_reason, model_number, serial_number, created_at",
+        "decoder_version, manufacturer, status, confidence, confidence_percent, rejected_count, rejection_reason, rule_id, unknown_reason, model_number, serial_number, created_at",
       )
       .gte("created_at", since)
       .order("created_at", { ascending: false })
@@ -185,7 +185,8 @@ export const getAgeDecoderStats = createServerFn({ method: "POST" })
     const all: Row[] = rows ?? [];
 
     // Totals (v2 only — v1 rows are for comparison logging).
-    const v2 = all.filter((r) => r.decoder_version === "v2-rule-engine");
+    // Everything that isn't the legacy comparison logger is the current engine.
+    const v2 = all.filter((r) => r.decoder_version !== "v1-legacy");
     const total = v2.length;
     const successful = v2.filter((r) => r.status === "ok").length;
     const unknown = total - successful;
@@ -221,7 +222,7 @@ export const getAgeDecoderStats = createServerFn({ method: "POST" })
         v1: { total: 0, ok: 0 },
         v2: { total: 0, ok: 0 },
       };
-      const bucket = r.decoder_version === "v2-rule-engine" ? e.v2 : e.v1;
+      const bucket = r.decoder_version !== "v1-legacy" ? e.v2 : e.v1;
       bucket.total += 1;
       if (r.status === "ok") bucket.ok += 1;
       mfrMap.set(key, e);
@@ -259,6 +260,35 @@ export const getAgeDecoderStats = createServerFn({ method: "POST" })
         createdAt: r.created_at,
       }));
 
+    // Per-rule analytics — surfaces weak decoding rules so they can be improved.
+    const ruleMap = new Map<
+      string,
+      { ruleId: string; total: number; ok: number; rejected: number; confSum: number; confN: number }
+    >();
+    for (const r of v2) {
+      const key = r.rule_id || "(no rule matched)";
+      const e = ruleMap.get(key) ?? { ruleId: key, total: 0, ok: 0, rejected: 0, confSum: 0, confN: 0 };
+      e.total += 1;
+      if (r.status === "ok") e.ok += 1;
+      e.rejected += (r as any).rejected_count ?? 0;
+      const cp = (r as any).confidence_percent as number | null;
+      if (cp != null) {
+        e.confSum += cp;
+        e.confN += 1;
+      }
+      ruleMap.set(key, e);
+    }
+    const perRule = Array.from(ruleMap.values())
+      .map((e) => ({
+        ruleId: e.ruleId,
+        total: e.total,
+        successful: e.ok,
+        rejectedCandidates: e.rejected,
+        accuracy: e.total ? e.ok / e.total : 0,
+        avgConfidence: e.confN ? Math.round(e.confSum / e.confN) : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
     return {
       total,
       successful,
@@ -268,6 +298,7 @@ export const getAgeDecoderStats = createServerFn({ method: "POST" })
       perManufacturer,
       topUnknownReasons,
       recentUnknowns,
+      perRule,
     };
   });
 

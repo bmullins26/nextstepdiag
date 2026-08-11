@@ -11,6 +11,10 @@ const MONTH_MAP: Record<string, number> = {
 
 const samsungPos7: Rule = {
   id: "samsung.pos7-year-pos8-month",
+  formatId: "samsung.pos7-year-pos8-month",
+  effectiveFrom: 2004,
+  effectiveTo: null,
+  priority: 85,
   name: "Samsung Position 7/8 Year-Month Decoder",
   family: "Samsung",
   pattern: /^.{6}[A-Z][0-9A-C].*/,

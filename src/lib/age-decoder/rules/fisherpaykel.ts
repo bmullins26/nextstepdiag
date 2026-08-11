@@ -4,6 +4,10 @@ import type { Rule } from "../types";
 export const fisherPaykelRules: Rule[] = [
   {
     id: "fisherpaykel.stub",
+    formatId: "fisherpaykel.stub",
+    effectiveFrom: 1970,
+    effectiveTo: null,
+    priority: 10,
     name: "Fisher & Paykel (rule pending)",
     family: "Fisher & Paykel",
     pattern: /.^/,

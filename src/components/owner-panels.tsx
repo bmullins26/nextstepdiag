@@ -822,6 +822,43 @@ function AgeDecoderTab() {
         </div>
       </div>
 
+      <div className="rounded-lg border border-border bg-card/60 p-4">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Rule Analytics (per serial format, last 30d)
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="py-1 text-left">Rule</th>
+                <th className="py-1 text-right">Used</th>
+                <th className="py-1 text-right">Successful</th>
+                <th className="py-1 text-right">Rejected candidates</th>
+                <th className="py-1 text-right">Accuracy</th>
+                <th className="py-1 text-right">Avg confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.perRule ?? []).map((r) => (
+                <tr key={r.ruleId} className="border-t border-border/40">
+                  <td className="py-1 font-mono text-xs">{r.ruleId}</td>
+                  <td className="py-1 text-right">{r.total}</td>
+                  <td className="py-1 text-right">{r.successful}</td>
+                  <td className="py-1 text-right text-muted-foreground">{r.rejectedCandidates}</td>
+                  <td className={`py-1 text-right ${r.accuracy < 0.7 ? "text-amber-300" : ""}`}>
+                    {pct(r.accuracy)}
+                  </td>
+                  <td className="py-1 text-right">{r.avgConfidence ? `${r.avgConfidence}%` : "—"}</td>
+                </tr>
+              ))}
+              {!(data.perRule ?? []).length && (
+                <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">No decodes in the last 30 days.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-lg border border-border bg-card/60 p-4">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

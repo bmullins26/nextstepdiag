@@ -2,6 +2,10 @@ import type { Rule } from "../types";
 
 const bschFD: Rule = {
   id: "bsh.fd-code",
+  formatId: "bsh.fd-code",
+  effectiveFrom: 1990,
+  effectiveTo: null,
+  priority: 90,
   name: "Bosch/Thermador FD-Code Decoder",
   family: "BSH",
   pattern: /FD\s*\d{4}/,

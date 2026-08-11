@@ -9,6 +9,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DecodeLogicPanel, type DecodeLogic } from "@/components/decode-logic-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -76,6 +77,7 @@ export type DecodedAppliance = {
       url?: string;
     }>;
   } | null;
+  decodeLogic?: DecodeLogic | null;
   apiStatus?: {
     ok: boolean;
     statusCode: number;
@@ -367,7 +369,7 @@ export function VerifyAppliance({
             k="Confidence"
             v={
               result.confidencePercent != null
-                ? `${result.confidence} · ${result.confidencePercent}% (cap 80%)`
+                ? `${result.confidence} · ${result.confidencePercent}%`
                 : result.confidence
             }
           />
@@ -390,6 +392,12 @@ export function VerifyAppliance({
                   Age unavailable
                 </span>
               )}
+              {result.decodeLogic && result.decodeLogic.communityConfirmations > 0 ? (
+                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  Community verified · {result.decodeLogic.communityConfirmations} technician
+                  {result.decodeLogic.communityConfirmations === 1 ? "" : "s"} confirmed
+                </span>
+              ) : null}
               {result.reconciled && result.reconciled.agreementCount >= 2 ? (
                 <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
                   {result.reconciled.agreementCount} sources agree
@@ -480,6 +488,7 @@ export function VerifyAppliance({
             </div>
           ) : null}
           <KV k="Applied Rule" v={result.ruleName || result.ruleFamily || "—"} />
+          {result.decodeLogic ? <DecodeLogicPanel logic={result.decodeLogic} /> : null}
 
           {result.candidates && result.candidates.length > 1 ? (
             <details className="rounded-lg border border-border bg-background/40 p-3">

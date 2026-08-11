@@ -11,6 +11,10 @@ const MONTH_MAP: Record<string, number> = {
  */
 const lgYYM: Rule = {
   id: "lg.yym",
+  formatId: "lg.yym",
+  effectiveFrom: 2010,
+  effectiveTo: null,
+  priority: 85,
   name: "LG YY+M Decoder (modern)",
   family: "LG",
   pattern: /^\d{2}[0-9ABC]/,
@@ -37,6 +41,10 @@ const lgYYM: Rule = {
  */
 const lgYMM: Rule = {
   id: "lg.ymm",
+  formatId: "lg.ymm",
+  effectiveFrom: 1995,
+  effectiveTo: null,
+  priority: 60,
   name: "LG Y+MM Decoder (legacy)",
   family: "LG",
   // Y digit, then MM 01-12. Avoid matching things that are also valid YY+M

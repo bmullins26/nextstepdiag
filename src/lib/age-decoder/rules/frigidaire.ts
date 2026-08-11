@@ -2,6 +2,10 @@ import type { Rule } from "../types";
 
 const frigidaireYYWW: Rule = {
   id: "frigidaire.yy-ww",
+  formatId: "frigidaire.yy-ww",
+  effectiveFrom: 1990,
+  effectiveTo: null,
+  priority: 80,
   name: "Frigidaire/Electrolux Year-Week Decoder",
   family: "Frigidaire/Electrolux",
   pattern: /^\d{2}\d{2}\d+$/,
