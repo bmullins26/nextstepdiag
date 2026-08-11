@@ -1,10 +1,10 @@
-# Age Decoder Accuracy Upgrade (refactor, not rebuild)
+# Age Decoder Accuracy v2 (enhance, do not rebuild)
 
-The existing decoder already has a brand registry, per-manufacturer rule files, candidate scoring, web corroboration, and attempt logging. This plan keeps all of that and strengthens the parts that actually drive wrong answers: rule coverage per era, date validation, ambiguity resolution, and explainability.
+Everything already in place stays: the brand registry, the per-manufacturer rule files, candidate scoring, the RapidAPI primary lookup, web corroboration, the reconciliation layer, and attempt logging. This plan layers versioned rules, hard validation, weighted confidence, explainability, analytics, and a technician feedback loop on top of them.
 
-## 1. Declarative manufacturer rule format
+## Phase 1 — Versioned rule engine
 
-Today each rule is hand-written TypeScript with a regex plus an `extract` function. Rules stay in the same files, but gain a declarative descriptor so new manufacturers/formats can be added as data:
+Rules become data-driven descriptors compiled into the existing `Rule` shape, so `decode.ts` keeps its current flow:
 
 ```
 {
@@ -13,71 +13,67 @@ Today each rule is hand-written TypeScript with a regex plus an `extract` functi
   serialFormats: ["^[A-Z]{2}\\d{7}$"],
   yearPosition: { index: 1, kind: "letter-cycle" },
   weekPosition: { start: 2, length: 2 },
-  monthPosition: null,
   lookupTables: { yearLetters: "ABCDEFGHJKLMNPRSTVWXY", cycleStart: 1973, cycleLength: 20 },
-  effectiveDateRanges: [{ from: 1993, to: null }],
-  weight: 0.9
+  effectiveFrom: "1993-01-01",
+  effectiveTo: "2008-12-31",
+  priority: 100,
+  confidenceWeight: 0.95
 }
 ```
 
-A generic compiler turns each descriptor into the existing `Rule` shape, so `decode.ts` and `scoring.ts` are untouched structurally. Hand-written rules that don't fit the descriptor (LG legacy, GE letter-month) can still be registered directly — both kinds live in the same registry.
+Rule selection uses serial format match, effective date range, model family, then priority. Hand-written rules that do not fit the descriptor (LG legacy, GE letter-month, Bosch FD) stay as code and register into the same list.
 
-## 2. Expanded per-manufacturer format coverage
+Format coverage expands per manufacturer: Whirlpool family (pre-1993 cycle, modern plant+letter+week, Maytag 9/10-char, KitchenAid), GE family (legacy letter-month, modern two-letter, Haier/Hotpoint), Frigidaire/Electrolux eras, LG modern + legacy + plant-prefix, Samsung YYMM + legacy letter, Bosch/BSH FD numbers, plus Sub-Zero, Speed Queen, and Danby.
 
-Add missing historical formats, each with its own effective date range so the decoder picks the rule that was actually in use:
+## Phase 2 — Model production windows
 
-- Whirlpool family: pre-1993 letter cycle, modern plant+year-letter+week, 2-letter prefix (e.g. `CY`), Maytag 9/10-char, KitchenAid variants.
-- GE family: legacy letter-month + year-digit, modern 2-letter (month/year) prefix, Haier-built and Hotpoint variants.
-- Frigidaire/Electrolux: `XX` + year-digit + week, 2000s `4A`-style, current 8+ digit format.
-- LG: keep modern YY+M and legacy Y+MM, add the newer 3-digit-plant variant.
-- Samsung: current YYMM prefix plus older letter-coded year.
-- Bosch/BSH: FD-number decoding (4-digit FD → month/year) alongside serial prefix.
-- Also add Sub-Zero, Speed Queen, and Danby as new brands, since the format is now data-driven.
+New table `model_production_windows` (manufacturer, brand, model_prefix, introduced_year, discontinued_year, replacement_series), seeded with the prefixes we support and extendable from the owner console. A decoded year outside a known window is rejected before scoring, which removes the common "2003 date on a 2021 model" failure.
 
-Kenmore keeps model-prefix routing to the real builder.
+## Phase 3 — Validation layer
 
-## 3. Validation gate before returning a result
+A shared validator runs on every candidate before scoring: not in the future, valid month, valid week, format matched, within the rule's effective dates, within the model production window, and no contradictory month/week pair. Rejected candidates never reach the confidence engine; each rejection is recorded with its reason and surfaced in the decode explanation and logs.
 
-A shared validator runs on every candidate:
+## Phase 4 — Weighted confidence engine
 
-- Reject dates in the future (beyond current month).
-- Reject week > 53, month outside 1–12, and week/month pairs that contradict each other.
-- Reject years before the manufacturer's earliest known format date.
-- Constrain to the model's plausible production window when the model number implies one (existing model-family and corroboration data supply this).
+High/Medium/Low is computed from an additive point model instead of ad-hoc bonuses:
 
-Candidates failing validation are dropped with a recorded reason instead of silently scoring low.
-
-## 4. Ambiguity resolution + confidence
-
-When a letter/digit cycle yields multiple years (the main accuracy problem), resolution order is:
-
-1. Model-number production window, when known.
-2. Web corroboration evidence (already implemented) and retailer discontinued/in-stock signal.
-3. Production-era plausibility for the matched format.
-4. Recency decay as the final tie-breaker.
-
-Confidence mapping stays High / Medium / Low with the current 80% cap, but a single surviving validated candidate with a matched format now reaches High, and unresolved multi-cycle results are capped at Low.
-
-## 5. "Why?" explainability
-
-Each rule returns structured decode steps rather than only a sentence, e.g.:
-
-```
-Format:      Whirlpool Format B
-Character 2: year code "X" -> 2019
-Chars 3-4:   week 42
-Result:      October 2019
-Confidence:  High (single validated candidate, corroborated by 2 sources)
+```text
+Matched format         30
+Model window agrees    25
+RapidAPI agrees        20
+Historical rule match  15
+No ambiguity           10
 ```
 
-A "Why?" button next to the decoded age in the appliance verification panel opens a popover showing these steps, the rule id, rejected candidates with reasons, and any corroborating sources.
+Corroboration trust tiers and reconciliation agreement adjust the total; disagreement subtracts. The result renders as a percent plus a label (e.g. "96% · High"). The current 80% display cap is lifted, since the score is now evidence-backed rather than heuristic.
 
-## 6. Failure logging
+## Phase 5 — Cross validation
 
-Extend the existing `age_decode_attempts` logging to record every rule attempted and why it failed (pattern mismatch, no date code, validation rejection, unresolved ambiguity) — not just the final reason. The owner console's Age Decoder tab gains a "rules attempted" column so weak formats surface quickly.
+After decoding, the result is compared against the RapidAPI answer, the existing reconciliation output, prior successful decodes for the same model family, and any confirmed technician entries. Agreement raises confidence; conflicts lower it and are shown explicitly rather than silently averaged.
+
+## Phase 6 — Explainability
+
+Each rule returns structured decode steps instead of a sentence. A "Show Decode Logic" button beside the appliance age opens a panel with the rule used, character-by-character derivation, candidate years, rejected candidates with reasons, validation checks, corroborating sources, and the confidence math.
+
+## Phase 7 — Rule analytics
+
+Per-rule counters (attempts, successes, rejections, corrections, average confidence) are aggregated from the existing attempt log plus the new rejection records, and shown as a Rule Performance table in the owner console's Age Decoder tab so weak formats are visible.
+
+## Phase 8 — Technician feedback and community verification
+
+The existing ground-truth capture is extended into a prompt shown right after every decode: "Is this manufacture date correct?" with yes/no, and a correct-date input on no. Stored records include manufacturer, model, serial, decoded result, corrected result, and rule id. Repeat confirmations of the same model/serial pattern add a "Community verified — N technicians confirmed this date" badge and a confidence bonus.
+
+## Phase 9 — Appliance intelligence panel
+
+After a successful decode the result panel shows manufacture date, current age, estimated service life, warranty status, common failures, service bulletins and known recalls (from the existing tech sheet and community evidence providers), and a Start Diagnosis action so the decoder becomes the entry point for a service call. Parts data is included only where an existing source supplies it; nothing is fabricated.
+
+## Phase 10 — Regression test suite
+
+A fixture-driven suite with known-good serial/model/date pairs for every manufacturer and format, asserting decoded year, month/week, and confidence band. Any rule change runs the whole suite, so improving one brand cannot silently break another. Rejection cases (future dates, out-of-window years, malformed serials) are asserted too.
 
 ## Technical notes
 
-- New: `src/lib/age-decoder/rule-format.ts` (descriptor type + compiler), `src/lib/age-decoder/validate.ts` (date validation), `src/lib/age-decoder/explain.ts` (structured steps type).
-- Edited: `types.ts` (steps + rejected candidates on the outcome), `registry.ts` (register descriptors), each `rules/*.ts` (converted to descriptors + new formats), `scoring.ts` (validation-aware confidence), `serial-decode.functions.ts` (richer logging), `verify-appliance.tsx` ("Why?" popover).
-- Existing fixtures in `age-decoder/tests` are extended with known-good serial/year pairs per new format so accuracy changes are measurable, and the RapidAPI primary lookup and reconciliation layer stay exactly as they are.
+- New: `rule-format.ts` (descriptor + compiler), `validate.ts`, `explain.ts`, `confidence.ts`, `model-windows.server.ts`, plus a migration for `model_production_windows` and a rule-rejection/feedback column set on the existing decode-attempt logging.
+- Edited: `types.ts`, `registry.ts`, `scoring.ts`, `decode.ts`, each `rules/*.ts`, `serial-decode.functions.ts`, `verify-appliance.tsx`, and the owner Age Decoder analytics tab.
+- Unchanged: RapidAPI provider and cache, `age-verify/reconcile.server.ts`, corroboration/Firecrawl pipeline, brand alias and Kenmore prefix routing.
+- Delivery order: phases 1–4 first (accuracy core), then 5–7, then 8–10.
