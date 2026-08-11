@@ -49,6 +49,192 @@ function download(name: string, csv: string) {
 }
 
 function EmailsPage() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <Mail className="h-4 w-4 text-primary" />
+        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+          Emails
+        </h2>
+      </div>
+      <Tabs defaultValue="compose">
+        <TabsList>
+          <TabsTrigger value="compose">Compose</TabsTrigger>
+          <TabsTrigger value="sent">Sent</TabsTrigger>
+          <TabsTrigger value="exports">Exports</TabsTrigger>
+        </TabsList>
+        <TabsContent value="compose" className="mt-4">
+          <ComposeTab />
+        </TabsContent>
+        <TabsContent value="sent" className="mt-4">
+          <SentTab />
+        </TabsContent>
+        <TabsContent value="exports" className="mt-4">
+          <ExportsTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function ComposeTab() {
+  const searchFn = useServerFn(searchRecipients);
+  const [query, setQuery] = useState("");
+  const [target, setTarget] = useState<ComposeTarget>(null);
+  const [manual, setManual] = useState("");
+
+  const { data: results, isFetching } = useQuery({
+    queryKey: ["owner", "recipient-search", query],
+    queryFn: () => searchFn({ data: { query } }),
+  });
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Send a one-to-one message to a user or beta applicant. Search below, or type any address.
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search users and applicants…"
+          className="max-w-xs"
+        />
+        <div className="flex gap-2">
+          <Input
+            value={manual}
+            onChange={(e) => setManual(e.target.value)}
+            placeholder="Or type an address…"
+            className="w-[240px]"
+          />
+          <Button
+            variant="outline"
+            disabled={!/\S+@\S+\.\S+/.test(manual.trim())}
+            onClick={() => setTarget({ email: manual.trim() })}
+          >
+            <Mail className="mr-1.5 h-4 w-4" /> Compose
+          </Button>
+        </div>
+      </div>
+
+      <div className="max-h-[420px] overflow-auto rounded-xl border border-border/60 bg-card/60 backdrop-blur">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-card/95 text-left text-xs uppercase text-muted-foreground backdrop-blur">
+            <tr>
+              <th className="px-3 py-2">Email</th>
+              <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Source</th>
+              <th className="px-3 py-2 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(results ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
+                  {isFetching ? "Searching…" : "No matches."}
+                </td>
+              </tr>
+            ) : (
+              (results ?? []).map((r) => (
+                <tr key={r.email} className="border-t border-border/50">
+                  <td className="px-3 py-2">{r.email}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{r.name ?? "—"}</td>
+                  <td className="px-3 py-2 text-xs uppercase text-muted-foreground">{r.source}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Button size="sm" variant="ghost" onClick={() => setTarget(r)}>
+                      <Mail className="mr-1.5 h-4 w-4" /> Email
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <EmailComposeDialog
+        target={target}
+        allowEditRecipient
+        onOpenChange={(o) => !o && setTarget(null)}
+      />
+    </div>
+  );
+}
+
+function SentTab() {
+  const fn = useServerFn(listOwnerEmails);
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["owner", "sent-emails"],
+    queryFn: () => fn(),
+  });
+
+  const badge = (status: string) => {
+    const tone =
+      status === "sent"
+        ? "bg-emerald-500/15 text-emerald-500"
+        : status === "pending"
+          ? "bg-muted text-muted-foreground"
+          : status === "suppressed"
+            ? "bg-amber-500/15 text-amber-500"
+            : "bg-destructive/15 text-destructive";
+    return (
+      <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${tone}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Messages sent from the owner console.</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          Refresh
+        </Button>
+      </div>
+      <div className="max-h-[520px] overflow-auto rounded-xl border border-border/60 bg-card/60 backdrop-blur">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-card/95 text-left text-xs uppercase text-muted-foreground backdrop-blur">
+            <tr>
+              <th className="px-3 py-2">Recipient</th>
+              <th className="px-3 py-2">Subject</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Sent</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
+                  {isLoading ? "Loading…" : "Nothing sent yet."}
+                </td>
+              </tr>
+            ) : (
+              (data ?? []).map((r) => (
+                <tr key={r.messageId} className="border-t border-border/50 align-top">
+                  <td className="px-3 py-2">{r.recipient}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {r.subject ?? "—"}
+                    {r.errorMessage ? (
+                      <div className="text-xs text-destructive">{r.errorMessage}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2">{badge(r.status)}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                    {new Date(r.createdAt).toLocaleString()}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ExportsTab() {
   const fn = useServerFn(exportEmailList);
   const [segment, setSegment] = useState<EmailSegment>("all_users");
   const [excludeSuppressed, setExcludeSuppressed] = useState(true);
