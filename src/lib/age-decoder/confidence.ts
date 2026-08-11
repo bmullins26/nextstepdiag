@@ -147,13 +147,31 @@ export function computeConfidence(opts: {
     });
   }
 
+  // Percent is scored against the evidence that was actually AVAILABLE, so a
+  // clean format match with no external sources on file is not punished for
+  // evidence that could never have existed. Unavailable categories are excluded
+  // from the denominator; available-but-failing categories still cost points.
+  const modelWindowAvailable = !!modelWindow;
+  const externalAvailable = apiYear != null || confirmedYear != null;
+  const corroborationAvailable = !!corroboration?.used && corroboration.hits.length > 0;
+
+  const applicableMax =
+    CONFIDENCE_WEIGHTS.matchedFormat +
+    CONFIDENCE_WEIGHTS.noAmbiguity +
+    (modelWindowAvailable ? CONFIDENCE_WEIGHTS.modelWindow : 0) +
+    (externalAvailable ? CONFIDENCE_WEIGHTS.apiAgreement : 0) +
+    (corroborationAvailable ? CONFIDENCE_WEIGHTS.historicalRule : 0);
+
   const earned = points.reduce((a, p) => a + p.points, 0);
-  const percent = Math.max(0, Math.min(100, Math.round((earned / MAX_CONFIDENCE_POINTS) * 100)));
+  const percent = Math.max(
+    0,
+    Math.min(100, Math.round((earned / Math.max(1, applicableMax)) * 100)),
+  );
 
   return {
     points,
     earned,
-    max: MAX_CONFIDENCE_POINTS,
+    max: applicableMax,
     percent,
     label: labelFor(percent),
   };
