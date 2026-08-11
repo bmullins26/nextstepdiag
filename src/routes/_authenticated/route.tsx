@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
     const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw redirect({ to: "/auth" });
+    if (error || !data.user) throw redirect({ to: "/auth", search: { next: "" } });
     try {
       const access = await hasBetaAccess();
       if (!access.ok && (access.accessStatus === "suspended" || access.accessStatus === "deactivated")) {

@@ -14,9 +14,11 @@ import {
   Pencil,
   Trash2,
   KeyRound,
+  Mail,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { EmailComposeDialog, type ComposeTarget } from "@/components/owner/email-compose-dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -309,6 +311,7 @@ function UsersTab() {
   const [renameTarget, setRenameTarget] = useState<{ id: string; current: string | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; email: string } | null>(null);
   const [resetLink, setResetLink] = useState<{ email: string; link: string | null } | null>(null);
+  const [emailTarget, setEmailTarget] = useState<ComposeTarget>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["owner", "users", search],
@@ -354,6 +357,7 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
+      <EmailComposeDialog target={emailTarget} onOpenChange={(o) => !o && setEmailTarget(null)} />
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -427,6 +431,12 @@ function UsersTab() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => setDetailId(u.id)}>View detail</DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!u.email}
+                          onClick={() => setEmailTarget({ email: u.email, name: u.display_name ?? u.full_name ?? null })}
+                        >
+                          <Mail className="mr-2 h-4 w-4"/>Send email
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setRenameTarget({ id: u.id, current: u.display_name ?? null })}>
                           <Pencil className="mr-2 h-4 w-4"/>Edit display name
                         </DropdownMenuItem>
@@ -644,6 +654,7 @@ function FeedbackTab() {
   const qc = useQueryClient();
   const fn = useServerFn(listFeedback);
   const updateFn = useServerFn(updateFeedbackStatus);
+  const [feedbackTarget, setFeedbackTarget] = useState<ComposeTarget>(null);
   const [kind, setKind] = useState<"all" | "bug" | "feature" | "general">("all");
   const [status, setStatus] = useState<"all" | "open" | "reviewed" | "closed">("all");
   const { data, isLoading, error } = useQuery({
@@ -658,6 +669,11 @@ function FeedbackTab() {
 
   return (
     <div className="space-y-4">
+      <EmailComposeDialog
+        target={feedbackTarget}
+        defaultSubject="Re: your NextStep feedback"
+        onOpenChange={(o) => !o && setFeedbackTarget(null)}
+      />
       <div className="flex flex-wrap items-center gap-2">
         <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
           <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
@@ -696,6 +712,15 @@ function FeedbackTab() {
                   <div className="mt-1 font-semibold">{f.subject}</div>
                   <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{f.body}</div>
                 </div>
+                <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!f.email}
+                  onClick={() => setFeedbackTarget({ email: f.email, name: null })}
+                >
+                  <Mail className="mr-1.5 h-4 w-4" />Reply by email
+                </Button>
                 <Select value={f.status} onValueChange={(v) => mut.mutate({ id: f.id, status: v as "open" | "reviewed" | "closed" })}>
                   <SelectTrigger className="h-8 w-[120px]"><SelectValue/></SelectTrigger>
                   <SelectContent>
@@ -704,6 +729,7 @@ function FeedbackTab() {
                     <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
                 </Select>
+                </div>
               </div>
             </div>
           ))}
