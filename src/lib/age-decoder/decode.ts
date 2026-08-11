@@ -7,6 +7,7 @@ import type {
   RejectedCandidate,
   Rule,
   Corroboration,
+  UnknownReason,
   ValidationCheck,
 } from "./types";
 import { resolveBrand, rulesForBrand } from "./registry";
@@ -37,7 +38,7 @@ export function decodeAge(input: DecodeInput): DecodeOutcome {
   const crossChecks = input.crossChecks ?? null;
 
   const unknown = (
-    reason: DecodeOutcome extends { unknownReason: infer R } ? R : never,
+    reason: UnknownReason,
     breakdown: string,
     extra?: Partial<{
       appliedRule: AppliedRule | null;
