@@ -17,6 +17,7 @@ const Schema = z.object({
   verifiedOutcomeId: z.string().uuid().optional().catch(undefined),
 });
 
+
 export const Route = createFileRoute("/_authenticated/community/new")({
   head: () => ({ meta: [{ title: "New discussion — Community — NextStep" }] }),
   validateSearch: (s: Record<string, unknown>) => Schema.parse(s),
