@@ -1,4 +1,5 @@
-import { createServerFn, getRequest, getRequestHeader } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
@@ -30,10 +31,11 @@ export const sendOwnerEmail = createServerFn({ method: "POST" })
     const { assertOwner } = await import("@/lib/owner-admin.server");
     await assertOwner(context.supabase, context.userId);
 
-    const authHeader = getRequestHeader("authorization");
+    const request = getRequest();
+    const authHeader = request.headers.get("authorization");
     if (!authHeader) throw new Error("Missing authorization.");
 
-    const origin = new URL(getRequest().url).origin;
+    const origin = new URL(request.url).origin;
     const messageId = `owner-msg-${crypto.randomUUID()}`;
 
     const res = await fetch(`${origin}/lovable/email/transactional/send`, {
