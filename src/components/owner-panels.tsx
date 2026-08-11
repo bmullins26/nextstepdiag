@@ -75,7 +75,7 @@ import {
   listApplianceTypeOverrides,
   deleteApplianceTypeOverride,
 } from "@/lib/appliance-type-overrides.functions";
-import { getOwnerOutcomeMetrics } from "@/lib/diagnostic-outcomes.functions";
+import { getOwnerOutcomeMetrics, getAccuracyMetrics, type AccuracyMetrics } from "@/lib/diagnostic-outcomes.functions";
 import { PendingRepairs } from "@/components/pending-repairs";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
 import { BetaProgramTab } from "@/components/owner/beta-program-tab";
@@ -1038,6 +1038,7 @@ function AccuracyTab() {
   const accuracy = data.accuracyPercent;
   return (
     <div className="space-y-6">
+      <NextStepAccuracySection />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
         <StatCard label="Total Outcomes" value={data.totals.total} />
         <StatCard label="Confirmed" value={data.totals.confirmed} />
@@ -1069,6 +1070,100 @@ function AccuracyTab() {
 }
 
 function RankList({ title, rows }: { title: string; rows: Array<{ label: string; count: number }> }) {
+  return <RankListInner title={title} rows={rows} />;
+}
+
+/** Prediction-vs-actual accuracy from technician verdicts, with filters. */
+function NextStepAccuracySection() {
+  const fn = useServerFn(getAccuracyMetrics);
+  const [brand, setBrand] = useState("");
+  const [applianceType, setApplianceType] = useState("");
+  const [model, setModel] = useState("");
+  const [failure, setFailure] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["owner", "nextstep-accuracy", brand, applianceType, model, failure, from, to],
+    queryFn: () =>
+      fn({
+        data: {
+          brand: brand.trim() || undefined,
+          applianceType: applianceType.trim() || undefined,
+          model: model.trim() || undefined,
+          failure: failure.trim() || undefined,
+          from: from ? new Date(from).toISOString() : undefined,
+          to: to ? new Date(to).toISOString() : undefined,
+        },
+      }) as Promise<AccuracyMetrics>,
+  });
+
+  return (
+    <div className="rounded-xl border border-primary/40 bg-card/60 p-4 backdrop-blur">
+      <div className="mb-3 text-sm font-semibold">NextStep Diagnostic Accuracy</div>
+      <div className="mb-3 grid gap-2 md:grid-cols-6">
+        <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Brand" className="h-9" />
+        <Input value={applianceType} onChange={(e) => setApplianceType(e.target.value)} placeholder="Appliance type" className="h-9" />
+        <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Model" className="h-9" />
+        <Input value={failure} onChange={(e) => setFailure(e.target.value)} placeholder="Failure" className="h-9" />
+        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9" />
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9" />
+      </div>
+      {isLoading ? (
+        <Loading />
+      ) : error ? (
+        <ErrorBlock error={error} />
+      ) : !data ? null : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+            <StatCard label="Completed" value={data.totalCompleted} />
+            <StatCard label="Confirmed Repairs" value={data.confirmedRepairs} />
+            <StatCard label="With Feedback" value={data.withFeedback} />
+            <StatCard label="Correct" value={data.correct} />
+            <StatCard label="Partial" value={data.partial} />
+            <StatCard label="Incorrect" value={data.incorrect} />
+          </div>
+          <div className="mt-3 text-sm">
+            Accuracy:{" "}
+            <span className="font-bold text-primary">
+              {data.accuracyPercent == null
+                ? `Not enough data (${data.withFeedback}/${data.minSample})`
+                : `${data.accuracyPercent}%`}
+            </span>
+          </div>
+          {data.monthly.length > 0 && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-muted-foreground">
+                  <tr>
+                    <th className="py-1 text-left">Month</th>
+                    <th className="py-1 text-right">Correct</th>
+                    <th className="py-1 text-right">Partial</th>
+                    <th className="py-1 text-right">Incorrect</th>
+                    <th className="py-1 text-right">Accuracy</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.monthly.map((m) => (
+                    <tr key={m.month} className="border-t border-border/40">
+                      <td className="py-1">{m.month}</td>
+                      <td className="py-1 text-right">{m.correct}</td>
+                      <td className="py-1 text-right">{m.partial}</td>
+                      <td className="py-1 text-right">{m.incorrect}</td>
+                      <td className="py-1 text-right">{m.accuracyPercent == null ? "—" : `${m.accuracyPercent}%`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function RankListInner({ title, rows }: { title: string; rows: Array<{ label: string; count: number }> }) {
   return (
     <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur">
       <div className="mb-2 text-sm font-semibold">{title}</div>

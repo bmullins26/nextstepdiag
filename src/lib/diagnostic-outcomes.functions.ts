@@ -5,6 +5,54 @@ import { loadOutcomeStats, type OutcomeStats } from "./diagnostic-outcomes.serve
 
 const OutcomeKind = z.enum(["confirmed", "incorrect", "partial", "pending_repair"]);
 
+const Verdict = z.enum(["correct", "partial", "incorrect"]);
+
+/** Optional structured feedback captured by the 3-step outcome flow. */
+const FeedbackFields = {
+  partReplaced: z.string().nullable().optional(),
+  confirmingTest: z.string().nullable().optional(),
+  repairSuccessful: z.boolean().nullable().optional(),
+  unusualNotes: z.string().nullable().optional(),
+  nextstepVerdict: Verdict.nullable().optional(),
+  predictedTopFailure: z.string().nullable().optional(),
+  predictedFailures: z.array(z.string()).optional(),
+  predictedConfidence: z.record(z.string(), z.unknown()).optional(),
+  testsPerformed: z.array(z.unknown()).optional(),
+  evidenceSnapshot: z.array(z.unknown()).optional(),
+  photoPath: z.string().nullable().optional(),
+};
+
+type FeedbackInput = Partial<{
+  partReplaced: string | null;
+  confirmingTest: string | null;
+  repairSuccessful: boolean | null;
+  unusualNotes: string | null;
+  nextstepVerdict: "correct" | "partial" | "incorrect" | null;
+  predictedTopFailure: string | null;
+  predictedFailures: string[];
+  predictedConfidence: Record<string, unknown>;
+  testsPerformed: unknown[];
+  evidenceSnapshot: unknown[];
+  photoPath: string | null;
+}>;
+
+/** Maps optional feedback fields to column names, omitting undefined values. */
+function feedbackPatch(d: FeedbackInput): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (d.partReplaced !== undefined) out['part_replaced'] = d.partReplaced;
+  if (d.confirmingTest !== undefined) out['confirming_test'] = d.confirmingTest;
+  if (d.repairSuccessful !== undefined) out['repair_successful'] = d.repairSuccessful;
+  if (d.unusualNotes !== undefined) out['unusual_notes'] = d.unusualNotes;
+  if (d.nextstepVerdict !== undefined) out['nextstep_verdict'] = d.nextstepVerdict;
+  if (d.predictedTopFailure !== undefined) out['predicted_top_failure'] = d.predictedTopFailure;
+  if (d.predictedFailures !== undefined) out['predicted_failures'] = d.predictedFailures;
+  if (d.predictedConfidence !== undefined) out['predicted_confidence'] = d.predictedConfidence;
+  if (d.testsPerformed !== undefined) out['tests_performed'] = d.testsPerformed;
+  if (d.evidenceSnapshot !== undefined) out['evidence_snapshot'] = d.evidenceSnapshot;
+  if (d.photoPath !== undefined) out['photo_path'] = d.photoPath;
+  return out;
+}
+
 const RecordInput = z.object({
   sessionId: z.string().uuid().nullable().optional(),
   manufacturer: z.string().default(""),
@@ -16,6 +64,7 @@ const RecordInput = z.object({
   outcome: OutcomeKind,
   actualFailure: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  ...FeedbackFields,
 });
 
 export const recordOutcome = createServerFn({ method: "POST" })
@@ -35,6 +84,7 @@ export const recordOutcome = createServerFn({ method: "POST" })
       notes: data.notes ?? null,
       outcome: data.outcome,
       confirmed_at: data.outcome === "confirmed" ? new Date().toISOString() : null,
+      ...feedbackPatch(data),
     };
     const { data: row, error } = await context.supabase
       .from("diagnostic_outcomes")
@@ -58,6 +108,7 @@ const UpdateInput = z.object({
   outcome: z.enum(["confirmed", "incorrect", "partial"]),
   actualFailure: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  ...FeedbackFields,
 });
 
 export const updateOutcome = createServerFn({ method: "POST" })
@@ -69,6 +120,7 @@ export const updateOutcome = createServerFn({ method: "POST" })
       actual_failure: data.actualFailure ?? null,
       notes: data.notes ?? null,
       confirmed_at: data.outcome === "confirmed" ? new Date().toISOString() : null,
+      ...feedbackPatch(data),
     };
     const { data: row, error } = await context.supabase
       .from("diagnostic_outcomes")
@@ -208,5 +260,108 @@ export const getOwnerOutcomeMetrics = createServerFn({ method: "POST" })
       topApplianceTypes: rankMap(types, "type"),
       bestModels: [...modelRows].sort((a, b) => b.accuracyPercent - a.accuracyPercent).slice(0, 10),
       worstModels: [...modelRows].sort((a, b) => a.accuracyPercent - b.accuracyPercent).slice(0, 10),
+    };
+  });
+// ---------------------------------------------------------------------------
+// NextStep Diagnostic Accuracy (owner) — prediction vs actual, from technician
+// verdicts captured by the outcome feedback loop.
+// ---------------------------------------------------------------------------
+
+/** Minimum verdicts required before an accuracy percentage is meaningful. */
+export const ACCURACY_MIN_SAMPLE = 20;
+
+const AccuracyFilters = z.object({
+  brand: z.string().optional(),
+  applianceType: z.string().optional(),
+  model: z.string().optional(),
+  failure: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+export type AccuracyMetrics = {
+  totalCompleted: number;
+  confirmedRepairs: number;
+  withFeedback: number;
+  correct: number;
+  partial: number;
+  incorrect: number;
+  accuracyPercent: number | null;
+  minSample: number;
+  monthly: Array<{ month: string; correct: number; partial: number; incorrect: number; accuracyPercent: number | null }>;
+};
+
+export const getAccuracyMetrics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AccuracyFilters.parse(d ?? {}))
+  .handler(async ({ data, context }): Promise<AccuracyMetrics> => {
+    const { data: isOwner } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "owner",
+    });
+    if (!isOwner) throw new Error("Forbidden");
+
+    let q = context.supabase
+      .from("diagnostic_outcomes")
+      .select("outcome,nextstep_verdict,actual_failure,recommended_failure,manufacturer,appliance_type,model_number,created_at")
+      .limit(10000);
+    if (data.brand) q = q.ilike("manufacturer", data.brand);
+    if (data.applianceType) q = q.ilike("appliance_type", data.applianceType);
+    if (data.model) q = q.ilike("model_number", `%${data.model}%`);
+    if (data.from) q = q.gte("created_at", data.from);
+    if (data.to) q = q.lte("created_at", data.to);
+
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+
+    const failureFilter = (data.failure ?? "").trim().toLowerCase();
+    const monthly = new Map<string, { correct: number; partial: number; incorrect: number }>();
+    let totalCompleted = 0;
+    let confirmedRepairs = 0;
+    let correct = 0;
+    let partial = 0;
+    let incorrect = 0;
+
+    for (const r of (rows ?? []) as Array<Record<string, any>>) {
+      if (failureFilter) {
+        const hay = `${r['actual_failure'] ?? ""} ${r['recommended_failure'] ?? ""}`.toLowerCase();
+        if (!hay.includes(failureFilter)) continue;
+      }
+      if (r['outcome'] !== "pending_repair") totalCompleted += 1;
+      if (r['outcome'] === "confirmed") confirmedRepairs += 1;
+
+      const v = r['nextstep_verdict'] as string | null;
+      if (v !== "correct" && v !== "partial" && v !== "incorrect") continue;
+      if (v === "correct") correct += 1;
+      else if (v === "partial") partial += 1;
+      else incorrect += 1;
+
+      const month = String(r['created_at'] ?? "").slice(0, 7);
+      const bucket = monthly.get(month) ?? { correct: 0, partial: 0, incorrect: 0 };
+      bucket[v] += 1;
+      monthly.set(month, bucket);
+    }
+
+    const withFeedback = correct + partial + incorrect;
+    return {
+      totalCompleted,
+      confirmedRepairs,
+      withFeedback,
+      correct,
+      partial,
+      incorrect,
+      accuracyPercent:
+        withFeedback >= ACCURACY_MIN_SAMPLE ? Math.round((correct / withFeedback) * 100) : null,
+      minSample: ACCURACY_MIN_SAMPLE,
+      monthly: Array.from(monthly.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([month, b]) => {
+          const n = b.correct + b.partial + b.incorrect;
+          return {
+            month,
+            ...b,
+            accuracyPercent: n > 0 ? Math.round((b.correct / n) * 100) : null,
+          };
+        }),
     };
   });

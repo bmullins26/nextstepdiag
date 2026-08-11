@@ -15,7 +15,10 @@ const Schema = z.object({
   title: z.string().optional().catch(undefined),
   body: z.string().optional().catch(undefined),
   verifiedOutcomeId: z.string().uuid().optional().catch(undefined),
+  partReplaced: z.string().optional().catch(undefined),
+  confirmingTest: z.string().optional().catch(undefined),
 });
+
 
 export const Route = createFileRoute("/_authenticated/community/new")({
   head: () => ({ meta: [{ title: "New discussion — Community — NextStep" }] }),

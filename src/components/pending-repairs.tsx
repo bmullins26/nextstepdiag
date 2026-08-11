@@ -2,12 +2,11 @@ import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, XCircle, HelpCircle, ChevronRight } from "lucide-react";
+import { Loader2, CheckCircle2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Link } from "@tanstack/react-router";
 import { listPendingRepairs, updateOutcome } from "@/lib/diagnostic-outcomes.functions";
+import { OutcomeFeedbackSteps } from "@/components/outcome-feedback-steps";
 
 type Row = {
   id: string;
@@ -24,8 +23,7 @@ export function PendingRepairs({ limit, compact = false }: { limit?: number; com
   const qc = useQueryClient();
   const list = useServerFn(listPendingRepairs);
   const update = useServerFn(updateOutcome);
-  const [openRow, setOpenRow] = useState<{ id: string; mode: "incorrect" | "partial" } | null>(null);
-  const [text, setText] = useState("");
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["pending-repairs", limit ?? "all"],
@@ -33,13 +31,12 @@ export function PendingRepairs({ limit, compact = false }: { limit?: number; com
   });
 
   const mutate = useMutation({
-    mutationFn: (args: { id: string; outcome: "confirmed" | "incorrect" | "partial"; actualFailure?: string; notes?: string }) =>
+    mutationFn: (args: Record<string, unknown> & { id: string; outcome: "confirmed" | "incorrect" | "partial" }) =>
       update({ data: args }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pending-repairs"] });
       qc.invalidateQueries({ queryKey: ["owner", "diagnostic-accuracy"] });
-      setOpenRow(null);
-      setText("");
+      setOpenRowId(null);
       toast.success("Outcome updated.");
     },
     onError: (e) => toast.error((e as Error).message),
@@ -100,44 +97,31 @@ export function PendingRepairs({ limit, compact = false }: { limit?: number; com
             )}
           </div>
 
-          {openRow?.id === r.id ? (
-            <div className="mt-3 space-y-2">
-              {openRow.mode === "incorrect" ? (
-                <Input
-                  autoFocus
-                  placeholder="What was the actual failure?"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  className="h-10"
-                />
-              ) : (
-                <Textarea
-                  autoFocus
-                  placeholder="What else contributed?"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  className="min-h-20"
-                />
-              )}
-              <div className="flex gap-2">
-                <Button
-                  className="h-9 flex-1"
-                  disabled={mutate.isPending || !text.trim()}
-                  onClick={() =>
-                    mutate.mutate({
-                      id: r.id,
-                      outcome: openRow.mode,
-                      actualFailure: openRow.mode === "incorrect" ? text.trim() : undefined,
-                      notes: openRow.mode === "partial" ? text.trim() : undefined,
-                    })
-                  }
-                >
-                  Save
-                </Button>
-                <Button variant="ghost" className="h-9" onClick={() => { setOpenRow(null); setText(""); }}>
-                  Cancel
-                </Button>
-              </div>
+          {openRowId === r.id ? (
+            <div className="mt-3 rounded-xl border border-border bg-background/40 p-3">
+              <OutcomeFeedbackSteps
+                busy={mutate.isPending}
+                defaultActualFailure={r.recommended_failure ?? undefined}
+                onSubmit={(v) =>
+                  mutate.mutate({
+                    id: r.id,
+                    outcome: v.verdict === "correct" ? "confirmed" : v.verdict === "partial" ? "partial" : "incorrect",
+                    actualFailure: v.actualFailure.trim() || null,
+                    notes: v.notes.trim() || null,
+                    partReplaced: v.partReplaced.trim() || null,
+                    confirmingTest: v.confirmingTest.trim() || null,
+                    repairSuccessful: v.repairSuccessful,
+                    unusualNotes: v.unusualNotes.trim() || null,
+                    nextstepVerdict: v.verdict,
+                    photoPath: v.photoPath,
+                  })
+                }
+                footer={
+                  <Button variant="ghost" className="h-10 w-full" onClick={() => setOpenRowId(null)}>
+                    Cancel
+                  </Button>
+                }
+              />
             </div>
           ) : (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -145,25 +129,9 @@ export function PendingRepairs({ limit, compact = false }: { limit?: number; com
                 size="sm"
                 className="h-8 bg-emerald-500/90 hover:bg-emerald-500"
                 disabled={mutate.isPending}
-                onClick={() => mutate.mutate({ id: r.id, outcome: "confirmed" })}
+                onClick={() => setOpenRowId(r.id)}
               >
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Confirm Repair
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8"
-                onClick={() => { setOpenRow({ id: r.id, mode: "incorrect" }); setText(""); }}
-              >
-                <XCircle className="mr-1.5 h-3.5 w-3.5 text-destructive" /> Mark Incorrect
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8"
-                onClick={() => { setOpenRow({ id: r.id, mode: "partial" }); setText(""); }}
-              >
-                <HelpCircle className="mr-1.5 h-3.5 w-3.5 text-amber-400" /> Mark Partial
+                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Complete Repair
               </Button>
             </div>
           )}
