@@ -2,14 +2,21 @@ import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, HelpCircle, Loader2, MessagesSquare, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Loader2, MessagesSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { recordOutcome } from "@/lib/diagnostic-outcomes.functions";
 import { stitchOutcomeToInsights } from "@/lib/community.functions";
+import { OutcomeFeedbackSteps, type OutcomeFeedbackValue } from "@/components/outcome-feedback-steps";
+import { ShareRepairPanel } from "@/components/share-repair-panel";
 
-type Choice = "confirmed" | "incorrect" | "partial" | "pending_repair" | null;
+type Kind = "confirmed" | "incorrect" | "partial" | "pending_repair";
+
+/** Maps the technician's verdict onto the existing outcome vocabulary. */
+function outcomeFromFeedback(v: OutcomeFeedbackValue): Kind {
+  if (v.verdict === "correct") return "confirmed";
+  if (v.verdict === "partial") return "partial";
+  return "incorrect";
+}
 
 export function OutcomeCapture({
   sessionId,
@@ -19,6 +26,10 @@ export function OutcomeCapture({
   platform,
   complaint,
   recommendedFailure,
+  predictedFailures,
+  predictedConfidence,
+  testsPerformed,
+  evidenceSnapshot,
   onRecorded,
 }: {
   sessionId: string | null;
@@ -28,21 +39,24 @@ export function OutcomeCapture({
   platform?: string | null;
   complaint: string;
   recommendedFailure: string;
-  onRecorded: (kind: Exclude<Choice, null>) => void;
+  predictedFailures?: string[];
+  predictedConfidence?: Record<string, unknown>;
+  testsPerformed?: unknown[];
+  evidenceSnapshot?: unknown[];
+  onRecorded: (kind: Kind) => void;
 }) {
   const record = useServerFn(recordOutcome);
   const stitch = useServerFn(stitchOutcomeToInsights);
   const navigate = useNavigate();
-  const [choice, setChoice] = useState<Choice>(null);
-  const [actual, setActual] = useState("");
-  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<Exclude<Choice, null> | null>(null);
+  const [done, setDone] = useState<Kind | null>(null);
+  const [savedOutcomeId, setSavedOutcomeId] = useState<string | null>(null);
+  const [saved, setSaved] = useState<OutcomeFeedbackValue | null>(null);
 
-  async function submit(outcome: Exclude<Choice, null>, extra?: { actualFailure?: string; notes?: string }) {
+  async function save(outcome: Kind, v?: OutcomeFeedbackValue) {
     setBusy(true);
     try {
-      const res = await record({
+      const row = (await record({
         data: {
           sessionId,
           manufacturer,
@@ -52,21 +66,37 @@ export function OutcomeCapture({
           complaint,
           recommendedFailure,
           outcome,
-          actualFailure: extra?.actualFailure ?? null,
-          notes: extra?.notes ?? null,
+          actualFailure: v?.actualFailure?.trim() || null,
+          notes: v?.notes?.trim() || null,
+          partReplaced: v?.partReplaced?.trim() || null,
+          confirmingTest: v?.confirmingTest?.trim() || null,
+          repairSuccessful: v?.repairSuccessful ?? null,
+          unusualNotes: v?.unusualNotes?.trim() || null,
+          nextstepVerdict: v?.verdict ?? null,
+          photoPath: v?.photoPath ?? null,
+          // Snapshot of the recommendation the technician actually saw.
+          predictedTopFailure: recommendedFailure || null,
+          predictedFailures: predictedFailures ?? [],
+          predictedConfidence: predictedConfidence ?? {},
+          testsPerformed: testsPerformed ?? [],
+          evidenceSnapshot: evidenceSnapshot ?? [],
         },
-      });
-      if (sessionId) {
+      })) as { id?: string } | null;
+
+      if (sessionId && outcome !== "pending_repair") {
         try {
           await stitch({ data: { sessionId, finalOutcome: outcome } });
         } catch { /* non-fatal — feedback rows may not exist */ }
       }
-      void res;
+      setSavedOutcomeId(row?.id ?? null);
+      setSaved(v ?? null);
       setDone(outcome);
       onRecorded(outcome);
-      if (outcome === "confirmed") toast.success("Thanks! This helps improve future diagnostics.");
-      else if (outcome === "pending_repair") toast.success("Repair outcome saved. You can confirm the result later.");
-      else toast.success("Outcome recorded.");
+      toast.success(
+        outcome === "pending_repair"
+          ? "Repair outcome saved. You can confirm the result later."
+          : "Thanks! This helps improve future diagnostics.",
+      );
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to record outcome.");
     } finally {
@@ -82,40 +112,22 @@ export function OutcomeCapture({
             <CheckCircle2 className="h-4 w-4" />
             {done === "confirmed" && "Confirmed — recorded as a successful repair."}
             {done === "incorrect" && "Recorded — actual failure logged for learning."}
-            {done === "partial" && "Recorded — partial fix captured."}
+            {done === "partial" && "Recorded — partial match captured."}
             {done === "pending_repair" && "Saved as Pending Repair. Confirm the result later from History."}
           </div>
         </div>
-        {done === "confirmed" && (
-          <div className="rounded-2xl border border-primary/40 bg-primary/5 p-4">
-            <div className="mb-2 flex items-center gap-2 text-sm font-bold">
-              <MessagesSquare className="h-4 w-4 text-primary" />
-              Share this repair with the community?
-            </div>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Post-fill a Confirmed Repair discussion. Other technicians see it when they diagnose the same fault.
-            </p>
-            <Button
-              className="h-10 w-full"
-              onClick={() =>
-                navigate({
-                  to: "/community/new",
-                  search: {
-                    brand: manufacturer,
-                    applianceType,
-                    model: modelNumber,
-                    complaint,
-                    confirmedFailure: recommendedFailure,
-                    discussionType: "confirmed_repair",
-                    title: `${modelNumber} — ${recommendedFailure}`,
-                    body: `Complaint: ${complaint}\n\nConfirmed failure: ${recommendedFailure}\n\nWhat I did:\n- `,
-                  } as never,
-                })
-              }
-            >
-              <MessagesSquare className="mr-2 h-4 w-4" /> Share with community
-            </Button>
-          </div>
+        {done === "confirmed" && savedOutcomeId && (
+          <ShareRepairPanel
+            outcomeId={savedOutcomeId}
+            brand={manufacturer}
+            applianceType={applianceType}
+            model={modelNumber}
+            complaint={complaint}
+            confirmedFailure={saved?.actualFailure?.trim() || recommendedFailure}
+            partReplaced={saved?.partReplaced ?? null}
+            confirmingTest={saved?.confirmingTest ?? null}
+            onOpenComposer={(search) => navigate({ to: "/community/new", search: search as never })}
+          />
         )}
       </div>
     );
@@ -124,108 +136,35 @@ export function OutcomeCapture({
   return (
     <div className="rounded-2xl border border-primary/40 bg-card p-5 space-y-4">
       <div>
-        <div className="text-[11px] font-bold uppercase tracking-wide text-primary">
-          Was this the actual failure?
-        </div>
+        <div className="text-[11px] font-bold uppercase tracking-wide text-primary">Repair Outcome</div>
         <p className="mt-1 text-sm font-semibold">
           Likely Cause: <span className="text-primary">{recommendedFailure || "—"}</span>
         </p>
         <p className="text-xs text-muted-foreground">
-          Confirming helps NextStep learn from your real repairs.
+          Takes about 30 seconds and makes future diagnostics sharper.
         </p>
       </div>
 
-      {choice === null && (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <OutcomeFeedbackSteps
+        busy={busy}
+        defaultActualFailure={recommendedFailure}
+        onSubmit={(v) => save(outcomeFromFeedback(v), v)}
+        footer={
           <Button
-            onClick={() => submit("confirmed")}
-            disabled={busy}
-            className="h-12 w-full bg-emerald-500/90 text-white hover:bg-emerald-500"
-          >
-            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-            Yes, This Fixed It
-          </Button>
-          <Button
-            onClick={() => setChoice("incorrect")}
+            onClick={() => save("pending_repair")}
             disabled={busy}
             variant="outline"
-            className="h-12 w-full"
+            className="h-11 w-full"
           >
-            <XCircle className="mr-2 h-4 w-4 text-destructive" />
-            No, This Wasn't It
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock className="mr-2 h-4 w-4 text-sky-400" />}
+            Repair Pending — finish later
           </Button>
-          <Button
-            onClick={() => setChoice("partial")}
-            disabled={busy}
-            variant="outline"
-            className="h-12 w-full"
-          >
-            <HelpCircle className="mr-2 h-4 w-4 text-amber-400" />
-            Partially Correct
-          </Button>
-          <Button
-            onClick={() => submit("pending_repair")}
-            disabled={busy}
-            variant="outline"
-            className="h-12 w-full"
-          >
-            <Clock className="mr-2 h-4 w-4 text-sky-400" />
-            Repair Pending
-          </Button>
-        </div>
-      )}
+        }
+      />
 
-      {choice === "incorrect" && (
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            What was the actual failure?
-          </label>
-          <Input
-            value={actual}
-            onChange={(e) => setActual(e.target.value)}
-            placeholder="e.g. Drain pump motor"
-            className="h-11"
-            autoFocus
-          />
-          <div className="flex gap-2">
-            <Button
-              onClick={() => submit("incorrect", { actualFailure: actual.trim() })}
-              disabled={busy || !actual.trim()}
-              className="h-11 flex-1"
-            >
-              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save
-            </Button>
-            <Button variant="ghost" onClick={() => setChoice(null)} disabled={busy} className="h-11">Cancel</Button>
-          </div>
-        </div>
-      )}
-
-      {choice === "partial" && (
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            What else contributed?
-          </label>
-          <Textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes for future diagnoses…"
-            className="min-h-24"
-            autoFocus
-          />
-          <div className="flex gap-2">
-            <Button
-              onClick={() => submit("partial", { notes: notes.trim() })}
-              disabled={busy || !notes.trim()}
-              className="h-11 flex-1"
-            >
-              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save
-            </Button>
-            <Button variant="ghost" onClick={() => setChoice(null)} disabled={busy} className="h-11">Cancel</Button>
-          </div>
-        </div>
-      )}
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <MessagesSquare className="h-3 w-3" /> Confirmed repairs can be shared with the Community afterwards.
+      </p>
     </div>
   );
 }
