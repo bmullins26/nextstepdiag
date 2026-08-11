@@ -42,10 +42,9 @@ function UnsubscribePage() {
       .then(async (r) => {
         const body = await r.json().catch(() => ({}));
         if (!r.ok || body?.valid === false) {
-          setState(body?.alreadyUnsubscribed || body?.already_unsubscribed ? "done" : "invalid");
+          setState(body?.reason === "already_unsubscribed" ? "done" : "invalid");
           return;
         }
-        setEmail(body?.email ?? null);
         setState("valid");
       })
       .catch(() => setState("invalid"));
