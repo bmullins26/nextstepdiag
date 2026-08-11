@@ -262,3 +262,106 @@ export const getOwnerOutcomeMetrics = createServerFn({ method: "POST" })
       worstModels: [...modelRows].sort((a, b) => a.accuracyPercent - b.accuracyPercent).slice(0, 10),
     };
   });
+// ---------------------------------------------------------------------------
+// NextStep Diagnostic Accuracy (owner) — prediction vs actual, from technician
+// verdicts captured by the outcome feedback loop.
+// ---------------------------------------------------------------------------
+
+/** Minimum verdicts required before an accuracy percentage is meaningful. */
+export const ACCURACY_MIN_SAMPLE = 20;
+
+const AccuracyFilters = z.object({
+  brand: z.string().optional(),
+  applianceType: z.string().optional(),
+  model: z.string().optional(),
+  failure: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+export type AccuracyMetrics = {
+  totalCompleted: number;
+  confirmedRepairs: number;
+  withFeedback: number;
+  correct: number;
+  partial: number;
+  incorrect: number;
+  accuracyPercent: number | null;
+  minSample: number;
+  monthly: Array<{ month: string; correct: number; partial: number; incorrect: number; accuracyPercent: number | null }>;
+};
+
+export const getAccuracyMetrics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => AccuracyFilters.parse(d ?? {}))
+  .handler(async ({ data, context }): Promise<AccuracyMetrics> => {
+    const { data: isOwner } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "owner",
+    });
+    if (!isOwner) throw new Error("Forbidden");
+
+    let q = context.supabase
+      .from("diagnostic_outcomes")
+      .select("outcome,nextstep_verdict,actual_failure,recommended_failure,manufacturer,appliance_type,model_number,created_at")
+      .limit(10000);
+    if (data.brand) q = q.ilike("manufacturer", data.brand);
+    if (data.applianceType) q = q.ilike("appliance_type", data.applianceType);
+    if (data.model) q = q.ilike("model_number", `%${data.model}%`);
+    if (data.from) q = q.gte("created_at", data.from);
+    if (data.to) q = q.lte("created_at", data.to);
+
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+
+    const failureFilter = (data.failure ?? "").trim().toLowerCase();
+    const monthly = new Map<string, { correct: number; partial: number; incorrect: number }>();
+    let totalCompleted = 0;
+    let confirmedRepairs = 0;
+    let correct = 0;
+    let partial = 0;
+    let incorrect = 0;
+
+    for (const r of (rows ?? []) as Array<Record<string, any>>) {
+      if (failureFilter) {
+        const hay = `${r['actual_failure'] ?? ""} ${r['recommended_failure'] ?? ""}`.toLowerCase();
+        if (!hay.includes(failureFilter)) continue;
+      }
+      if (r['outcome'] !== "pending_repair") totalCompleted += 1;
+      if (r['outcome'] === "confirmed") confirmedRepairs += 1;
+
+      const v = r['nextstep_verdict'] as string | null;
+      if (v !== "correct" && v !== "partial" && v !== "incorrect") continue;
+      if (v === "correct") correct += 1;
+      else if (v === "partial") partial += 1;
+      else incorrect += 1;
+
+      const month = String(r['created_at'] ?? "").slice(0, 7);
+      const bucket = monthly.get(month) ?? { correct: 0, partial: 0, incorrect: 0 };
+      bucket[v] += 1;
+      monthly.set(month, bucket);
+    }
+
+    const withFeedback = correct + partial + incorrect;
+    return {
+      totalCompleted,
+      confirmedRepairs,
+      withFeedback,
+      correct,
+      partial,
+      incorrect,
+      accuracyPercent:
+        withFeedback >= ACCURACY_MIN_SAMPLE ? Math.round((correct / withFeedback) * 100) : null,
+      minSample: ACCURACY_MIN_SAMPLE,
+      monthly: Array.from(monthly.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([month, b]) => {
+          const n = b.correct + b.partial + b.incorrect;
+          return {
+            month,
+            ...b,
+            accuracyPercent: n > 0 ? Math.round((b.correct / n) * 100) : null,
+          };
+        }),
+    };
+  });
