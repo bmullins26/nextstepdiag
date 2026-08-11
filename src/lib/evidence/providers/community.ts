@@ -124,9 +124,102 @@ export const communityVerifiedProvider: EvidenceProvider = {
   sourceType: "community_verified",
   priority: priorityFor("community_verified"),
   async fetch(q, { supabase }) {
-    return fetchDiscussions(supabase, q.brand, q.applianceType, q.model, q.complaint, true);
+    // Verified evidence now comes from confirmed repairs the technician shared.
+    const [repairs, discussions] = await Promise.all([
+      fetchVerifiedRepairs(supabase, q.brand, q.applianceType, q.model, q.complaint),
+      fetchDiscussions(supabase, q.brand, q.applianceType, q.model, q.complaint, true),
+    ]);
+    return [...repairs, ...discussions].sort((a, b) => b.confidence - a.confidence).slice(0, 6);
   },
 };
+
+type OutcomeRow = {
+  id: string;
+  manufacturer: string;
+  appliance_type: string;
+  model_number: string;
+  complaint: string;
+  actual_failure: string | null;
+  recommended_failure: string | null;
+  part_replaced: string | null;
+  confirming_test: string | null;
+  public_notes: string | null;
+  confirmed_at: string | null;
+  shared_at: string | null;
+  created_at: string;
+};
+
+/** Shared, confirmed repairs — the highest-quality community signal. */
+async function fetchVerifiedRepairs(
+  supabase: any,
+  brand: string,
+  applianceType: string,
+  model: string,
+  complaint: string,
+): Promise<EvidenceItem[]> {
+  const cand = candidateModels(brand, model);
+  const complaintTokens = new Set(
+    complaint.toLowerCase().split(/\W+/).filter((t) => t.length >= 4),
+  );
+  const { data, error } = await supabase
+    .from("diagnostic_outcomes")
+    .select(
+      "id,manufacturer,appliance_type,model_number,complaint,actual_failure,recommended_failure,part_replaced,confirming_test,public_notes,confirmed_at,shared_at,created_at",
+    )
+    .eq("outcome", "confirmed")
+    .eq("shared_to_community", true)
+    .ilike("manufacturer", brand)
+    .limit(80);
+  if (error || !data) return [];
+
+  const items: EvidenceItem[] = [];
+  for (const row of data as OutcomeRow[]) {
+    const failure = (row.actual_failure || row.recommended_failure || "").trim();
+    if (!failure) continue;
+    let tier: Tier = "brand";
+    if (normalizeModel(row.model_number) === cand.exact) tier = "exact";
+    else if (
+      applianceType &&
+      (row.appliance_type || "").trim().toLowerCase() === applianceType.trim().toLowerCase()
+    )
+      tier = "brand_type";
+
+    const rTokens = (row.complaint || "").toLowerCase().split(/\W+/);
+    const matchC = rTokens.some((t) => t.length >= 4 && complaintTokens.has(t));
+    if (!matchC && tier === "brand") continue;
+
+    const weight = { exact: 1, family: 0.75, brand_type: 0.6, brand: 0.4 }[tier];
+    items.push({
+      id: `community_verified:outcome:${row.id}`,
+      sourceType: "community_verified",
+      title: `Verified Repair — ${failure}`,
+      summary: `Confirmed fix on ${row.manufacturer} ${row.model_number}: ${failure}.`,
+      detail: [
+        `Complaint: ${row.complaint}`,
+        `Confirmed failure: ${failure}`,
+        row.part_replaced ? `Part replaced: ${row.part_replaced}` : "",
+        row.confirming_test ? `Confirming test: ${row.confirming_test}` : "",
+        row.public_notes ?? "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+        .slice(0, 700),
+      confidence: Math.min(0.95, 0.55 + weight * 0.35),
+      supportingDiscussionCount: 0,
+      supportingVerifiedRepairCount: 1,
+      lastUpdated: row.shared_at ?? row.confirmed_at ?? row.created_at,
+      link: `/community/confirmed-repairs/${row.id}`,
+      metadata: {
+        matchTier: tier,
+        brand: row.manufacturer,
+        model: row.model_number,
+        complaint: row.complaint,
+        verifiedRepair: true,
+      },
+    });
+  }
+  return items.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
+}
 
 export const communityDiscussionProvider: EvidenceProvider = {
   sourceType: "community_discussion",
