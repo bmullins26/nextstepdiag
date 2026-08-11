@@ -61,14 +61,92 @@ export type AppliedRule = {
   family: string;
 };
 
+/** One line of the human-readable derivation shown in "Show Decode Logic". */
+export type DecodeStep = {
+  label: string;
+  value: string;
+  detail?: string;
+};
+
+export type RejectionReason =
+  | "future_date"
+  | "invalid_month"
+  | "invalid_week"
+  | "impossible_combination"
+  | "outside_rule_effective_range"
+  | "outside_model_window"
+  | "implausible_year";
+
+export type RejectedCandidate = {
+  ruleId: string;
+  year: number;
+  month?: number | null;
+  week?: number | null;
+  reason: RejectionReason;
+  detail: string;
+};
+
+export type ValidationCheck = {
+  label: string;
+  passed: boolean;
+  detail?: string;
+};
+
+export type ConfidencePoint = {
+  label: string;
+  points: number;
+  awarded: boolean;
+  detail?: string;
+};
+
+export type ConfidenceBreakdown = {
+  points: ConfidencePoint[];
+  earned: number;
+  max: number;
+  percent: number;
+  label: Confidence;
+};
+
+/** Production window for a model prefix — used to reject impossible years. */
+export type ModelWindow = {
+  manufacturer?: string | null;
+  brand?: string | null;
+  modelPrefix: string;
+  introducedYear: number | null;
+  discontinuedYear: number | null;
+  replacementSeries?: string | null;
+};
+
+/** Cross-validation inputs supplied by the server fn (never fetched here). */
+export type CrossChecks = {
+  /** Year returned by the Appliance Age Finder API, when available. */
+  apiYear?: number | null;
+  /** Technician-confirmed year for this exact serial, when available. */
+  confirmedYear?: number | null;
+  /** How many technicians confirmed that year for this model/serial pattern. */
+  communityConfirmations?: number;
+  /** Years previously decoded successfully for the same model family. */
+  historicalYears?: number[];
+};
+
 export type Rule = {
   id: string;
   name: string;
   family: string;
   pattern: RegExp;
   weight: number; // 0..1 base confidence
+  /** Stable format identifier, e.g. "whirlpool.format-b". Defaults to `id`. */
+  formatId?: string;
+  /** First year this serial format was in use. */
+  effectiveFrom?: number;
+  /** Last year this format was in use (null/undefined = still current). */
+  effectiveTo?: number | null;
+  /** Higher priority rules are evaluated first. Default 50. */
+  priority?: number;
   extract: (serial: string, model?: string) => DateCandidate[];
   explain: (serial: string, candidate: DateCandidate) => string;
+  /** Structured character-by-character derivation for the "Why?" panel. */
+  steps?: (serial: string, candidate: DateCandidate) => DecodeStep[];
 };
 
 export type DecodeInput = {
@@ -79,6 +157,10 @@ export type DecodeInput = {
   now?: Date;
   /** Optional pre-fetched corroboration (server-fn injects this). */
   corroboration?: Corroboration | null;
+  /** Optional production window for the model (server-fn injects this). */
+  modelWindow?: ModelWindow | null;
+  /** Optional cross-validation signals (server-fn injects these). */
+  crossChecks?: CrossChecks | null;
 };
 
 export type DecodeOk = {
@@ -89,10 +171,15 @@ export type DecodeOk = {
   manufactureWeek: number | null;
   ageYears: number;
   confidence: Confidence;
-  confidencePercent: number;   // 0..80 (homespy cap)
+  confidencePercent: number;   // 0..100 (weighted evidence model)
   candidates: DateCandidate[];
   breakdown: string;
   corroboration: Corroboration | null;
+  steps: DecodeStep[];
+  rejected: RejectedCandidate[];
+  validation: ValidationCheck[];
+  confidenceBreakdown: ConfidenceBreakdown;
+  attemptedRules: { id: string; name: string; matched: boolean; reason?: string }[];
 };
 
 export type DecodeUnknown = {
@@ -104,6 +191,11 @@ export type DecodeUnknown = {
   breakdown: string;
   candidates: DateCandidate[];
   corroboration: Corroboration | null;
+  steps: DecodeStep[];
+  rejected: RejectedCandidate[];
+  validation: ValidationCheck[];
+  confidenceBreakdown: ConfidenceBreakdown | null;
+  attemptedRules: { id: string; name: string; matched: boolean; reason?: string }[];
 };
 
 export type DecodeOutcome = DecodeOk | DecodeUnknown;
