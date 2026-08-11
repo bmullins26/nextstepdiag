@@ -33,6 +33,7 @@ import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AuthenticatedCommunityDiscussionIdRouteImport } from './routes/_authenticated/community.$discussionId'
 import { Route as AuthenticatedCommunityBrowseRouteImport } from './routes/_authenticated/community.browse'
+import { Route as AuthenticatedCommunityConfirmedRepairsRouteImport } from './routes/_authenticated/community.confirmed-repairs'
 import { Route as AuthenticatedCommunityNewRouteImport } from './routes/_authenticated/community.new'
 import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_authenticated/community.search'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
@@ -41,6 +42,7 @@ import { Route as AuthenticatedOwnerEmailsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedOwnerPaymentsRouteImport } from './routes/_authenticated/owner/payments'
 import { Route as AuthenticatedOwnerToolsRouteImport } from './routes/_authenticated/owner/tools'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
+import { Route as AuthenticatedCommunityConfirmedRepairsOutcomeIdRouteImport } from './routes/_authenticated/community.confirmed-repairs.$outcomeId'
 import { Route as AuthenticatedOwnerToolsToolIdRouteImport } from './routes/_authenticated/owner/tools.$toolId'
 import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -174,6 +176,12 @@ const AuthenticatedCommunityBrowseRoute =
     path: '/browse',
     getParentRoute: () => AuthenticatedCommunityRoute,
   } as any)
+const AuthenticatedCommunityConfirmedRepairsRoute =
+  AuthenticatedCommunityConfirmedRepairsRouteImport.update({
+    id: '/confirmed-repairs',
+    path: '/confirmed-repairs',
+    getParentRoute: () => AuthenticatedCommunityRoute,
+  } as any)
 const AuthenticatedCommunityNewRoute =
   AuthenticatedCommunityNewRouteImport.update({
     id: '/new',
@@ -218,6 +226,12 @@ const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
   path: '/lovable/email/suppression',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedCommunityConfirmedRepairsOutcomeIdRoute =
+  AuthenticatedCommunityConfirmedRepairsOutcomeIdRouteImport.update({
+    id: '/$outcomeId',
+    path: '/$outcomeId',
+    getParentRoute: () => AuthenticatedCommunityConfirmedRepairsRoute,
+  } as any)
 const AuthenticatedOwnerToolsToolIdRoute =
   AuthenticatedOwnerToolsToolIdRouteImport.update({
     id: '/$toolId',
@@ -283,6 +297,7 @@ export interface FileRoutesByFullPath {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
   '/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/community/confirmed-repairs': typeof AuthenticatedCommunityConfirmedRepairsRouteWithChildren
   '/community/new': typeof AuthenticatedCommunityNewRoute
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
@@ -291,6 +306,7 @@ export interface FileRoutesByFullPath {
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/owner/': typeof AuthenticatedOwnerIndexRoute
+  '/community/confirmed-repairs/$outcomeId': typeof AuthenticatedCommunityConfirmedRepairsOutcomeIdRoute
   '/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -322,6 +338,7 @@ export interface FileRoutesByTo {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
   '/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/community/confirmed-repairs': typeof AuthenticatedCommunityConfirmedRepairsRouteWithChildren
   '/community/new': typeof AuthenticatedCommunityNewRoute
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
@@ -330,6 +347,7 @@ export interface FileRoutesByTo {
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/owner': typeof AuthenticatedOwnerIndexRoute
+  '/community/confirmed-repairs/$outcomeId': typeof AuthenticatedCommunityConfirmedRepairsOutcomeIdRoute
   '/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -364,6 +382,7 @@ export interface FileRoutesById {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/community/$discussionId': typeof AuthenticatedCommunityDiscussionIdRoute
   '/_authenticated/community/browse': typeof AuthenticatedCommunityBrowseRoute
+  '/_authenticated/community/confirmed-repairs': typeof AuthenticatedCommunityConfirmedRepairsRouteWithChildren
   '/_authenticated/community/new': typeof AuthenticatedCommunityNewRoute
   '/_authenticated/community/search': typeof AuthenticatedCommunitySearchRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
@@ -372,6 +391,7 @@ export interface FileRoutesById {
   '/_authenticated/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/_authenticated/owner/': typeof AuthenticatedOwnerIndexRoute
+  '/_authenticated/community/confirmed-repairs/$outcomeId': typeof AuthenticatedCommunityConfirmedRepairsOutcomeIdRoute
   '/_authenticated/owner/tools/$toolId': typeof AuthenticatedOwnerToolsToolIdRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
@@ -406,6 +426,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/community/$discussionId'
     | '/community/browse'
+    | '/community/confirmed-repairs'
     | '/community/new'
     | '/community/search'
     | '/history/$id'
@@ -414,6 +435,7 @@ export interface FileRouteTypes {
     | '/owner/tools'
     | '/lovable/email/suppression'
     | '/owner/'
+    | '/community/confirmed-repairs/$outcomeId'
     | '/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
@@ -445,6 +467,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/community/$discussionId'
     | '/community/browse'
+    | '/community/confirmed-repairs'
     | '/community/new'
     | '/community/search'
     | '/history/$id'
@@ -453,6 +476,7 @@ export interface FileRouteTypes {
     | '/owner/tools'
     | '/lovable/email/suppression'
     | '/owner'
+    | '/community/confirmed-repairs/$outcomeId'
     | '/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
@@ -486,6 +510,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/community/$discussionId'
     | '/_authenticated/community/browse'
+    | '/_authenticated/community/confirmed-repairs'
     | '/_authenticated/community/new'
     | '/_authenticated/community/search'
     | '/_authenticated/history/$id'
@@ -494,6 +519,7 @@ export interface FileRouteTypes {
     | '/_authenticated/owner/tools'
     | '/lovable/email/suppression'
     | '/_authenticated/owner/'
+    | '/_authenticated/community/confirmed-repairs/$outcomeId'
     | '/_authenticated/owner/tools/$toolId'
     | '/api/public/payments/webhook'
     | '/lovable/email/auth/preview'
@@ -696,6 +722,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCommunityBrowseRouteImport
       parentRoute: typeof AuthenticatedCommunityRoute
     }
+    '/_authenticated/community/confirmed-repairs': {
+      id: '/_authenticated/community/confirmed-repairs'
+      path: '/confirmed-repairs'
+      fullPath: '/community/confirmed-repairs'
+      preLoaderRoute: typeof AuthenticatedCommunityConfirmedRepairsRouteImport
+      parentRoute: typeof AuthenticatedCommunityRoute
+    }
     '/_authenticated/community/new': {
       id: '/_authenticated/community/new'
       path: '/new'
@@ -752,6 +785,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailSuppressionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/community/confirmed-repairs/$outcomeId': {
+      id: '/_authenticated/community/confirmed-repairs/$outcomeId'
+      path: '/$outcomeId'
+      fullPath: '/community/confirmed-repairs/$outcomeId'
+      preLoaderRoute: typeof AuthenticatedCommunityConfirmedRepairsOutcomeIdRouteImport
+      parentRoute: typeof AuthenticatedCommunityConfirmedRepairsRoute
+    }
     '/_authenticated/owner/tools/$toolId': {
       id: '/_authenticated/owner/tools/$toolId'
       path: '/$toolId'
@@ -804,9 +844,25 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedCommunityConfirmedRepairsRouteChildren {
+  AuthenticatedCommunityConfirmedRepairsOutcomeIdRoute: typeof AuthenticatedCommunityConfirmedRepairsOutcomeIdRoute
+}
+
+const AuthenticatedCommunityConfirmedRepairsRouteChildren: AuthenticatedCommunityConfirmedRepairsRouteChildren =
+  {
+    AuthenticatedCommunityConfirmedRepairsOutcomeIdRoute:
+      AuthenticatedCommunityConfirmedRepairsOutcomeIdRoute,
+  }
+
+const AuthenticatedCommunityConfirmedRepairsRouteWithChildren =
+  AuthenticatedCommunityConfirmedRepairsRoute._addFileChildren(
+    AuthenticatedCommunityConfirmedRepairsRouteChildren,
+  )
+
 interface AuthenticatedCommunityRouteChildren {
   AuthenticatedCommunityDiscussionIdRoute: typeof AuthenticatedCommunityDiscussionIdRoute
   AuthenticatedCommunityBrowseRoute: typeof AuthenticatedCommunityBrowseRoute
+  AuthenticatedCommunityConfirmedRepairsRoute: typeof AuthenticatedCommunityConfirmedRepairsRouteWithChildren
   AuthenticatedCommunityNewRoute: typeof AuthenticatedCommunityNewRoute
   AuthenticatedCommunitySearchRoute: typeof AuthenticatedCommunitySearchRoute
 }
@@ -816,6 +872,8 @@ const AuthenticatedCommunityRouteChildren: AuthenticatedCommunityRouteChildren =
     AuthenticatedCommunityDiscussionIdRoute:
       AuthenticatedCommunityDiscussionIdRoute,
     AuthenticatedCommunityBrowseRoute: AuthenticatedCommunityBrowseRoute,
+    AuthenticatedCommunityConfirmedRepairsRoute:
+      AuthenticatedCommunityConfirmedRepairsRouteWithChildren,
     AuthenticatedCommunityNewRoute: AuthenticatedCommunityNewRoute,
     AuthenticatedCommunitySearchRoute: AuthenticatedCommunitySearchRoute,
   }
