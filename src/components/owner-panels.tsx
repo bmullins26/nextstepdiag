@@ -654,6 +654,7 @@ function FeedbackTab() {
   const qc = useQueryClient();
   const fn = useServerFn(listFeedback);
   const updateFn = useServerFn(updateFeedbackStatus);
+  const [feedbackTarget, setFeedbackTarget] = useState<ComposeTarget>(null);
   const [kind, setKind] = useState<"all" | "bug" | "feature" | "general">("all");
   const [status, setStatus] = useState<"all" | "open" | "reviewed" | "closed">("all");
   const { data, isLoading, error } = useQuery({
