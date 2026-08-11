@@ -117,6 +117,17 @@ export function computeConfidence(opts: {
           : `${candidates.length} candidate years remain plausible`,
   });
 
+  // Ambiguity penalty: each additional surviving year makes the answer weaker.
+  if (!clearWinner && candidates.length > 1) {
+    const penalty = -Math.min(20, (candidates.length - 1) * 7);
+    points.push({
+      label: "Ambiguous year cycle",
+      points: penalty,
+      awarded: true,
+      detail: `${candidates.length} plausible years from this serial`,
+    });
+  }
+
   // Penalties: external disagreement, and corroboration that found nothing.
   if (apiConflicts && !confirmedAgrees) {
     points.push({
