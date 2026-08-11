@@ -101,7 +101,7 @@ export function PendingRepairs({ limit, compact = false }: { limit?: number; com
             <div className="mt-3 rounded-xl border border-border bg-background/40 p-3">
               <OutcomeFeedbackSteps
                 busy={mutate.isPending}
-                defaultActualFailure={r.recommended_failure}
+                defaultActualFailure={r.recommended_failure ?? undefined}
                 onSubmit={(v) =>
                   mutate.mutate({
                     id: r.id,
