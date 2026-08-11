@@ -656,6 +656,10 @@ function Phase3(props: {
           platform={appliance.platform ?? null}
           complaint={complaint}
           recommendedFailure={step.mostLikelyFailure || step.mostLikelyFailures?.[0] || ""}
+          predictedFailures={step.mostLikelyFailures ?? []}
+          predictedConfidence={(step.historicalOutcomes ?? {}) as Record<string, unknown>}
+          testsPerformed={history as unknown[]}
+          evidenceSnapshot={(step.evidence ?? []) as unknown[]}
           onRecorded={onOutcomeRecorded}
         />
       )}
