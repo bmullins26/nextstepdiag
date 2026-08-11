@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Download, Copy, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -15,6 +17,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { exportEmailList, type EmailSegment } from "@/lib/owner-emails.functions";
+import { listOwnerEmails, searchRecipients } from "@/lib/owner-outreach.functions";
+import {
+  EmailComposeDialog,
+  type ComposeTarget,
+} from "@/components/owner/email-compose-dialog";
 
 export const Route = createFileRoute("/_authenticated/owner/emails")({
   head: () => ({
