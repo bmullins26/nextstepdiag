@@ -2,12 +2,11 @@ import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, XCircle, HelpCircle, ChevronRight } from "lucide-react";
+import { Loader2, CheckCircle2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Link } from "@tanstack/react-router";
 import { listPendingRepairs, updateOutcome } from "@/lib/diagnostic-outcomes.functions";
+import { OutcomeFeedbackSteps } from "@/components/outcome-feedback-steps";
 
 type Row = {
   id: string;
@@ -24,8 +23,7 @@ export function PendingRepairs({ limit, compact = false }: { limit?: number; com
   const qc = useQueryClient();
   const list = useServerFn(listPendingRepairs);
   const update = useServerFn(updateOutcome);
-  const [openRow, setOpenRow] = useState<{ id: string; mode: "incorrect" | "partial" } | null>(null);
-  const [text, setText] = useState("");
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["pending-repairs", limit ?? "all"],
@@ -33,13 +31,12 @@ export function PendingRepairs({ limit, compact = false }: { limit?: number; com
   });
 
   const mutate = useMutation({
-    mutationFn: (args: { id: string; outcome: "confirmed" | "incorrect" | "partial"; actualFailure?: string; notes?: string }) =>
+    mutationFn: (args: Record<string, unknown> & { id: string; outcome: "confirmed" | "incorrect" | "partial" }) =>
       update({ data: args }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pending-repairs"] });
       qc.invalidateQueries({ queryKey: ["owner", "diagnostic-accuracy"] });
-      setOpenRow(null);
-      setText("");
+      setOpenRowId(null);
       toast.success("Outcome updated.");
     },
     onError: (e) => toast.error((e as Error).message),
