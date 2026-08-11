@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listCommunityHome } from "@/lib/community.functions";
 import { DiscussionCard, type DiscussionSummary } from "@/components/community/discussion-card";
+import { listConfirmedRepairs, type ConfirmedRepair } from "@/lib/confirmed-repairs.functions";
+import { ConfirmedRepairCard } from "@/components/community/confirmed-repair-card";
 
 export const Route = createFileRoute("/_authenticated/community")({
   head: () => ({
@@ -32,6 +34,11 @@ function CommunityHome() {
     queryFn: () => home({}),
   });
   const [q, setQ] = useState("");
+  const repairsFn = useServerFn(listConfirmedRepairs);
+  const { data: repairs } = useQuery({
+    queryKey: ["community", "confirmed-repairs", "home"],
+    queryFn: () => repairsFn({ data: { limit: 5, sort: "newest" } }) as Promise<{ items: ConfirmedRepair[] }>,
+  });
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -81,7 +88,24 @@ function CommunityHome() {
             <Section title="Popular Repairs" icon={Sparkles}>
               <CardList list={(data?.popular ?? []) as DiscussionSummary[]} />
             </Section>
-            <Section title="Recently Confirmed Repairs" icon={ShieldCheck}>
+            <Section title="Confirmed Repairs" icon={ShieldCheck}>
+              {(repairs?.items.length ?? 0) === 0 ? (
+                <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                  No confirmed repairs shared yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {repairs!.items.map((r) => <ConfirmedRepairCard key={r.id} repair={r} />)}
+                </div>
+              )}
+              <Link
+                to="/community/confirmed-repairs"
+                className="mt-2 inline-block text-xs font-semibold text-primary hover:underline"
+              >
+                View all confirmed repairs
+              </Link>
+            </Section>
+            <Section title="Verified Discussions" icon={ShieldCheck}>
               <CardList list={(data?.verified ?? []) as DiscussionSummary[]} />
             </Section>
             <Section title="Trending Models" icon={TrendingUp}>
