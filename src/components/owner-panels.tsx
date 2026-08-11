@@ -75,7 +75,7 @@ import {
   listApplianceTypeOverrides,
   deleteApplianceTypeOverride,
 } from "@/lib/appliance-type-overrides.functions";
-import { getOwnerOutcomeMetrics } from "@/lib/diagnostic-outcomes.functions";
+import { getOwnerOutcomeMetrics, getAccuracyMetrics, type AccuracyMetrics } from "@/lib/diagnostic-outcomes.functions";
 import { PendingRepairs } from "@/components/pending-repairs";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
 import { BetaProgramTab } from "@/components/owner/beta-program-tab";
@@ -1038,6 +1038,7 @@ function AccuracyTab() {
   const accuracy = data.accuracyPercent;
   return (
     <div className="space-y-6">
+      <NextStepAccuracySection />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
         <StatCard label="Total Outcomes" value={data.totals.total} />
         <StatCard label="Confirmed" value={data.totals.confirmed} />
