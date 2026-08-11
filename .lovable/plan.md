@@ -1,73 +1,63 @@
+# Email Users Directly From the Owner Console
 
-## Paywall Structure — Free vs Pro (with grandfathering)
+Add a compose-and-send email flow inside NextStep so you can reach out to a
+user, a beta applicant, or a feedback submitter without leaving the app.
 
-### Grandfathering rule
+## What you get
 
-Every user who exists at the time this ships is unaffected by the paywall:
-- Migration inserts a `subscriptions` row for **every existing `auth.users` id** with `tier='pro'`, `status='active'`, `plan_type='grandfathered'`, `current_period_end=null` (never expires), `stripe_customer_id=null`.
-- `has_pro_access()` treats `plan_type='grandfathered'` as always Pro (no period-end check).
-- New signups after deploy start on Free with the 8/mo quota unless they subscribe.
-- Owner dashboard gets a "Grandfathered" filter and the ability to revoke a specific user's grandfathered status if ever needed.
+**1. Compose dialog (free-form)**
+- "Email" button on: the Users table rows, each Beta applicant row, and each
+  Feedback / bug report row.
+- Dialog pre-fills the recipient (name + address, read-only) and lets you type
+  a subject and message. Plain text with line breaks; no HTML pasting.
+- Sends through your verified sender (notify.nextstepdiag.com) wrapped in a
+  branded NextStep template that matches the app's black/white styling.
+- Optional "Reply-to" defaults to your owner address so replies land in your
+  inbox.
 
-### Tiers
+**2. A dedicated Compose page**
+- `/owner/emails` gains two tabs: **Compose** and **Exports** (the existing
+  segment/CSV export tool stays exactly as-is).
+- Compose lets you pick a recipient by searching users/applicants, or type any
+  address manually.
 
-**Free** (new signups only) — 8 AI-powered lookups per calendar month across diagnose, age verify, error code lookup, document assistant. Full Community, history, outcome capture. No tech sheet upload, no Tech Talk.
+**3. Sent history**
+- Every send is logged (recipient, subject, status, timestamp, who sent it) and
+  shown as a "Sent" list on the Emails page, so you can see what went out and
+  whether delivery failed.
+- Bounced/unsubscribed addresses are blocked automatically and shown as
+  suppressed instead of silently failing.
 
-**Pro** — $1 / 7-day pass · $9.99 / month · $99 / year (2 months free). Unlimited lookups, Tech Sheet upload, Tech Talk.
+## About mass announcements
 
-### Data model (migration)
+Lovable's built-in email system is designed for one-to-one app email. Blasting
+the same announcement to your whole user list is a marketing/newsletter send,
+which it does not support — doing it anyway risks your sender domain's
+deliverability and can get the domain flagged.
 
-`public.subscriptions`
-- `user_id uuid PK → auth.users`
-- `tier` (`free` | `pro`), `status` (`active` | `canceled` | `past_due` | `trialing` | `grandfathered`)
-- `plan_type` (`week_pass` | `monthly` | `annual` | `grandfathered`)
-- `stripe_customer_id`, `stripe_subscription_id`
-- `current_period_end timestamptz` (nullable for grandfathered)
-- `cancel_at_period_end bool`, timestamps
-- RLS: user selects own; service_role full
-- **Backfill INSERT** for every existing `auth.users.id` as grandfathered Pro
-- Trigger on `auth.users` insert: new users get a `tier='free'` row (no grandfather)
+So this plan covers direct one-to-one outreach in-app, and for announcements
+keeps the existing segment CSV export, which you can drop into a mailing tool
+(Mailchimp, Brevo, Loops, etc.). If you want, I can wire up a marketing
+provider connector as a follow-up so announcements are also sendable from the
+owner console — say the word and I'll plan that separately.
 
-`public.usage_counters` — `(user_id, period_month date)` PK, `lookups_used int`. RLS: own row.
+## Technical notes
 
-`public.tech_talk_messages` — `id`, `user_id`, `channel`, `body`, `parent_id`, `created_at`. RLS gated by `has_pro_access(auth.uid())`.
-
-Functions:
-- `has_pro_access(_user_id uuid)` — true if row exists with `tier='pro'` AND (`plan_type='grandfathered'` OR `current_period_end > now()`).
-- `increment_lookup(_user_id uuid)` — bypasses when Pro; else atomically bumps monthly counter under limit 8; returns `{allowed, used, limit}`.
-
-### Server functions (`src/lib/billing.functions.ts`)
-
-- `getMyEntitlements()` → `{ tier, planType, isGrandfathered, lookupsUsed, lookupsLimit, currentPeriodEnd, cancelAtPeriodEnd }`
-- `createCheckoutSession({ plan })` — Stripe Checkout
-- `createBillingPortalSession()` — Stripe customer portal
-- Wrap `runDiagnostic`, serial decode/age verify, error code lookup, document assistant with `increment_lookup`; return `{ error: 'quota_exceeded' }` on deny.
-
-Public route `src/routes/api/public/stripe-webhook.ts` — HMAC verify, upsert subscription on `checkout.session.completed`, `customer.subscription.updated/deleted`; `week_pass` sets `current_period_end = now() + 7 days`.
-
-### UI
-
-- `paywall/upgrade-dialog.tsx` — three plan cards (Week $1 / Monthly $9.99 / Annual $99 "2 months free")
-- `paywall/usage-meter.tsx` — "X of 8 lookups used" chip; hidden for Pro/grandfathered
-- Account Settings dialog: shows "Grandfathered — thanks for being an early user" for grandfathered accounts; "Upgrade" for Free; "Manage subscription" (Stripe portal) for paid Pro
-- Tech Sheet upload gated by `has_pro_access`
-- New route `src/routes/_authenticated/tech-talk.tsx` + sidebar link (lock badge for Free)
-- Diagnose / Age Verify / Error Codes / Documents: intercept `quota_exceeded` → open upgrade dialog
-- Owner dashboard: subscribers tab with filter incl. Grandfathered, revoke action
-
-### Stripe setup
-
-- `stripe--enable_stripe_payments` (seamless)
-- Three prices: Week Pass ($1 one-time, 7-day access), Monthly ($9.99 recurring), Annual ($99 recurring)
-- Secrets: `STRIPE_PRICE_WEEK`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `STRIPE_WEBHOOK_SECRET`
-
-### Rollout
-
-1. Enable Stripe payments
-2. Migration (tables + `has_pro_access` + `increment_lookup` + backfill all existing users as grandfathered + new-user trigger)
-3. Billing server fns + Stripe webhook
-4. Quota wrap on 4 AI server fns
-5. Paywall UI + Account Settings integration
-6. Tech Sheet upload gate
-7. Tech Talk route
-8. QA: existing account stays unlimited with "Grandfathered" badge; new test account hits cap → upgrade → week pass → webhook grants Pro → Tech Talk accessible → cancel via portal
+- Run email infrastructure scaffolding for app (transactional) email: creates
+  the send/preview/unsubscribe routes and the template registry under
+  `src/lib/email-templates/`. Auth email infra and the queue route already
+  exist.
+- New template `owner-message.tsx`: NextStep header, greeting, message body
+  rendered from `templateData` (escaped, never raw HTML), signature.
+- New `src/lib/owner-outreach.functions.ts`:
+  - `sendOwnerEmail` — owner-gated, Zod-validated (`to` email, subject <=150,
+    body <=5000), suppression check, one recipient per call, idempotency key
+    derived from a generated message id; posts to the transactional send route.
+  - `listOwnerEmails` — recent sends read from `email_send_log` filtered to the
+    owner-message template, deduped by `message_id`.
+- New `src/components/owner/email-compose-dialog.tsx` — shared dialog reused by
+  the Users, Beta, and Feedback tables plus the Compose page.
+- Wire the "Email" button into `src/components/owner-panels.tsx` (users +
+  feedback), the beta program tab, and `src/routes/_authenticated/owner/emails.tsx`.
+- No schema migration needed; `email_send_log` and `suppressed_emails` already
+  exist.
