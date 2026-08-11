@@ -142,6 +142,7 @@ export const decodeAppliance = createServerFn({ method: "POST" })
     // Priority: cached -> Appliance Age Finder API -> local decoder -> unknown.
     let apiLookup: Awaited<ReturnType<typeof lookupApplianceAgeWithCache>> | null = null;
     let outcome: DecodeOutcome | null = null;
+    let crossChecksOut: { communityConfirmations?: number; confirmedYear?: number | null } | null = null;
 
     if (hasSerial) {
       const brandKeyForApi = resolveBrand(data.brand) ?? data.brand.toLowerCase();
@@ -172,6 +173,8 @@ export const decodeAppliance = createServerFn({ method: "POST" })
           apiYear: apiLookup?.manufactureYear ?? null,
         }),
       ]);
+
+      crossChecksOut = crossChecks;
 
       try {
         outcome = decodeAge({ brand: data.brand, model: data.modelNumber, serial, modelWindow, crossChecks });
@@ -452,7 +455,7 @@ Identify the appliance. Do not state any date or age.`,
             rejected: outcome.rejected,
             attemptedRules: outcome.attemptedRules,
             confidenceBreakdown: outcome.confidenceBreakdown,
-            communityConfirmations: 0,
+            communityConfirmations: crossChecksOut?.communityConfirmations ?? 0,
           }
         : null,
       candidates: (outcome?.candidates ?? []).map((c) => ({
