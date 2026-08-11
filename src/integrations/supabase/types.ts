@@ -742,21 +742,83 @@ export type Database = {
           },
         ]
       }
+      contribution_events: {
+        Row: {
+          created_at: string
+          discussion_id: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          outcome_id: string | null
+          user_id: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          discussion_id?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          outcome_id?: string | null
+          user_id: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          discussion_id?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          outcome_id?: string | null
+          user_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contribution_events_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "community_discussions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contribution_events_outcome_id_fkey"
+            columns: ["outcome_id"]
+            isOneToOne: false
+            referencedRelation: "diagnostic_outcomes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diagnostic_outcomes: {
         Row: {
           actual_failure: string | null
           appliance_type: string
           complaint: string
           confirmed_at: string | null
+          confirming_test: string | null
           created_at: string
+          evidence_snapshot: Json
           id: string
           manufacturer: string
           model_number: string
+          nextstep_verdict: string | null
           notes: string | null
           outcome: string
+          part_replaced: string | null
+          photo_path: string | null
           platform: string | null
+          predicted_confidence: Json
+          predicted_failures: Json
+          predicted_top_failure: string | null
+          public_notes: string | null
           recommended_failure: string
+          repair_successful: boolean | null
           session_id: string | null
+          shared_at: string | null
+          shared_to_community: boolean
+          tests_performed: Json
+          unusual_notes: string | null
           updated_at: string
           user_id: string
         }
@@ -765,15 +827,29 @@ export type Database = {
           appliance_type?: string
           complaint?: string
           confirmed_at?: string | null
+          confirming_test?: string | null
           created_at?: string
+          evidence_snapshot?: Json
           id?: string
           manufacturer?: string
           model_number?: string
+          nextstep_verdict?: string | null
           notes?: string | null
           outcome: string
+          part_replaced?: string | null
+          photo_path?: string | null
           platform?: string | null
+          predicted_confidence?: Json
+          predicted_failures?: Json
+          predicted_top_failure?: string | null
+          public_notes?: string | null
           recommended_failure?: string
+          repair_successful?: boolean | null
           session_id?: string | null
+          shared_at?: string | null
+          shared_to_community?: boolean
+          tests_performed?: Json
+          unusual_notes?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -782,15 +858,29 @@ export type Database = {
           appliance_type?: string
           complaint?: string
           confirmed_at?: string | null
+          confirming_test?: string | null
           created_at?: string
+          evidence_snapshot?: Json
           id?: string
           manufacturer?: string
           model_number?: string
+          nextstep_verdict?: string | null
           notes?: string | null
           outcome?: string
+          part_replaced?: string | null
+          photo_path?: string | null
           platform?: string | null
+          predicted_confidence?: Json
+          predicted_failures?: Json
+          predicted_top_failure?: string | null
+          public_notes?: string | null
           recommended_failure?: string
+          repair_successful?: boolean | null
           session_id?: string | null
+          shared_at?: string | null
+          shared_to_community?: boolean
+          tests_performed?: Json
+          unusual_notes?: string | null
           updated_at?: string
           user_id?: string
         }
