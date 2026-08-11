@@ -5,6 +5,54 @@ import { loadOutcomeStats, type OutcomeStats } from "./diagnostic-outcomes.serve
 
 const OutcomeKind = z.enum(["confirmed", "incorrect", "partial", "pending_repair"]);
 
+const Verdict = z.enum(["correct", "partial", "incorrect"]);
+
+/** Optional structured feedback captured by the 3-step outcome flow. */
+const FeedbackFields = {
+  partReplaced: z.string().nullable().optional(),
+  confirmingTest: z.string().nullable().optional(),
+  repairSuccessful: z.boolean().nullable().optional(),
+  unusualNotes: z.string().nullable().optional(),
+  nextstepVerdict: Verdict.nullable().optional(),
+  predictedTopFailure: z.string().nullable().optional(),
+  predictedFailures: z.array(z.string()).optional(),
+  predictedConfidence: z.record(z.string(), z.unknown()).optional(),
+  testsPerformed: z.array(z.unknown()).optional(),
+  evidenceSnapshot: z.array(z.unknown()).optional(),
+  photoPath: z.string().nullable().optional(),
+};
+
+type FeedbackInput = Partial<{
+  partReplaced: string | null;
+  confirmingTest: string | null;
+  repairSuccessful: boolean | null;
+  unusualNotes: string | null;
+  nextstepVerdict: "correct" | "partial" | "incorrect" | null;
+  predictedTopFailure: string | null;
+  predictedFailures: string[];
+  predictedConfidence: Record<string, unknown>;
+  testsPerformed: unknown[];
+  evidenceSnapshot: unknown[];
+  photoPath: string | null;
+}>;
+
+/** Maps optional feedback fields to column names, omitting undefined values. */
+function feedbackPatch(d: FeedbackInput): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (d.partReplaced !== undefined) out['part_replaced'] = d.partReplaced;
+  if (d.confirmingTest !== undefined) out['confirming_test'] = d.confirmingTest;
+  if (d.repairSuccessful !== undefined) out['repair_successful'] = d.repairSuccessful;
+  if (d.unusualNotes !== undefined) out['unusual_notes'] = d.unusualNotes;
+  if (d.nextstepVerdict !== undefined) out['nextstep_verdict'] = d.nextstepVerdict;
+  if (d.predictedTopFailure !== undefined) out['predicted_top_failure'] = d.predictedTopFailure;
+  if (d.predictedFailures !== undefined) out['predicted_failures'] = d.predictedFailures;
+  if (d.predictedConfidence !== undefined) out['predicted_confidence'] = d.predictedConfidence;
+  if (d.testsPerformed !== undefined) out['tests_performed'] = d.testsPerformed;
+  if (d.evidenceSnapshot !== undefined) out['evidence_snapshot'] = d.evidenceSnapshot;
+  if (d.photoPath !== undefined) out['photo_path'] = d.photoPath;
+  return out;
+}
+
 const RecordInput = z.object({
   sessionId: z.string().uuid().nullable().optional(),
   manufacturer: z.string().default(""),
@@ -16,6 +64,7 @@ const RecordInput = z.object({
   outcome: OutcomeKind,
   actualFailure: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  ...FeedbackFields,
 });
 
 export const recordOutcome = createServerFn({ method: "POST" })
@@ -35,6 +84,7 @@ export const recordOutcome = createServerFn({ method: "POST" })
       notes: data.notes ?? null,
       outcome: data.outcome,
       confirmed_at: data.outcome === "confirmed" ? new Date().toISOString() : null,
+      ...feedbackPatch(data),
     };
     const { data: row, error } = await context.supabase
       .from("diagnostic_outcomes")
@@ -58,6 +108,7 @@ const UpdateInput = z.object({
   outcome: z.enum(["confirmed", "incorrect", "partial"]),
   actualFailure: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  ...FeedbackFields,
 });
 
 export const updateOutcome = createServerFn({ method: "POST" })
@@ -69,6 +120,7 @@ export const updateOutcome = createServerFn({ method: "POST" })
       actual_failure: data.actualFailure ?? null,
       notes: data.notes ?? null,
       confirmed_at: data.outcome === "confirmed" ? new Date().toISOString() : null,
+      ...feedbackPatch(data),
     };
     const { data: row, error } = await context.supabase
       .from("diagnostic_outcomes")
