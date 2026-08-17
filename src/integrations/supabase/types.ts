@@ -1129,6 +1129,504 @@ export type Database = {
         }
         Relationships: []
       }
+      knowledge_chunks: {
+        Row: {
+          appliance_type: string | null
+          brand: string | null
+          chunk_index: number
+          component: string | null
+          confidence_score: number
+          content: string
+          created_at: string
+          embedding: string | null
+          embedding_dims: number | null
+          embedding_model: string | null
+          error_code: string | null
+          extraction_id: string | null
+          fact_id: string | null
+          id: string
+          job_id: string | null
+          manufacturer: string | null
+          model_family: string | null
+          model_number: string | null
+          needs_review: boolean
+          origin: Database["public"]["Enums"]["knowledge_origin"]
+          page_number: number | null
+          section: string | null
+          source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_id: string
+          source_type: Database["public"]["Enums"]["knowledge_source_type"]
+          symptom_tags: string[]
+          token_count: number | null
+        }
+        Insert: {
+          appliance_type?: string | null
+          brand?: string | null
+          chunk_index?: number
+          component?: string | null
+          confidence_score?: number
+          content: string
+          created_at?: string
+          embedding?: string | null
+          embedding_dims?: number | null
+          embedding_model?: string | null
+          error_code?: string | null
+          extraction_id?: string | null
+          fact_id?: string | null
+          id?: string
+          job_id?: string | null
+          manufacturer?: string | null
+          model_family?: string | null
+          model_number?: string | null
+          needs_review?: boolean
+          origin: Database["public"]["Enums"]["knowledge_origin"]
+          page_number?: number | null
+          section?: string | null
+          source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_id: string
+          source_type: Database["public"]["Enums"]["knowledge_source_type"]
+          symptom_tags?: string[]
+          token_count?: number | null
+        }
+        Update: {
+          appliance_type?: string | null
+          brand?: string | null
+          chunk_index?: number
+          component?: string | null
+          confidence_score?: number
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          embedding_dims?: number | null
+          embedding_model?: string | null
+          error_code?: string | null
+          extraction_id?: string | null
+          fact_id?: string | null
+          id?: string
+          job_id?: string | null
+          manufacturer?: string | null
+          model_family?: string | null
+          model_number?: string | null
+          needs_review?: boolean
+          origin?: Database["public"]["Enums"]["knowledge_origin"]
+          page_number?: number | null
+          section?: string | null
+          source_authority?: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_id?: string
+          source_type?: Database["public"]["Enums"]["knowledge_source_type"]
+          symptom_tags?: string[]
+          token_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_extractions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_fact_id_fkey"
+            columns: ["fact_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_facts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_processing_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_extractions: {
+        Row: {
+          created_at: string
+          heading: string | null
+          id: string
+          job_id: string | null
+          metadata: Json
+          ocr_text: string | null
+          page_number: number | null
+          section: string | null
+          source_id: string
+          tables: Json
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          heading?: string | null
+          id?: string
+          job_id?: string | null
+          metadata?: Json
+          ocr_text?: string | null
+          page_number?: number | null
+          section?: string | null
+          source_id: string
+          tables?: Json
+          text?: string
+        }
+        Update: {
+          created_at?: string
+          heading?: string | null
+          id?: string
+          job_id?: string | null
+          metadata?: Json
+          ocr_text?: string | null
+          page_number?: number | null
+          section?: string | null
+          source_id?: string
+          tables?: Json
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_extractions_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_processing_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_extractions_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_facts: {
+        Row: {
+          actual_result: string | null
+          appliance_type: string | null
+          brand: string | null
+          complaint: string | null
+          component: string | null
+          confidence_reason: string | null
+          confidence_score: number
+          created_at: string
+          diagnostic_step: string | null
+          error_code: string | null
+          expected_result: string | null
+          extraction_id: string | null
+          failure: string | null
+          id: string
+          job_id: string | null
+          manufacturer: string | null
+          model_family: string | null
+          model_number: string | null
+          needs_review: boolean
+          notes: string | null
+          origin: Database["public"]["Enums"]["knowledge_origin"]
+          origin_actor: string | null
+          part: string | null
+          part_number: string | null
+          repair: string | null
+          resolution: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_id: string
+          superseded_by: string | null
+          symptom: string | null
+          test: string | null
+          test_condition: string | null
+          updated_at: string
+        }
+        Insert: {
+          actual_result?: string | null
+          appliance_type?: string | null
+          brand?: string | null
+          complaint?: string | null
+          component?: string | null
+          confidence_reason?: string | null
+          confidence_score?: number
+          created_at?: string
+          diagnostic_step?: string | null
+          error_code?: string | null
+          expected_result?: string | null
+          extraction_id?: string | null
+          failure?: string | null
+          id?: string
+          job_id?: string | null
+          manufacturer?: string | null
+          model_family?: string | null
+          model_number?: string | null
+          needs_review?: boolean
+          notes?: string | null
+          origin: Database["public"]["Enums"]["knowledge_origin"]
+          origin_actor?: string | null
+          part?: string | null
+          part_number?: string | null
+          repair?: string | null
+          resolution?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_id: string
+          superseded_by?: string | null
+          symptom?: string | null
+          test?: string | null
+          test_condition?: string | null
+          updated_at?: string
+        }
+        Update: {
+          actual_result?: string | null
+          appliance_type?: string | null
+          brand?: string | null
+          complaint?: string | null
+          component?: string | null
+          confidence_reason?: string | null
+          confidence_score?: number
+          created_at?: string
+          diagnostic_step?: string | null
+          error_code?: string | null
+          expected_result?: string | null
+          extraction_id?: string | null
+          failure?: string | null
+          id?: string
+          job_id?: string | null
+          manufacturer?: string | null
+          model_family?: string | null
+          model_number?: string | null
+          needs_review?: boolean
+          notes?: string | null
+          origin?: Database["public"]["Enums"]["knowledge_origin"]
+          origin_actor?: string | null
+          part?: string | null
+          part_number?: string | null
+          repair?: string | null
+          resolution?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_authority?: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_id?: string
+          superseded_by?: string | null
+          symptom?: string | null
+          test?: string | null
+          test_condition?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_facts_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_extractions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_facts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_processing_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_facts_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_facts_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "knowledge_facts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_processing_jobs: {
+        Row: {
+          attempt_count: number
+          created_at: string
+          embedding_model: string | null
+          extraction_confidence: number | null
+          extraction_method: string | null
+          id: string
+          processing_completed_at: string | null
+          processing_error: string | null
+          processing_started_at: string | null
+          requested_by: string | null
+          source_id: string
+          stats: Json
+          status: Database["public"]["Enums"]["knowledge_job_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          created_at?: string
+          embedding_model?: string | null
+          extraction_confidence?: number | null
+          extraction_method?: string | null
+          id?: string
+          processing_completed_at?: string | null
+          processing_error?: string | null
+          processing_started_at?: string | null
+          requested_by?: string | null
+          source_id: string
+          stats?: Json
+          status?: Database["public"]["Enums"]["knowledge_job_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          created_at?: string
+          embedding_model?: string | null
+          extraction_confidence?: number | null
+          extraction_method?: string | null
+          id?: string
+          processing_completed_at?: string | null
+          processing_error?: string | null
+          processing_started_at?: string | null
+          requested_by?: string | null
+          source_id?: string
+          stats?: Json
+          status?: Database["public"]["Enums"]["knowledge_job_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_processing_jobs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_review_log: {
+        Row: {
+          action: string
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          fact_id: string | null
+          id: string
+          reason: string | null
+          reviewer_id: string
+          source_id: string | null
+        }
+        Insert: {
+          action: string
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          fact_id?: string | null
+          id?: string
+          reason?: string | null
+          reviewer_id: string
+          source_id?: string | null
+        }
+        Update: {
+          action?: string
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          fact_id?: string | null
+          id?: string
+          reason?: string | null
+          reviewer_id?: string
+          source_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_review_log_fact_id_fkey"
+            columns: ["fact_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_facts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_review_log_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_sources: {
+        Row: {
+          appliance_type: string | null
+          brand: string | null
+          content_hash: string | null
+          created_at: string
+          file_size: number | null
+          id: string
+          manufacturer: string | null
+          metadata: Json
+          mime_type: string | null
+          model_family: string | null
+          model_number: string | null
+          ref_id: string | null
+          ref_table: string | null
+          source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_type: Database["public"]["Enums"]["knowledge_source_type"]
+          source_url: string | null
+          storage_path: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          appliance_type?: string | null
+          brand?: string | null
+          content_hash?: string | null
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          manufacturer?: string | null
+          metadata?: Json
+          mime_type?: string | null
+          model_family?: string | null
+          model_number?: string | null
+          ref_id?: string | null
+          ref_table?: string | null
+          source_authority?: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_type: Database["public"]["Enums"]["knowledge_source_type"]
+          source_url?: string | null
+          storage_path?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          appliance_type?: string | null
+          brand?: string | null
+          content_hash?: string | null
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          manufacturer?: string | null
+          metadata?: Json
+          mime_type?: string | null
+          model_family?: string | null
+          model_number?: string | null
+          ref_id?: string | null
+          ref_table?: string | null
+          source_authority?: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_type?: Database["public"]["Enums"]["knowledge_source_type"]
+          source_url?: string | null
+          storage_path?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       model_production_windows: {
         Row: {
           brand: string | null
@@ -1541,6 +2039,46 @@ export type Database = {
         Returns: boolean
       }
       increment_lookup: { Args: { _user_id: string }; Returns: Json }
+      knowledge_authority_weight: {
+        Args: { _a: Database["public"]["Enums"]["knowledge_source_authority"] }
+        Returns: number
+      }
+      match_knowledge_chunks: {
+        Args: {
+          filter_appliance_type?: string
+          filter_brand?: string
+          filter_component?: string
+          filter_error_code?: string
+          filter_model_family?: string
+          filter_source_type?: Database["public"]["Enums"]["knowledge_source_type"]
+          include_pending?: boolean
+          match_count?: number
+          min_authority_weight?: number
+          query_embedding: string
+          query_text?: string
+        }
+        Returns: {
+          appliance_type: string
+          brand: string
+          component: string
+          confidence_score: number
+          content: string
+          error_code: string
+          extraction_id: string
+          fact_id: string
+          id: string
+          model_family: string
+          needs_review: boolean
+          origin: Database["public"]["Enums"]["knowledge_origin"]
+          page_number: number
+          score: number
+          section: string
+          similarity: number
+          source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
+          source_id: string
+          source_type: Database["public"]["Enums"]["knowledge_source_type"]
+        }[]
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -1558,11 +2096,38 @@ export type Database = {
           read_ct: number
         }[]
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "owner" | "user"
       feedback_kind: "bug" | "feature" | "general"
       feedback_status: "open" | "reviewed" | "closed"
+      knowledge_job_status:
+        | "pending"
+        | "processing"
+        | "completed"
+        | "failed"
+        | "needs_review"
+      knowledge_origin: "human" | "ai_extraction" | "ai_inference"
+      knowledge_source_authority:
+        | "manufacturer_verified"
+        | "technician_verified_repair"
+        | "technician_entered"
+        | "reviewed_normalized"
+        | "ai_extracted_pending_review"
+        | "ai_inference"
+      knowledge_source_type:
+        | "service_manual"
+        | "tech_sheet"
+        | "wiring_diagram"
+        | "error_code_doc"
+        | "parts_doc"
+        | "technician_note"
+        | "repair_record"
+        | "service_call"
+        | "community_thread"
+        | "other"
       plan_tier: "free" | "pro" | "master" | "lifetime"
     }
     CompositeTypes: {
@@ -1694,6 +2259,34 @@ export const Constants = {
       app_role: ["owner", "user"],
       feedback_kind: ["bug", "feature", "general"],
       feedback_status: ["open", "reviewed", "closed"],
+      knowledge_job_status: [
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "needs_review",
+      ],
+      knowledge_origin: ["human", "ai_extraction", "ai_inference"],
+      knowledge_source_authority: [
+        "manufacturer_verified",
+        "technician_verified_repair",
+        "technician_entered",
+        "reviewed_normalized",
+        "ai_extracted_pending_review",
+        "ai_inference",
+      ],
+      knowledge_source_type: [
+        "service_manual",
+        "tech_sheet",
+        "wiring_diagram",
+        "error_code_doc",
+        "parts_doc",
+        "technician_note",
+        "repair_record",
+        "service_call",
+        "community_thread",
+        "other",
+      ],
       plan_tier: ["free", "pro", "master", "lifetime"],
     },
   },
