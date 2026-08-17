@@ -1161,36 +1161,6 @@ export type Database = {
         }
         Relationships: []
       }
-      jenova_sessions: {
-        Row: {
-          agent_id: string | null
-          created_at: string
-          diagnostic_session_id: string
-          id: string
-          jenova_session_id: string
-          updated_at: string
-          user_id: string | null
-        }
-        Insert: {
-          agent_id?: string | null
-          created_at?: string
-          diagnostic_session_id: string
-          id?: string
-          jenova_session_id: string
-          updated_at?: string
-          user_id?: string | null
-        }
-        Update: {
-          agent_id?: string | null
-          created_at?: string
-          diagnostic_session_id?: string
-          id?: string
-          jenova_session_id?: string
-          updated_at?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       knowledge_chunks: {
         Row: {
           appliance_type: string | null
