@@ -475,6 +475,9 @@ export const getUserDetail = createServerFn({ method: "POST" })
 
     if (profile.error) throw new Error(profile.error.message);
 
+    const { sessionKnowledgeStatusFor } = await import("@/lib/knowledge/session-ingest.server");
+    const knowledgeStatus = await sessionKnowledgeStatusFor(supabaseAdmin as any, data.userId);
+
     const sessionRows = sessions.data ?? [];
     const sessionsByStatus = { completed: 0, active: 0, abandoned: 0 };
     for (const s of sessionRows) {
@@ -500,6 +503,7 @@ export const getUserDetail = createServerFn({ method: "POST" })
       role: roleRow.data ? ("owner" as const) : ("user" as const),
       totalDiagnoses: sessionRows.length,
       sessionsByStatus,
+      knowledgeStatus,
       totalAiCalls: (usage.data ?? []).length,
       totalCostUsd: totalCost,
       byFeature: Object.entries(byFeature)
