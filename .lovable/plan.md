@@ -101,6 +101,19 @@ Processing is invoked explicitly (upload action or an owner "reprocess" button) 
 
 Minimal and safe: implement the currently-stubbed `manufacturerDocProvider` and `serviceBulletinProvider` in `src/lib/evidence/providers/stubs.ts` as real providers backed by `search_knowledge`, and add one `knowledge_fact` provider. `gatherEvidence`, `tieredPromptBlock`, and `diagnostics.functions.ts` need **no structural change** — the new evidence flows through the existing tier ordering and prompt block. If retrieval returns nothing, diagnostics behave exactly as they do today.
 
+**The diagnostic engine is not touched until ingestion and retrieval pass testing.** Steps 1–4 below ship and are verified with the evidence providers still returning empty, exactly as today. Only step 5 wires retrieval in, behind a flag that can be turned off without a code change.
+
+## Incremental delivery order
+
+Each step is completed and verified before the next begins.
+
+1. **Confirm the embedding model.** Live gateway call, read back the real vector length, then write the migration against that number.
+2. **Schema + storage.** Tables, enums, grants, RLS, bucket. Nothing reads from them yet.
+3. **Ingest one tech sheet.** Upload a single real tech sheet end to end: source → job → extraction → facts → chunks → embedding. Inspect every stage in the admin UI and confirm page/section attribution, confidence, and provenance are correct before ingesting anything else.
+4. **Backfill a small `diagnostic_outcomes` sample.** Ten to twenty confirmed outcomes, owner-triggered, with a dry-run preview. Verify the normalized facts match the original records, that the originals are untouched, and that every chunk traces back to its outcome id. Only then consider a wider backfill.
+5. **Retrieval smoke test.** Run `search_knowledge` directly against the ingested corpus with filters and a realistic query ("Whirlpool washer fills, agitates, won't spin") and inspect the ranked results — still with no diagnostic-engine change.
+6. **Wire into the evidence engine.** Enable the knowledge-backed providers behind a flag, compare diagnoses with the flag on and off, and confirm behavior is unchanged when the corpus is empty.
+
 ## Admin UI (minimum)
 
 New route `/owner/knowledge` (added to `OWNER_NAV`), three tabs:
@@ -114,8 +127,9 @@ No chat interface, no generic AI screen.
 
 - **Duplication with `tech_sheets` / `error_code_cache`**: avoided by referencing those rows as sources rather than copying content. They remain their own caches.
 - **Cost**: embedding + extraction are AI calls. Mitigated by `content_hash` dedupe, explicit (not automatic) processing, and no re-embedding of unchanged content.
-- **Bad AI extraction polluting diagnostics**: mitigated by the authority ordering, the `needs_review` gate on reads, and the immutability trigger.
-- **Model dimension lock-in**: embedding dimension is fixed at table creation; the plan records the model name per chunk so a future re-embed is possible.
+- **Bad AI extraction polluting diagnostics**: mitigated by the authority ordering, the `needs_review` gate on reads, server-authorized provenance, and the append-only extraction table.
+- **Model dimension lock-in**: embedding dimension is fixed at table creation; the model is verified live before the migration and recorded per chunk so a future re-embed is possible.
+- **Provenance loss**: every chunk and fact keeps its FK chain to extraction → source, plus page/section and the originating job, so any retrieved statement can be traced to the exact document page or repair record it came from. A row that cannot state its origin is not written.
 
 ## Phase 1 exit criteria
 
