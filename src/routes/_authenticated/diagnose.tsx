@@ -628,6 +628,12 @@ function Phase3(props: {
             ) : null}
           </div>
           <FindingCard label="Recommended Next Test" value={step.recommendedNextTest || "—"} accent="secondary" />
+          {step.safetyWarning ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              <span className="font-semibold uppercase tracking-wide">Safety </span>
+              {step.safetyWarning}
+            </div>
+          ) : null}
           {step.groundingSource && <GroundingCaption source={step.groundingSource} />}
         </div>
       )}
