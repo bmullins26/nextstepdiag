@@ -7,9 +7,10 @@ import { logAiUsage } from "./ai-usage-log.server";
 import { getTechSheet } from "./tech-sheets/lookup.functions";
 import type { GroundingResult } from "./tech-sheets/types";
 import { loadOutcomeStats } from "./diagnostic-outcomes.server";
-import { gatherEvidence, tieredPromptBlock } from "./evidence/engine";
+import { gatherEvidence, tieredPromptBlock, provenanceBlock } from "./evidence/engine";
 import type { EvidenceItem } from "./evidence/types";
 import { enforceLookupQuota, QuotaExceededError } from "./billing/quota.server";
+import { runDiagnosticStep } from "./ai/diagnostic-provider.server";
 
 const ApplianceInput = z.object({
   brand: z.string().min(1),
@@ -75,6 +76,7 @@ const StepInput = z.object({
   documentExcerpt: z.string().optional().default(""),
   currentFindings: z.array(z.string()).default([]),
   sessionId: z.string().uuid().nullable().optional(),
+  provider: z.enum(["lovable", "jenova"]).nullable().optional(),
 });
 
 export const nextDiagnosticStep = createServerFn({ method: "POST" })
@@ -96,13 +98,14 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
           groundingSource: null,
           historicalOutcomes: null,
           evidence: [] as EvidenceItem[],
+          provider: "lovable" as const,
+          providerError: null as string | null,
           quotaExceeded: true as const,
           quota: { used: e.used, limit: e.limit },
         };
       }
       throw e;
     }
-    const gateway = getGateway();
     const historyText = data.history.length
       ? data.history.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join("\n")
       : "(no questions answered yet)";
