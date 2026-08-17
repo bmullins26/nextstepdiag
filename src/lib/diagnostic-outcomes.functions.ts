@@ -100,6 +100,16 @@ export const recordOutcome = createServerFn({ method: "POST" })
         .eq("id", data.sessionId)
         .eq("user_id", context.userId);
     }
+    // Session evidence + (only when confirmed) the higher-authority repair
+    // record enter the Knowledge Engine. Both paths are idempotent.
+    {
+      const { queueSessionIngest, queueOutcomeIngest } = await import(
+        "@/lib/knowledge/session-ingest.server"
+      );
+      if (data.sessionId) queueSessionIngest(data.sessionId, context.userId);
+      if (data.outcome === "confirmed" && (row as any)?.id)
+        queueOutcomeIngest((row as any).id, context.userId);
+    }
     return row;
   });
 
@@ -137,6 +147,13 @@ export const updateOutcome = createServerFn({ method: "POST" })
         .update({ status: "completed" })
         .eq("id", row.session_id)
         .eq("user_id", context.userId);
+    }
+    {
+      const { queueSessionIngest, queueOutcomeIngest } = await import(
+        "@/lib/knowledge/session-ingest.server"
+      );
+      if (row?.session_id) queueSessionIngest(row.session_id, context.userId);
+      if (data.outcome === "confirmed") queueOutcomeIngest(data.id, context.userId);
     }
     return row;
   });

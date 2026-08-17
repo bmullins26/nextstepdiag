@@ -297,6 +297,42 @@ export const ingestOutcomeSample = createServerFn({ method: "POST" })
   });
 
 /** Owner review action — approve / reject a normalized fact. */
+export const getSessionKnowledgeStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { sessionKnowledgeStats } = await import("@/lib/knowledge/session-ingest.server");
+    return sessionKnowledgeStats(supabaseAdmin as any);
+  });
+
+/**
+ * Historical diagnostic-session backfill. Idempotent, batched, owner-only.
+ * Authority/provenance are decided server-side inside the pipeline.
+ */
+export const backfillSessionKnowledge = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z
+      .object({
+        limit: z.number().int().min(1).max(25).default(10),
+        dryRun: z.boolean().default(false),
+        retryFailed: z.boolean().default(false),
+      })
+      .parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { backfillSessions } = await import("@/lib/knowledge/session-ingest.server");
+    return backfillSessions(supabaseAdmin as any, {
+      limit: data.limit,
+      dryRun: data.dryRun,
+      retryFailed: data.retryFailed,
+      uploadedBy: context.userId,
+    });
+  });
+
 export const reviewKnowledgeFact = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>

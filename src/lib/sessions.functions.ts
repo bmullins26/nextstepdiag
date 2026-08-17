@@ -39,6 +39,10 @@ export const upsertSession = createServerFn({ method: "POST" })
         .select()
         .single();
       if (error) throw new Error(error.message);
+      if ((r as { status?: string } | null)?.status === "completed") {
+        const { queueSessionIngest } = await import("@/lib/knowledge/session-ingest.server");
+        queueSessionIngest(id, context.userId);
+      }
       void context.supabase
         .from("profiles")
         .update({ last_activity_at: new Date().toISOString() })
@@ -114,6 +118,10 @@ export const setSessionStatus = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
+    if (data.status === "completed") {
+      const { queueSessionIngest } = await import("@/lib/knowledge/session-ingest.server");
+      queueSessionIngest(data.id, context.userId);
+    }
     return { ok: true };
   });
 

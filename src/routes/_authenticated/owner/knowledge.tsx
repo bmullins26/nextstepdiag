@@ -17,6 +17,8 @@ import {
 import { toast } from "sonner";
 import {
   getKnowledgeSourceDetail,
+  backfillSessionKnowledge,
+  getSessionKnowledgeStats,
   ingestOutcomeSample,
   ingestTechSheet,
   listIngestCandidates,
@@ -45,10 +47,11 @@ export const Route = createFileRoute("/_authenticated/owner/knowledge")({
   component: KnowledgePage,
 });
 
-const TABS = ["sources", "inspect", "review", "search"] as const;
+const TABS = ["sources", "sessions", "inspect", "review", "search"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   sources: "Sources",
+  sessions: "Sessions",
   inspect: "Inspect",
   review: "Review queue",
   search: "Retrieval test",
@@ -121,9 +124,151 @@ function KnowledgePage() {
         />
       )}
       {tab === "inspect" && <InspectTab sourceId={selected} />}
+      {tab === "sessions" && <SessionsTab />}
       {tab === "review" && <ReviewTab />}
       {tab === "search" && <SearchTab />}
     </section>
+  );
+}
+
+function StatTile({ label, value, tone }: { label: string; value: number; tone?: string }) {
+  return (
+    <div className="rounded-lg border border-border/60 px-3 py-2">
+      <div className={`text-lg font-semibold ${tone ?? ""}`}>{value.toLocaleString()}</div>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function SessionsTab() {
+  const qc = useQueryClient();
+  const statsFn = useServerFn(getSessionKnowledgeStats);
+  const backfillFn = useServerFn(backfillSessionKnowledge);
+
+  const stats = useQuery({
+    queryKey: ["knowledge", "session-stats"],
+    queryFn: () => statsFn(),
+  });
+
+  const mut = useMutation({
+    mutationFn: (vars: { limit: number; dryRun: boolean; retryFailed: boolean }) =>
+      backfillFn({ data: vars }),
+    onSuccess: (r: any) => {
+      if (r.dryRun) {
+        toast.info(`Dry run: ${r.wouldIngest.length} session(s) would be ingested.`);
+      } else {
+        const ok = r.results.filter((x: any) => x.state === "processed").length;
+        const skipped = r.results.filter((x: any) => x.state === "skipped").length;
+        const failed = r.results.filter((x: any) => x.state === "failed").length;
+        toast.success(`Processed ${ok}, skipped ${skipped}, failed ${failed}.`);
+      }
+      qc.invalidateQueries({ queryKey: ["knowledge"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Backfill failed"),
+  });
+
+  const s = stats.data;
+  const results: any[] = (mut.data as any)?.results ?? [];
+  const wouldIngest: any[] = (mut.data as any)?.wouldIngest ?? [];
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-border/70 bg-card/40 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Diagnostic sessions → Knowledge Engine</h3>
+          <Button size="sm" variant="ghost" onClick={() => qc.invalidateQueries({ queryKey: ["knowledge"] })}>
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Refresh
+          </Button>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Sessions are ingested as <strong>evidence</strong> (service call, technician entered), and every
+          AI-derived fact still lands in the review queue. Only confirmed repair outcomes are ingested at
+          verified-repair authority. Original sessions are never modified.
+        </p>
+
+        {stats.isLoading ? (
+          <p className="text-sm text-muted-foreground">
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Loading…
+          </p>
+        ) : s ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            <StatTile label="Eligible" value={s.eligible} />
+            <StatTile label="Processed" value={s.processed} tone="text-emerald-500" />
+            <StatTile label="Pending" value={s.pending} tone="text-amber-500" />
+            <StatTile label="Failed" value={s.failed} tone="text-destructive" />
+            <StatTile label="Not eligible" value={s.notEligible} />
+            <StatTile label="Total sessions" value={s.totalSessions} />
+            <StatTile label="Facts generated" value={s.facts} />
+            <StatTile label="Chunks generated" value={s.chunks} />
+            <StatTile label="Review items" value={s.reviewItems} tone="text-amber-500" />
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-3">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={mut.isPending}
+            onClick={() => mut.mutate({ limit: 10, dryRun: true, retryFailed: false })}
+          >
+            Dry run (10)
+          </Button>
+          <Button
+            size="sm"
+            disabled={mut.isPending}
+            onClick={() => mut.mutate({ limit: 10, dryRun: false, retryFailed: false })}
+          >
+            {mut.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Backfill batch (10)
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={mut.isPending}
+            onClick={() => mut.mutate({ limit: 5, dryRun: false, retryFailed: true })}
+          >
+            Retry failed (5)
+          </Button>
+        </div>
+      </div>
+
+      {wouldIngest.length > 0 && (
+        <Section title={`Would ingest (${wouldIngest.length})`}>
+          {wouldIngest.map((w) => (
+            <div key={w.id} className="px-4 py-2 text-xs">
+              {w.label}
+            </div>
+          ))}
+        </Section>
+      )}
+
+      {results.length > 0 && (
+        <Section title={`Last batch (${results.length})`}>
+          {results.map((r, i) => (
+            <div key={`${r.sessionId}-${i}`} className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
+              <span
+                className={`rounded px-2 py-0.5 font-medium ${
+                  r.state === "processed"
+                    ? "bg-emerald-500/15 text-emerald-500"
+                    : r.state === "failed"
+                      ? "bg-destructive/15 text-destructive"
+                      : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {r.state}
+              </span>
+              <span className="text-muted-foreground">{r.sessionId}</span>
+              {r.state === "processed" && (
+                <span className="text-muted-foreground">
+                  {r.facts} facts · {r.chunks} chunks · {r.needs_review} need review
+                </span>
+              )}
+              {r.reason && <span className="text-muted-foreground">{r.reason}</span>}
+            </div>
+          ))}
+        </Section>
+      )}
+    </div>
   );
 }
 
