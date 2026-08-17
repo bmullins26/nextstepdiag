@@ -156,9 +156,19 @@ export function stripTags(html: string): string {
 }
 
 function listItems(html: string): string[] {
+  return items(html);
+}
+
+function items(html: string): string[] {
   return [...html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
     .map((m) => stripTags(m[1] ?? ""))
     .filter(Boolean);
+}
+
+/** Slug segment -> display text ("gas-dryer" -> "Gas dryer"). */
+export function slugToLabel(slug: string): string {
+  const s = slug.replace(/-/g, " ").trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 /** Text of the first list that follows a bolded label inside a block. */
@@ -339,8 +349,8 @@ export function parseVadFixPage(html: string, url: string): VadCategoryRecord | 
 
   const parts = url.replace(/\/+$/, "").split("/");
   const symptom = (parts[parts.length - 1] ?? "").replace(/-/g, " ");
-  const applianceType = (parts[parts.length - 2] ?? "").replace(/-/g, " ");
-  const brand = (parts[parts.length - 3] ?? "").replace(/-/g, " ");
+  const applianceType = slugToLabel(parts[parts.length - 2] ?? "");
+  const brand = slugToLabel(parts[parts.length - 3] ?? "");
   if (!symptom || !applianceType || !brand) return null;
 
   const excluded: ExclusionCounters = {
