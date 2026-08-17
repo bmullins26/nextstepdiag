@@ -11,6 +11,12 @@ export async function logAiUsage(args: {
   feature: string;
   model: string;
   usage: Usage;
+  provider?: string;
+  agentId?: string | null;
+  sessionId?: string | null;
+  success?: boolean;
+  errorMessage?: string | null;
+  costUsd?: number | null;
 }) {
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -22,6 +28,13 @@ export async function logAiUsage(args: {
       model: args.model,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
+      provider: args.provider ?? "lovable",
+      agent_id: args.agentId ?? null,
+      session_id: args.sessionId ?? null,
+      success: args.success ?? true,
+      // Never log credentials or raw provider payloads — message text only.
+      error_message: args.errorMessage ? String(args.errorMessage).slice(0, 500) : null,
+      cost_usd: args.costUsd ?? null,
     });
   } catch (err) {
     console.error("[ai_usage] log failed", err);
