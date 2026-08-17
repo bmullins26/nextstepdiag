@@ -602,6 +602,13 @@ export type Database = {
             referencedRelation: "diagnostic_outcomes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "community_discussions_verified_outcome_id_fkey"
+            columns: ["verified_outcome_id"]
+            isOneToOne: false
+            referencedRelation: "shared_confirmed_repairs"
+            referencedColumns: ["id"]
+          },
         ]
       }
       community_insight_feedback: {
@@ -786,6 +793,13 @@ export type Database = {
             columns: ["outcome_id"]
             isOneToOne: false
             referencedRelation: "diagnostic_outcomes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contribution_events_outcome_id_fkey"
+            columns: ["outcome_id"]
+            isOneToOne: false
+            referencedRelation: "shared_confirmed_repairs"
             referencedColumns: ["id"]
           },
         ]
@@ -2009,7 +2023,60 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      shared_confirmed_repairs: {
+        Row: {
+          actual_failure: string | null
+          appliance_type: string | null
+          complaint: string | null
+          confirmed_at: string | null
+          confirming_test: string | null
+          created_at: string | null
+          id: string | null
+          manufacturer: string | null
+          model_number: string | null
+          part_replaced: string | null
+          public_notes: string | null
+          recommended_failure: string | null
+          repair_successful: boolean | null
+          shared_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          actual_failure?: string | null
+          appliance_type?: string | null
+          complaint?: string | null
+          confirmed_at?: string | null
+          confirming_test?: string | null
+          created_at?: string | null
+          id?: string | null
+          manufacturer?: string | null
+          model_number?: string | null
+          part_replaced?: string | null
+          public_notes?: string | null
+          recommended_failure?: string | null
+          repair_successful?: boolean | null
+          shared_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          actual_failure?: string | null
+          appliance_type?: string | null
+          complaint?: string | null
+          confirmed_at?: string | null
+          confirming_test?: string | null
+          created_at?: string | null
+          id?: string | null
+          manufacturer?: string | null
+          model_number?: string | null
+          part_replaced?: string | null
+          public_notes?: string | null
+          recommended_failure?: string | null
+          repair_successful?: boolean | null
+          shared_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       _beta_guess_state: { Args: { input: string }; Returns: string }
