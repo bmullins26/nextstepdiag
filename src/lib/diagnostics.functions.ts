@@ -288,7 +288,8 @@ ${evidenceBlock}
 ${data.documentExcerpt ? `Additional tech sheet / wiring diagram excerpt (uploaded by technician):\n${data.documentExcerpt.slice(0, 4000)}\n` : ""}
 Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.${historicalBlock}`,
     });
-    await logAiUsage({ userId: context.userId, feature: "next_diagnostic_step", model: DEFAULT_MODEL, usage });
+    // Usage is logged inside the provider layer (per-provider, incl. failures).
+    const object = providerResult.output;
 
     // Persist which evidence items informed this diagnosis
     try {
@@ -310,6 +311,8 @@ Decide the single next diagnostic question, or finalize the call. Reminder: answ
 
     return {
       ...object,
+      provider: providerResult.provider,
+      providerError: providerResult.providerError ?? null,
       groundingMode: mode,
       groundingSource: grounding
         ? {
