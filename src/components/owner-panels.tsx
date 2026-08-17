@@ -625,6 +625,15 @@ function UserDetailDialog({ userId, onClose }: { userId: string | null; onClose:
               <StatCard label="Active" value={data.sessionsByStatus.active} />
               <StatCard label="Abandoned" value={data.sessionsByStatus.abandoned} />
             </div>
+            <div>
+              <div className="mb-2 text-sm font-semibold">Knowledge Engine ingestion</div>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <StatCard label="Processed" value={data.knowledgeStatus?.processed ?? 0} />
+                <StatCard label="Pending" value={data.knowledgeStatus?.pending ?? 0} />
+                <StatCard label="Failed" value={data.knowledgeStatus?.failed ?? 0} />
+                <StatCard label="Not Eligible" value={data.knowledgeStatus?.not_eligible ?? 0} />
+              </div>
+            </div>
             <div className="text-xs text-muted-foreground">
               Signed up {fmtDate(data.profile?.created_at)} · Last activity {fmtDate(data.profile?.last_activity_at)}
             </div>
