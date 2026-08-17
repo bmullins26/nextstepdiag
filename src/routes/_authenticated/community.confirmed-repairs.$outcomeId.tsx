@@ -52,8 +52,15 @@ function ConfirmedRepairDetail() {
               <Row label="Part replaced" value={data.partReplaced ?? "—"} />
               <Row label="Confirming test" value={data.confirmingTest ?? "—"} />
               <Row label="Repair successful" value={data.repairSuccessful == null ? "—" : data.repairSuccessful ? "Yes" : "No"} />
-              <Row label="Technician" value={data.technician} />
-              <Row label="Confirmed" value={new Date(data.confirmedAt).toLocaleDateString()} />
+              <Row label="Verified by" value={data.technician} />
+              <Row
+                label="Verified"
+                value={new Date(data.confirmedAt).toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              />
               {data.publicNotes && <Row label="Notes" value={data.publicNotes} />}
             </dl>
             {data.discussionId && (

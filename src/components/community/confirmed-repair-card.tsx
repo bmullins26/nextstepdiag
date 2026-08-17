@@ -27,8 +27,15 @@ export function ConfirmedRepairCard({ repair }: { repair: ConfirmedRepair }) {
             <CheckCircle2 className="h-3 w-3" /> {repair.repairSuccessful ? "Repair successful" : "Not resolved"}
           </span>
         )}
-        <span>{repair.technician}</span>
-        <span>{new Date(repair.confirmedAt).toLocaleDateString()}</span>
+        <span>Verified by: {repair.technician}</span>
+        <span>
+          Verified:{" "}
+          {new Date(repair.confirmedAt).toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
+        </span>
         <span className="inline-flex items-center gap-1"><ThumbsUp className="h-3 w-3" /> {repair.helpfulCount}</span>
         {repair.discussionId && (
           <span className="inline-flex items-center gap-1"><MessagesSquare className="h-3 w-3" /> {repair.replyCount}</span>

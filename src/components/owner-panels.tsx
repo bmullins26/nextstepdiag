@@ -380,6 +380,7 @@ function UsersTab() {
                 <th className="px-3 py-2">Display name</th>
                 <th className="px-3 py-2">Plan</th>
                 <th className="px-3 py-2">Role</th>
+                <th className="px-3 py-2">Sessions</th>
                 <th className="px-3 py-2">Signup</th>
                 <th className="px-3 py-2">Last Login</th>
                 <th className="px-3 py-2">Last Activity</th>
@@ -421,6 +422,7 @@ function UsersTab() {
                     </Select>
                   </td>
                   <td className="px-3 py-2 text-xs">{u.role === "owner" ? <span className="inline-flex items-center gap-1 font-semibold text-primary"><Shield className="h-3 w-3"/>Owner</span> : "User"}</td>
+                  <td className="px-3 py-2 text-xs tabular-nums">{u.sessions ?? 0}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.created_at)}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.last_sign_in_at)}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.last_activity_at)}</td>
@@ -614,9 +616,14 @@ function UserDetailDialog({ userId, onClose }: { userId: string | null; onClose:
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <StatCard label="Plan" value={data.profile?.plan ?? "—"} />
-              <StatCard label="Diagnoses" value={data.totalDiagnoses} />
+              <StatCard label="Diagnostic Sessions" value={data.totalDiagnoses} />
               <StatCard label="AI Calls" value={data.totalAiCalls} />
               <StatCard label="Est. Cost" value={formatUsd(data.totalCostUsd)} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard label="Completed" value={data.sessionsByStatus.completed} />
+              <StatCard label="Active" value={data.sessionsByStatus.active} />
+              <StatCard label="Abandoned" value={data.sessionsByStatus.abandoned} />
             </div>
             <div className="text-xs text-muted-foreground">
               Signed up {fmtDate(data.profile?.created_at)} · Last activity {fmtDate(data.profile?.last_activity_at)}
