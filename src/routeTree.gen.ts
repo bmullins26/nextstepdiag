@@ -39,6 +39,7 @@ import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_auth
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
 import { Route as AuthenticatedOwnerIndexRouteImport } from './routes/_authenticated/owner/index'
 import { Route as AuthenticatedOwnerEmailsRouteImport } from './routes/_authenticated/owner/emails'
+import { Route as AuthenticatedOwnerKnowledgeRouteImport } from './routes/_authenticated/owner/knowledge'
 import { Route as AuthenticatedOwnerPaymentsRouteImport } from './routes/_authenticated/owner/payments'
 import { Route as AuthenticatedOwnerToolsRouteImport } from './routes/_authenticated/owner/tools'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
@@ -210,6 +211,12 @@ const AuthenticatedOwnerEmailsRoute =
     path: '/emails',
     getParentRoute: () => AuthenticatedOwnerRoute,
   } as any)
+const AuthenticatedOwnerKnowledgeRoute =
+  AuthenticatedOwnerKnowledgeRouteImport.update({
+    id: '/knowledge',
+    path: '/knowledge',
+    getParentRoute: () => AuthenticatedOwnerRoute,
+  } as any)
 const AuthenticatedOwnerPaymentsRoute =
   AuthenticatedOwnerPaymentsRouteImport.update({
     id: '/payments',
@@ -302,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/owner/emails': typeof AuthenticatedOwnerEmailsRoute
+  '/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -343,6 +351,7 @@ export interface FileRoutesByTo {
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/owner/emails': typeof AuthenticatedOwnerEmailsRoute
+  '/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -387,6 +396,7 @@ export interface FileRoutesById {
   '/_authenticated/community/search': typeof AuthenticatedCommunitySearchRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
   '/_authenticated/owner/emails': typeof AuthenticatedOwnerEmailsRoute
+  '/_authenticated/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/_authenticated/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/_authenticated/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -431,6 +441,7 @@ export interface FileRouteTypes {
     | '/community/search'
     | '/history/$id'
     | '/owner/emails'
+    | '/owner/knowledge'
     | '/owner/payments'
     | '/owner/tools'
     | '/lovable/email/suppression'
@@ -472,6 +483,7 @@ export interface FileRouteTypes {
     | '/community/search'
     | '/history/$id'
     | '/owner/emails'
+    | '/owner/knowledge'
     | '/owner/payments'
     | '/owner/tools'
     | '/lovable/email/suppression'
@@ -515,6 +527,7 @@ export interface FileRouteTypes {
     | '/_authenticated/community/search'
     | '/_authenticated/history/$id'
     | '/_authenticated/owner/emails'
+    | '/_authenticated/owner/knowledge'
     | '/_authenticated/owner/payments'
     | '/_authenticated/owner/tools'
     | '/lovable/email/suppression'
@@ -764,6 +777,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOwnerEmailsRouteImport
       parentRoute: typeof AuthenticatedOwnerRoute
     }
+    '/_authenticated/owner/knowledge': {
+      id: '/_authenticated/owner/knowledge'
+      path: '/knowledge'
+      fullPath: '/owner/knowledge'
+      preLoaderRoute: typeof AuthenticatedOwnerKnowledgeRouteImport
+      parentRoute: typeof AuthenticatedOwnerRoute
+    }
     '/_authenticated/owner/payments': {
       id: '/_authenticated/owner/payments'
       path: '/payments'
@@ -910,6 +930,7 @@ const AuthenticatedOwnerToolsRouteWithChildren =
 
 interface AuthenticatedOwnerRouteChildren {
   AuthenticatedOwnerEmailsRoute: typeof AuthenticatedOwnerEmailsRoute
+  AuthenticatedOwnerKnowledgeRoute: typeof AuthenticatedOwnerKnowledgeRoute
   AuthenticatedOwnerPaymentsRoute: typeof AuthenticatedOwnerPaymentsRoute
   AuthenticatedOwnerToolsRoute: typeof AuthenticatedOwnerToolsRouteWithChildren
   AuthenticatedOwnerIndexRoute: typeof AuthenticatedOwnerIndexRoute
@@ -917,6 +938,7 @@ interface AuthenticatedOwnerRouteChildren {
 
 const AuthenticatedOwnerRouteChildren: AuthenticatedOwnerRouteChildren = {
   AuthenticatedOwnerEmailsRoute: AuthenticatedOwnerEmailsRoute,
+  AuthenticatedOwnerKnowledgeRoute: AuthenticatedOwnerKnowledgeRoute,
   AuthenticatedOwnerPaymentsRoute: AuthenticatedOwnerPaymentsRoute,
   AuthenticatedOwnerToolsRoute: AuthenticatedOwnerToolsRouteWithChildren,
   AuthenticatedOwnerIndexRoute: AuthenticatedOwnerIndexRoute,

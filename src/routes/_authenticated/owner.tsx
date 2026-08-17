@@ -37,6 +37,7 @@ const OWNER_NAV = [
   { to: "/owner/payments", label: "Payments & Subscriptions" },
   { to: "/owner/emails", label: "Email Exports" },
   { to: "/owner/tools", label: "Tool Manager" },
+  { to: "/owner/knowledge", label: "Knowledge Engine" },
 ] as const;
 
 function OwnerLayout() {
