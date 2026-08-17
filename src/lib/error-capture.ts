@@ -4,7 +4,22 @@
 let lastCapturedError: { error: unknown; at: number } | undefined;
 const TTL_MS = 5_000;
 
+// Client disconnects (page reload/navigation while a request is in flight) surface
+// as Node http "aborted" / ECONNRESET errors. They are not application faults.
+function isBenignClientDisconnect(error: unknown): boolean {
+  const err = error as { message?: unknown; code?: unknown; stack?: unknown } | null;
+  if (!err || typeof err !== "object") return false;
+  const code = typeof err.code === "string" ? err.code : "";
+  if (code === "ECONNRESET" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE") {
+    return true;
+  }
+  const message = typeof err.message === "string" ? err.message : "";
+  const stack = typeof err.stack === "string" ? err.stack : "";
+  return message === "aborted" && stack.includes("abortIncoming");
+}
+
 function record(error: unknown) {
+  if (isBenignClientDisconnect(error)) return;
   lastCapturedError = { error, at: Date.now() };
 }
 
