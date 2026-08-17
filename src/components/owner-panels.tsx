@@ -380,6 +380,7 @@ function UsersTab() {
                 <th className="px-3 py-2">Display name</th>
                 <th className="px-3 py-2">Plan</th>
                 <th className="px-3 py-2">Role</th>
+                <th className="px-3 py-2">Sessions</th>
                 <th className="px-3 py-2">Signup</th>
                 <th className="px-3 py-2">Last Login</th>
                 <th className="px-3 py-2">Last Activity</th>
@@ -421,6 +422,7 @@ function UsersTab() {
                     </Select>
                   </td>
                   <td className="px-3 py-2 text-xs">{u.role === "owner" ? <span className="inline-flex items-center gap-1 font-semibold text-primary"><Shield className="h-3 w-3"/>Owner</span> : "User"}</td>
+                  <td className="px-3 py-2 text-xs tabular-nums">{u.sessions ?? 0}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.created_at)}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.last_sign_in_at)}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.last_activity_at)}</td>
