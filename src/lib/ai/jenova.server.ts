@@ -57,6 +57,8 @@ async function jenovaFetch(
     });
     const text = await res.text();
     if (!res.ok) throw new JenovaError(safeMessage(`Jenova API ${res.status}: ${text}`), res.status);
+    // The messages endpoint answers with a Server-Sent Events stream.
+    if (text.startsWith("event:") || text.includes("\nevent:")) return parseJenovaStream(text);
     try {
       return text ? JSON.parse(text) : {};
     } catch {
@@ -69,6 +71,52 @@ async function jenovaFetch(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Collapse a Jenova SSE response into the same shape the JSON API would return. */
+function parseJenovaStream(text: string): {
+  content: string;
+  session_id?: string;
+  usage?: { cost?: string | number; input_tokens?: number; output_tokens?: number };
+  error?: string;
+} {
+  let content = "";
+  let sessionId: string | undefined;
+  let usage: Record<string, unknown> | undefined;
+  let error: string | undefined;
+  for (const block of text.split("\n\n")) {
+    const dataLine = block
+      .split("\n")
+      .find((l) => l.startsWith("data:"));
+    if (!dataLine) continue;
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(dataLine.slice(5).trim());
+    } catch {
+      continue;
+    }
+    if (typeof payload.session_id === "string") sessionId = payload.session_id;
+    if (typeof payload.chunk_content === "string") content += payload.chunk_content;
+    else if (typeof payload.content === "string" && !("chunk_content" in payload)) {
+      // some events carry a complete message body
+      if (block.includes("message_completed") && payload.from && (payload.from as { type?: string }).type === "agent") {
+        content += payload.content;
+      }
+    }
+    if (payload.usage && typeof payload.usage === "object") usage = payload.usage as Record<string, unknown>;
+    if (typeof payload.error === "string") error = payload.error;
+    if (payload.error && typeof payload.error === "object") {
+      const e = payload.error as { message?: string; code?: string };
+      error = safeMessage(`${e.code ?? "error"}: ${e.message ?? ""}`);
+    }
+    if (payload.success === false && typeof payload.stop_reason === "string") {
+      error =
+        error ??
+        safeMessage(`Jenova run stopped: ${payload.stop_reason} ${JSON.stringify(payload).slice(0, 300)}`);
+    }
+  }
+  if (!content && error) throw new JenovaError(safeMessage(error));
+  return { content, session_id: sessionId, usage: usage as never };
 }
 
 export interface JenovaAgent {
@@ -116,7 +164,7 @@ export async function sendJenovaMessage(args: {
   const raw = (await jenovaFetch(path, {
     method: "POST",
     body,
-    timeoutMs: args.timeoutMs ?? 90_000,
+    timeoutMs: args.timeoutMs ?? 240_000,
   })) as {
     content?: unknown;
     message?: { content?: unknown };
