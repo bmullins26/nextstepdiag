@@ -7,16 +7,20 @@ import {
 } from "./providers/community";
 import {
   externalRepairGuideProvider,
-  manufacturerDocProvider,
-  serviceBulletinProvider,
 } from "./providers/stubs";
+import {
+  knowledgeManufacturerDocProvider,
+  knowledgeRepairRecordProvider,
+  knowledgeServiceBulletinProvider,
+} from "./providers/knowledge";
 
 export function getEvidenceProviders(): EvidenceProvider[] {
   return [
-    manufacturerDocProvider,
+    knowledgeManufacturerDocProvider,
     techSheetProvider,
-    serviceBulletinProvider,
+    knowledgeServiceBulletinProvider,
     verifiedRepairProvider,
+    knowledgeRepairRecordProvider,
     communityVerifiedProvider,
     communityDiscussionProvider,
     externalRepairGuideProvider,
