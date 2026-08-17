@@ -3,8 +3,7 @@
 //   NextStep diagnostic session -> NextStep Knowledge retrieval -> PROVIDER -> NextStep response
 //
 // Providers only reason. NextStep owns diagnostic state, knowledge, provenance
-// and verification. Jenova is additive: when disabled or failing, the existing
-// Lovable AI Gateway provider handles the request exactly as before.
+// and verification.
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getGateway, DEFAULT_MODEL } from "../ai-gateway.server";
@@ -15,13 +14,6 @@ import type {
   DiagnosticProviderResult,
   DiagnosticStepOutput,
 } from "./diagnostic-types";
-import {
-  getJenovaConfig,
-  getMappedJenovaSession,
-  isJenovaConfigured,
-  saveJenovaSessionMapping,
-  sendJenovaMessage,
-} from "./jenova.server";
 
 export const StepSchema = z.object({
   done: z.boolean().describe("True only when you have enough evidence to name the most likely failure with confidence."),
@@ -36,11 +28,8 @@ export const StepSchema = z.object({
   }),
 });
 
-export function resolveProvider(requested?: DiagnosticProviderName | null): DiagnosticProviderName {
-  const cfg = getJenovaConfig();
-  if (requested === "jenova") return isJenovaConfigured(cfg) ? "jenova" : "lovable";
-  if (requested === "lovable") return "lovable";
-  return cfg.enabled && isJenovaConfigured(cfg) ? "jenova" : "lovable";
+export function resolveProvider(_requested?: DiagnosticProviderName | null): DiagnosticProviderName {
+  return "lovable";
 }
 
 export interface DiagnosticStepRequest {
@@ -52,60 +41,6 @@ export interface DiagnosticStepRequest {
   sessionId?: string | null;
   feature: string;
   provider?: DiagnosticProviderName | null;
-}
-
-const JENOVA_OUTPUT_CONTRACT = `
-Respond with ONE JSON object and nothing else (no prose, no markdown fences):
-{
-  "done": boolean,
-  "currentFindings": string,
-  "mostLikelyFailure": string,
-  "mostLikelyFailures": string[],
-  "recommendedNextTest": string,
-  "expectedResult": string,
-  "resultInterpretation": string,
-  "reasoning": string,
-  "safetyWarning": string,
-  "supportingEvidence": string[],
-  "confidence": number,
-  "nextQuestion": { "text": string, "choices": string[], "allowFreeText": boolean }
-}
-Rules for this JSON:
-- Only cite connectors, pins, voltages, resistances or fault codes that appear in the supplied evidence.
-- "supportingEvidence" must reference the supplied NextStep evidence entries by their SOURCE/TITLE. Never invent sources.
-- Never present an inference as a technician-verified fact. Verified status is owned by NextStep, not by you.
-- Keep "confidence" between 0 and 1 and lower it when evidence is thin.`;
-
-function extractJson(text: string): unknown {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fenced ? fenced[1] : text;
-  const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  if (start === -1 || end <= start) throw new Error("No JSON object in provider response");
-  return JSON.parse(candidate.slice(start, end + 1));
-}
-
-const JenovaResponseSchema = StepSchema.extend({
-  reasoning: z.string().optional().default(""),
-  expectedResult: z.string().optional().default(""),
-  resultInterpretation: z.string().optional().default(""),
-  safetyWarning: z.string().optional().default(""),
-  supportingEvidence: z.array(z.string()).optional().default([]),
-  confidence: z.number().optional(),
-}).partial({ mostLikelyFailures: true });
-
-function normalize(raw: unknown): DiagnosticStepOutput {
-  const parsed = JenovaResponseSchema.parse(raw);
-  const failures = parsed.mostLikelyFailures?.length
-    ? parsed.mostLikelyFailures
-    : parsed.mostLikelyFailure
-      ? [parsed.mostLikelyFailure]
-      : [];
-  return {
-    ...parsed,
-    mostLikelyFailures: failures,
-    mostLikelyFailure: parsed.mostLikelyFailure || failures[0] || "",
-  } as DiagnosticStepOutput;
 }
 
 async function runLovable(req: DiagnosticStepRequest): Promise<DiagnosticStepOutput> {
@@ -127,92 +62,10 @@ async function runLovable(req: DiagnosticStepRequest): Promise<DiagnosticStepOut
   return object as DiagnosticStepOutput;
 }
 
-async function runJenova(req: DiagnosticStepRequest): Promise<DiagnosticStepOutput> {
-  const cfg = getJenovaConfig();
-  const existingSession = req.sessionId ? await getMappedJenovaSession(req.sessionId) : null;
-  const message = [
-    req.system,
-    "",
-    "=== NEXTSTEP DIAGNOSTIC CONTEXT ===",
-    req.prompt,
-    req.provenance ? `\n=== NEXTSTEP KNOWLEDGE ENGINE EVIDENCE (authoritative, provenance preserved) ===\n${req.provenance}` : "",
-    "",
-    JENOVA_OUTPUT_CONTRACT,
-  ].join("\n");
-
-  try {
-    const res = await sendJenovaMessage({
-      message,
-      sessionId: existingSession,
-      externalUserId: req.userId ? `nextstep:${req.userId}` : null,
-    });
-    if (req.sessionId && res.sessionId) {
-      await saveJenovaSessionMapping({
-        diagnosticSessionId: req.sessionId,
-        jenovaSessionId: res.sessionId,
-        userId: req.userId,
-        agentId: cfg.agentSlug,
-      });
-    }
-    const output = normalize(extractJson(res.content));
-    await logAiUsage({
-      userId: req.userId,
-      feature: req.feature,
-      model: `jenova:${cfg.agentSlug ?? "unknown"}`,
-      usage: { inputTokens: res.inputTokens, outputTokens: res.outputTokens },
-      provider: "jenova",
-      agentId: cfg.agentSlug,
-      sessionId: req.sessionId ?? null,
-      success: true,
-      costUsd: res.cost,
-    });
-    return output;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Jenova call failed";
-    await logAiUsage({
-      userId: req.userId,
-      feature: req.feature,
-      model: `jenova:${cfg.agentSlug ?? "unknown"}`,
-      usage: undefined,
-      provider: "jenova",
-      agentId: cfg.agentSlug,
-      sessionId: req.sessionId ?? null,
-      success: false,
-      errorMessage: msg,
-    });
-    throw err;
-  }
-}
-
-/**
- * Runs one diagnostic reasoning step. Never throws for provider-level failures
- * when a fallback is available — the diagnostic session must survive.
- */
+/** Runs one diagnostic reasoning step. */
 export async function runDiagnosticStep(
   req: DiagnosticStepRequest,
 ): Promise<DiagnosticProviderResult> {
-  const requested = resolveProvider(req.provider);
-  if (requested === "jenova") {
-    try {
-      const output = await runJenova(req);
-      return {
-        output: applySafetyFramework(output),
-        provider: "jenova",
-        requestedProvider: "jenova",
-        providerError: null,
-      };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Jenova provider error";
-      console.warn("[diagnose] jenova provider failed, falling back to lovable:", msg);
-      const output = await runLovable(req);
-      return {
-        output: applySafetyFramework(output),
-        provider: "lovable",
-        requestedProvider: "jenova",
-        providerError: "Jenova reasoning unavailable — used the standard NextStep provider.",
-      };
-    }
-  }
   const output = await runLovable(req);
   return {
     output: applySafetyFramework(output),
