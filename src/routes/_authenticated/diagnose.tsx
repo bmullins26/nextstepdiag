@@ -63,6 +63,10 @@ type Step = {
   mostLikelyFailure: string;
   mostLikelyFailures?: string[];
   recommendedNextTest: string;
+  safetyWarning?: string;
+  reasoning?: string;
+  provider?: "lovable" | "jenova";
+  providerError?: string | null;
   nextQuestion: { text: string; choices: string[]; allowFreeText: boolean };
   groundingSource?: {
     url: string | null;
