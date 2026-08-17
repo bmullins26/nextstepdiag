@@ -1,5 +1,36 @@
 import type { EvidenceItem, EvidenceProviderCtx, EvidenceQuery } from "./types";
 import { getEvidenceProviders } from "./registry";
+import { EVIDENCE_TIER_LABEL } from "./types";
+
+/**
+ * Provenance-preserving rendering of Knowledge Engine evidence for external
+ * reasoning providers (e.g. Jenova). Only session-relevant items are included —
+ * never the whole Knowledge Engine — and every entry keeps its source identity
+ * so an AI inference can never be mistaken for a verified fact.
+ */
+export function provenanceBlock(items: EvidenceItem[], limit = 12): string {
+  if (!items.length) return "(no NextStep Knowledge Engine evidence for this session)";
+  return items
+    .slice(0, limit)
+    .map((it) => {
+      const meta = it.metadata as { model?: string; sourceUrl?: string; matchTier?: string } | undefined;
+      return [
+        "SOURCE: NextStep Knowledge Engine",
+        `SOURCE TYPE: ${EVIDENCE_TIER_LABEL[it.sourceType] ?? it.sourceType}`,
+        meta?.model ? `MODEL: ${meta.model}` : null,
+        `TITLE: ${it.title}`,
+        `FACT: ${it.summary}`,
+        it.detail ? `DETAIL: ${it.detail.slice(0, 600)}` : null,
+        `CONFIDENCE: ${it.confidence.toFixed(2)}`,
+        meta?.matchTier ? `MATCH: ${meta.matchTier}` : null,
+        it.link ? `REFERENCE: ${it.link}` : null,
+        `LAST UPDATED: ${it.lastUpdated}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    })
+    .join("\n---\n");
+}
 
 export async function gatherEvidence(
   query: EvidenceQuery,
