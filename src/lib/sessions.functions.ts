@@ -118,6 +118,10 @@ export const setSessionStatus = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
+    if (data.status === "completed") {
+      const { queueSessionIngest } = await import("@/lib/knowledge/session-ingest.server");
+      queueSessionIngest(data.id, context.userId);
+    }
     return { ok: true };
   });
 
