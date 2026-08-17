@@ -5,9 +5,8 @@ import {
   communityDiscussionProvider,
   communityVerifiedProvider,
 } from "./providers/community";
-import {
-  externalRepairGuideProvider,
-} from "./providers/stubs";
+import { externalRepairGuideProvider } from "./providers/stubs";
+import { externalRepairDataProvider } from "./providers/verified-appliance-data";
 import {
   knowledgeManufacturerDocProvider,
   knowledgeRepairRecordProvider,
@@ -23,6 +22,7 @@ export function getEvidenceProviders(): EvidenceProvider[] {
     knowledgeRepairRecordProvider,
     communityVerifiedProvider,
     communityDiscussionProvider,
+    externalRepairDataProvider,
     externalRepairGuideProvider,
   ];
 }
