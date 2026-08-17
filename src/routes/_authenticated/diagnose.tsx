@@ -65,7 +65,7 @@ type Step = {
   recommendedNextTest: string;
   safetyWarning?: string;
   reasoning?: string;
-  provider?: "lovable" | "jenova";
+  provider?: "lovable";
   providerError?: string | null;
   nextQuestion: { text: string; choices: string[]; allowFreeText: boolean };
   groundingSource?: {

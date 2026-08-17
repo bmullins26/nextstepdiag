@@ -76,7 +76,7 @@ const StepInput = z.object({
   documentExcerpt: z.string().optional().default(""),
   currentFindings: z.array(z.string()).default([]),
   sessionId: z.string().uuid().nullable().optional(),
-  provider: z.enum(["lovable", "jenova"]).nullable().optional(),
+  provider: z.enum(["lovable"]).nullable().optional(),
 });
 
 export const nextDiagnosticStep = createServerFn({ method: "POST" })
