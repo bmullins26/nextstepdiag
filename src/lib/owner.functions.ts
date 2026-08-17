@@ -415,6 +415,19 @@ export const listUsers = createServerFn({ method: "POST" })
       ownerIds = new Set((roleRows ?? []).map((r) => r.user_id));
     }
 
+    // Derive diagnostic session counts from the authoritative session records.
+    const sessionCounts = new Map<string, number>();
+    if (ids.length) {
+      const { data: sessionRows } = await supabaseAdmin
+        .from("diagnostic_sessions")
+        .select("user_id")
+        .in("user_id", ids)
+        .limit(50000);
+      for (const s of sessionRows ?? []) {
+        sessionCounts.set(s.user_id, (sessionCounts.get(s.user_id) ?? 0) + 1);
+      }
+    }
+
     // Pull last_sign_in_at from auth.admin (limited to first 1000; fine for an owner table)
     const authMap = new Map<string, string | null>();
     try {
@@ -425,6 +438,7 @@ export const listUsers = createServerFn({ method: "POST" })
     return (rows ?? []).map((r) => ({
       ...r,
       role: ownerIds.has(r.id) ? ("owner" as const) : ("user" as const),
+      sessions: sessionCounts.get(r.id) ?? 0,
       last_sign_in_at: authMap.get(r.id) ?? null,
     }));
   });
@@ -445,7 +459,7 @@ export const getUserDetail = createServerFn({ method: "POST" })
         .maybeSingle(),
       supabaseAdmin
         .from("diagnostic_sessions")
-        .select("id", { count: "exact", head: true })
+        .select("status")
         .eq("user_id", data.userId),
       supabaseAdmin
         .from("ai_usage")
@@ -460,6 +474,14 @@ export const getUserDetail = createServerFn({ method: "POST" })
     ]);
 
     if (profile.error) throw new Error(profile.error.message);
+
+    const sessionRows = sessions.data ?? [];
+    const sessionsByStatus = { completed: 0, active: 0, abandoned: 0 };
+    for (const s of sessionRows) {
+      if (s.status === "completed") sessionsByStatus.completed += 1;
+      else if (s.status === "active") sessionsByStatus.active += 1;
+      else if (s.status === "abandoned") sessionsByStatus.abandoned += 1;
+    }
 
     const byFeature: Record<string, { calls: number; input: number; output: number; costUsd: number }> = {};
     let totalCost = 0;
@@ -476,7 +498,8 @@ export const getUserDetail = createServerFn({ method: "POST" })
     return {
       profile: profile.data,
       role: roleRow.data ? ("owner" as const) : ("user" as const),
-      totalDiagnoses: sessions.count ?? 0,
+      totalDiagnoses: sessionRows.length,
+      sessionsByStatus,
       totalAiCalls: (usage.data ?? []).length,
       totalCostUsd: totalCost,
       byFeature: Object.entries(byFeature)
