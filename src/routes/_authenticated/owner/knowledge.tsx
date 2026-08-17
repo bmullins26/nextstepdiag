@@ -24,6 +24,8 @@ import {
   listIngestCandidates,
   listKnowledgeSources,
   listReviewQueue,
+  getVerifiedApplianceDataStats,
+  importVerifiedApplianceDataBatch,
   reviewKnowledgeFact,
   searchKnowledge,
 } from "@/lib/knowledge.functions";
@@ -713,6 +715,185 @@ function SearchTab() {
       )}
       {mut.isSuccess && hits.length === 0 && (
         <p className="text-sm text-muted-foreground">No matches in the ingested corpus.</p>
+      )}
+    </div>
+  );
+}
+/**
+ * External repair-data sources (Verified Appliance Data).
+ *
+ * Imported at `external_verified_source` authority — deliberately separate
+ * from manufacturer documentation and technician-verified repairs. Energy /
+ * efficiency and consumer shopping fields are excluded by the importer.
+ */
+function ExternalSourcesTab() {
+  const qc = useQueryClient();
+  const statsFn = useServerFn(getVerifiedApplianceDataStats);
+  const importFn = useServerFn(importVerifiedApplianceDataBatch);
+
+  const stats = useQuery({
+    queryKey: ["knowledge", "vad-stats"],
+    queryFn: () => statsFn(),
+  });
+
+  const mut = useMutation({
+    mutationFn: (vars: {
+      limit: number;
+      dryRun: boolean;
+      refresh: boolean;
+      kind: "model" | "category" | "all";
+    }) => importFn({ data: vars }),
+    onSuccess: (r: any) => {
+      if (r.dryRun) toast.info(`Dry run: ${r.attempted} page(s) queued, ${r.remaining} remaining.`);
+      else
+        toast.success(
+          `Imported ${r.imported}, refreshed ${r.refreshed}, duplicates ${r.duplicatesSkipped}, failed ${r.failed}.`,
+        );
+      qc.invalidateQueries({ queryKey: ["knowledge"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Import failed"),
+  });
+
+  const s = stats.data as any;
+  const report = mut.data as any;
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-border/70 bg-card/40 p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold">Verified Appliance Data</h3>
+            <p className="text-[11px] text-muted-foreground">
+              verifiedappliancedata.com · CC-BY-4.0 · external verified source
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant={s?.records ? "default" : "secondary"} className="text-[10px]">
+              {s?.records ? "Active" : "Not imported"}
+            </Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => qc.invalidateQueries({ queryKey: ["knowledge"] })}
+            >
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Refresh
+            </Button>
+          </div>
+        </div>
+
+        <p className="mb-3 text-xs text-muted-foreground">
+          Repair-relevant information only — model identity, electrical and physical specs, manual
+          references, documented failure points and diagnostic steps. Energy-efficiency data and consumer
+          shopping data (prices, retail links, running-cost comparisons) are excluded by the importer.
+          Category-level failure information keeps a category scope and is never presented as a verified
+          model-specific failure.
+        </p>
+
+        {stats.isLoading ? (
+          <p className="text-sm text-muted-foreground">
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Loading…
+          </p>
+        ) : s ? (
+          <>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+              <StatTile label="Records" value={s.records} />
+              <StatTile label="Models" value={s.models} />
+              <StatTile label="Category guides" value={s.categoryGuides} />
+              <StatTile label="Repair facts" value={s.facts} />
+              <StatTile label="Chunks" value={s.chunks} />
+              <StatTile label="Pending review" value={s.pending} tone="text-amber-500" />
+              <StatTile label="Failed" value={s.failed} tone="text-destructive" />
+              <StatTile label="Superseded versions" value={s.supersededRecords} />
+              <StatTile label="Energy fields excluded" value={s.excludedEnergyFields} />
+              <StatTile label="Shopping fields excluded" value={s.excludedShoppingFields} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-muted-foreground">
+              <span>Last import: {s.lastImport ? new Date(s.lastImport).toLocaleString() : "—"}</span>
+              {Object.entries(s.byApplianceType ?? {}).map(([k, v]) => (
+                <span key={k}>
+                  {k}: {String(v)}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-border/60 pt-3">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={mut.isPending}
+            onClick={() => mut.mutate({ limit: 10, dryRun: true, refresh: false, kind: "all" })}
+          >
+            Dry run (10)
+          </Button>
+          <Button
+            size="sm"
+            disabled={mut.isPending}
+            onClick={() => mut.mutate({ limit: 5, dryRun: false, refresh: false, kind: "model" })}
+          >
+            {mut.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Import models (5)
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={mut.isPending}
+            onClick={() => mut.mutate({ limit: 5, dryRun: false, refresh: false, kind: "category" })}
+          >
+            Import category guides (5)
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={mut.isPending}
+            onClick={() => mut.mutate({ limit: 5, dryRun: false, refresh: true, kind: "all" })}
+          >
+            Refresh changed (5)
+          </Button>
+        </div>
+      </div>
+
+      {report && (
+        <Section title={`Import report${report.dryRun ? " (dry run)" : ""}`}>
+          <div className="grid grid-cols-2 gap-2 px-4 py-3 sm:grid-cols-4 lg:grid-cols-6">
+            <StatTile label="Source records found" value={report.sourceRecordsFound} />
+            <StatTile label="Attempted" value={report.attempted} />
+            <StatTile label="Imported" value={report.imported} tone="text-emerald-500" />
+            <StatTile label="Refreshed" value={report.refreshed} />
+            <StatTile label="Duplicates skipped" value={report.duplicatesSkipped} />
+            <StatTile label="Skipped" value={report.skipped} />
+            <StatTile label="Failed" value={report.failed} tone="text-destructive" />
+            <StatTile label="Models identified" value={report.modelsIdentified} />
+            <StatTile label="Facts" value={report.facts} />
+            <StatTile label="Chunks / embeddings" value={report.chunks} />
+            <StatTile label="Needs review" value={report.needsReview} tone="text-amber-500" />
+            <StatTile label="Remaining in queue" value={report.remaining} />
+          </div>
+          {(report.results ?? []).map((r: any, i: number) => (
+            <div key={`${r.url}-${i}`} className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
+              <span
+                className={`rounded px-2 py-0.5 font-medium ${
+                  r.state === "imported" || r.state === "refreshed"
+                    ? "bg-emerald-500/15 text-emerald-500"
+                    : r.state === "failed"
+                      ? "bg-destructive/15 text-destructive"
+                      : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {r.state}
+              </span>
+              <span className="font-medium">
+                {r.brand} {r.modelNumber ?? r.applianceType}
+              </span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                scope: {r.scope ?? "—"}
+              </span>
+              <span className="truncate text-muted-foreground">{r.url}</span>
+              {r.reason ? <span className="text-muted-foreground">· {r.reason}</span> : null}
+            </div>
+          ))}
+        </Section>
       )}
     </div>
   );
