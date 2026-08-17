@@ -324,7 +324,6 @@ async function runPipeline(
   type FactInsert = Record<string, unknown> & { __text: string };
   const factInserts: FactInsert[] = [];
   let confSum = 0;
-  let normalizedModel = "";
 
   for (const ex of (extractions ?? []) as {
     id: string;
@@ -341,7 +340,6 @@ async function runPipeline(
       sourceLabel: `${args.title}${ex.heading ? ` — ${ex.heading}` : ""}`,
       text: ex.text.slice(0, 20000),
     });
-    normalizedModel = model;
 
     for (const f of facts) {
       const text = factToText(f as unknown as Record<string, unknown>);
@@ -460,6 +458,3 @@ async function runPipeline(
     avgConfidence: Number((confSum / factInserts.length).toFixed(3)),
   };
 }
-
-void normalizedModelUnused;
-function normalizedModelUnused() {}
