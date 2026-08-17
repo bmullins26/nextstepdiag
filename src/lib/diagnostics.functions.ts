@@ -7,9 +7,10 @@ import { logAiUsage } from "./ai-usage-log.server";
 import { getTechSheet } from "./tech-sheets/lookup.functions";
 import type { GroundingResult } from "./tech-sheets/types";
 import { loadOutcomeStats } from "./diagnostic-outcomes.server";
-import { gatherEvidence, tieredPromptBlock } from "./evidence/engine";
+import { gatherEvidence, tieredPromptBlock, provenanceBlock } from "./evidence/engine";
 import type { EvidenceItem } from "./evidence/types";
 import { enforceLookupQuota, QuotaExceededError } from "./billing/quota.server";
+import { runDiagnosticStep } from "./ai/diagnostic-provider.server";
 
 const ApplianceInput = z.object({
   brand: z.string().min(1),
@@ -75,6 +76,7 @@ const StepInput = z.object({
   documentExcerpt: z.string().optional().default(""),
   currentFindings: z.array(z.string()).default([]),
   sessionId: z.string().uuid().nullable().optional(),
+  provider: z.enum(["lovable", "jenova"]).nullable().optional(),
 });
 
 export const nextDiagnosticStep = createServerFn({ method: "POST" })
@@ -96,13 +98,14 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
           groundingSource: null,
           historicalOutcomes: null,
           evidence: [] as EvidenceItem[],
+          provider: "lovable" as const,
+          providerError: null as string | null,
           quotaExceeded: true as const,
           quota: { used: e.used, limit: e.limit },
         };
       }
       throw e;
     }
-    const gateway = getGateway();
     const historyText = data.history.length
       ? data.history.map((h, i) => `Q${i + 1}: ${h.question}\nA${i + 1}: ${h.answer}`).join("\n")
       : "(no questions answered yet)";
@@ -229,20 +232,12 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
     const evidenceBlock = tieredPromptBlock(evidence);
     const hierarchyRule = `\nEVIDENCE HIERARCHY (weight in this exact order):\n1) Manufacturer Documentation  2) Tech Sheet  3) Service Bulletins  4) Verified Repair Outcomes  5) Community — Verified Repairs  6) Community — Discussions  7) External Repair Guides.\nCommunity evidence may strengthen a recommendation when it corroborates higher-tier sources but MUST NEVER override manufacturer documentation or a verified repair outcome. When higher-tier evidence conflicts with community evidence, follow the higher tier and note the disagreement.\n`;
 
-    const { object, usage } = await generateObject({
-      model: gateway(DEFAULT_MODEL),
-      schema: z.object({
-        done: z.boolean().describe("True only when you have enough evidence to name the most likely failure with confidence."),
-        currentFindings: z.string().describe("One short sentence summarizing what's been ruled in/out so far."),
-        mostLikelyFailure: z.string().describe("Best current hypothesis. Empty string only if there's truly nothing yet."),
-        mostLikelyFailures: z.array(z.string()).describe("Top 2-3 ranked failure hypotheses, best first. Empty array only if nothing yet."),
-        recommendedNextTest: z.string().describe("The specific physical test the tech should perform next (e.g. 'Verify amp draw of drain pump at J5')."),
-        nextQuestion: z.object({
-          text: z.string().describe("ONE focused diagnostic question to ask the technician next. Empty if done=true."),
-          choices: z.array(z.string()).describe("2-4 short answer choices (Yes/No, measured values, observations). Empty if done=true."),
-          allowFreeText: z.boolean().describe("True if the tech should also be able to type a measured value or note."),
-        }),
-      }),
+    const providerResult = await runDiagnosticStep({
+      userId: context.userId,
+      sessionId: data.sessionId ?? null,
+      feature: "next_diagnostic_step",
+      provider: data.provider ?? null,
+      provenance: provenanceBlock(evidence),
       system: `You are an appliance diagnostic assistant guiding a senior tech on-site. The product question is always: "What should I test next?"
 ${hierarchyRule}
 
@@ -293,7 +288,8 @@ ${evidenceBlock}
 ${data.documentExcerpt ? `Additional tech sheet / wiring diagram excerpt (uploaded by technician):\n${data.documentExcerpt.slice(0, 4000)}\n` : ""}
 Decide the single next diagnostic question, or finalize the call. Reminder: answers MUST be specific to ${data.appliance.manufacturer} ${data.appliance.applianceType}.${historicalBlock}`,
     });
-    await logAiUsage({ userId: context.userId, feature: "next_diagnostic_step", model: DEFAULT_MODEL, usage });
+    // Usage is logged inside the provider layer (per-provider, incl. failures).
+    const object = providerResult.output;
 
     // Persist which evidence items informed this diagnosis
     try {
@@ -315,6 +311,8 @@ Decide the single next diagnostic question, or finalize the call. Reminder: answ
 
     return {
       ...object,
+      provider: providerResult.provider,
+      providerError: providerResult.providerError ?? null,
       groundingMode: mode,
       groundingSource: grounding
         ? {
