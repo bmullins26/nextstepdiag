@@ -35,6 +35,21 @@ const MAX_FACTS_PER_SEGMENT = 40;
 
 export type NormalizedFact = z.infer<typeof FactSchema>;
 
+/** Models occasionally emit the literal string "null"/"n/a" for empty fields. */
+function clean<T extends Record<string, unknown>>(fact: T): T {
+  const out: Record<string, unknown> = { ...fact };
+  for (const [k, v] of Object.entries(out)) {
+    if (typeof v !== "string") continue;
+    const t = v.trim();
+    if (!t || /^(null|n\/a|na|none|unknown|not stated|not specified)$/i.test(t)) {
+      delete out[k];
+    } else {
+      out[k] = t;
+    }
+  }
+  return out as T;
+}
+
 const SYSTEM = `You normalize appliance service documentation and technician repair records into structured diagnostic facts.
 
 Rules:
@@ -67,7 +82,11 @@ export async function normalizeToFacts(args: {
     ].join("\n"),
   });
 
-  return { facts: object.facts.slice(0, MAX_FACTS_PER_SEGMENT), model: DEFAULT_MODEL };
+  const facts = object.facts
+    .slice(0, MAX_FACTS_PER_SEGMENT)
+    .map((f) => clean(f))
+    .filter((f) => Object.keys(f).length > 2);
+  return { facts, model: DEFAULT_MODEL };
 }
 
 /** Human-readable one-line rendering of a fact, used as the chunk content. */
