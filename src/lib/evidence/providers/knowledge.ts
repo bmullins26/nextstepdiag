@@ -117,6 +117,9 @@ const DOC_TYPES = new Set([
   "parts_doc",
 ]);
 
+/** External published repair references — their own evidence class. */
+const EXTERNAL_TYPES = new Set(["external_repair_data"]);
+
 /** Manufacturer-verified documentation chunks — highest evidence tier. */
 export const knowledgeManufacturerDocProvider: EvidenceProvider = {
   sourceType: "manufacturer_doc",
@@ -150,8 +153,23 @@ export const knowledgeRepairRecordProvider: EvidenceProvider = {
   async fetch(q) {
     const hits = await retrieve(q);
     return hits
-      .filter((h) => !DOC_TYPES.has(h.source_type))
+      .filter((h) => !DOC_TYPES.has(h.source_type) && !EXTERNAL_TYPES.has(h.source_type))
       .slice(0, 5)
       .map((h) => toItem(h, "verified_repair"));
   },
 };
+
+/**
+ * Retrieval bridge for externally published repair data. Kept separate from
+ * manufacturer documentation and technician repair evidence on purpose.
+ */
+export async function knowledgeExternalRepairHits(q: EvidenceQuery): Promise<EvidenceItem[]> {
+  const hits = await retrieve(q);
+  return hits
+    .filter((h) => EXTERNAL_TYPES.has(h.source_type))
+    .slice(0, 5)
+    .map((h) => {
+      const item = toItem(h, "external_repair_guide");
+      return { ...item, title: item.title.replace("Knowledge base", "External repair reference") };
+    });
+}

@@ -2117,6 +2117,7 @@ export type Database = {
         | "reviewed_normalized"
         | "ai_extracted_pending_review"
         | "ai_inference"
+        | "external_verified_source"
       knowledge_source_type:
         | "service_manual"
         | "tech_sheet"
@@ -2128,6 +2129,7 @@ export type Database = {
         | "service_call"
         | "community_thread"
         | "other"
+        | "external_repair_data"
       plan_tier: "free" | "pro" | "master" | "lifetime"
     }
     CompositeTypes: {
@@ -2274,6 +2276,7 @@ export const Constants = {
         "reviewed_normalized",
         "ai_extracted_pending_review",
         "ai_inference",
+        "external_verified_source",
       ],
       knowledge_source_type: [
         "service_manual",
@@ -2286,6 +2289,7 @@ export const Constants = {
         "service_call",
         "community_thread",
         "other",
+        "external_repair_data",
       ],
       plan_tier: ["free", "pro", "master", "lifetime"],
     },
