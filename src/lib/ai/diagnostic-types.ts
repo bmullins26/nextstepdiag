@@ -1,7 +1,7 @@
 // Client-safe shared types for the diagnostic AI provider layer.
 // NextStep owns the diagnostic state; a provider only supplies reasoning.
 
-export type DiagnosticProviderName = "lovable" | "jenova";
+export type DiagnosticProviderName = "lovable";
 
 export interface DiagnosticNextQuestion {
   text: string;
@@ -16,7 +16,7 @@ export interface DiagnosticStepOutput {
   mostLikelyFailures: string[];
   recommendedNextTest: string;
   nextQuestion: DiagnosticNextQuestion;
-  /** Optional provider reasoning surface (Jenova structured response). */
+  /** Optional provider reasoning surface. */
   reasoning?: string;
   expectedResult?: string;
   resultInterpretation?: string;
