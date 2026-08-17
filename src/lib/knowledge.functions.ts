@@ -429,3 +429,42 @@ export const searchKnowledge = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { hits: (hits ?? []) as any[] };
   });
+/**
+ * Verified Appliance Data — external repair-reference source.
+ *
+ * Owner-only. Authority (`external_verified_source`), scope tagging and the
+ * energy/shopping exclusion rules are all decided server-side.
+ */
+export const getVerifiedApplianceDataStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { vadKnowledgeStats } = await import("@/lib/knowledge/vad/import.server");
+    return vadKnowledgeStats(supabaseAdmin as any);
+  });
+
+export const importVerifiedApplianceDataBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z
+      .object({
+        limit: z.number().int().min(1).max(15).default(5),
+        dryRun: z.boolean().default(false),
+        refresh: z.boolean().default(false),
+        kind: z.enum(["model", "category", "all"]).default("all"),
+      })
+      .parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { importVerifiedApplianceData } = await import("@/lib/knowledge/vad/import.server");
+    return importVerifiedApplianceData(supabaseAdmin as any, {
+      uploadedBy: context.userId,
+      limit: data.limit,
+      dryRun: data.dryRun,
+      refresh: data.refresh,
+      kind: data.kind,
+    });
+  });
