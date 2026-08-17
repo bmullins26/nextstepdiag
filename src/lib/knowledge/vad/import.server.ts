@@ -378,10 +378,8 @@ export async function importVerifiedApplianceData(
   const batch = queue.slice(0, opts.limit);
 
   let identityIndex: Map<string, VadCatalogIdentity> | undefined;
-  let catalogueExcluded = 0;
   if (opts.withIdentity !== false && batch.some((t) => t.kind === "model")) {
-    const cat = await loadVadCatalog();
-    identityIndex = cat.byModel;
+    identityIndex = (await loadVadCatalog()).byModel;
   }
 
   const results: VadPageResult[] = [];
@@ -423,7 +421,7 @@ export async function importVerifiedApplianceData(
     // Every chunk carries exactly one embedding from the shared pipeline.
     embeddings: sum((r) => r.chunks ?? 0),
     needsReview: sum((r) => r.needsReview ?? 0),
-    excludedEnergyFields: sum((r) => r.excludedEnergy ?? 0) + catalogueExcluded,
+    excludedEnergyFields: sum((r) => r.excludedEnergy ?? 0),
     excludedShoppingFields: sum((r) => r.excludedShopping ?? 0),
     byApplianceType,
     results,
