@@ -36,18 +36,30 @@ Five new tables, mirroring the requested pipeline stages. Every stage is preserv
    `symptom`, `complaint`, `appliance_type`, `component`, `part`, `part_number`, `test`, `test_condition`, `expected_result`, `actual_result`, `failure`, `repair`, `resolution`, `error_code`, `diagnostic_step`, plus `brand`, `manufacturer`, `model_number`, `model_family`, `confidence_score`, `confidence_reason`, `needs_review`, `reviewed_by`, `reviewed_at`, `source_authority`, and FKs back to source + extraction.
 
 5. **`knowledge_chunks`** — retrieval unit.
-   `content`, `embedding vector(1536)`, `token_count`, denormalized filter columns (brand, appliance_type, model_family, component, error_code, symptom tags), `source_authority`, `confidence_score`, and FKs to source/extraction/fact. Every chunk is traceable to its origin.
+   `content`, `embedding vector(3072)`, `embedding_model`, `embedding_dims`, `token_count`, denormalized filter columns (brand, appliance_type, model_family, component, error_code, symptom tags), `source_authority`, `confidence_score`, and FKs to source/extraction/fact. Every chunk is traceable to its origin.
 
 Supporting: `source_authority` enum ordered
 `manufacturer_verified > technician_verified_repair > technician_entered > reviewed_normalized > ai_extracted_pending_review > ai_inference`,
 and a `knowledge_review_log` for audit of human accept/reject/edit actions.
 
-**Immutability rule enforced in the database**, not just in code: extractions and any row whose authority is `manufacturer_verified` or `technician_verified_repair` get an UPDATE/DELETE-blocking trigger for AI-originated writes. AI output can only ever be inserted as a *new* lower-authority row.
+### Provenance and immutability — server-authorized, not trigger-guessed
+
+The database cannot tell whether a write originated from AI or a human, so it will not try. Instead:
+
+- Every fact/chunk row carries explicit provenance written by the server: `origin` (`human` | `ai_extraction` | `ai_inference`), `origin_actor` (user id or model id), `origin_run_id` (the processing job), `source_authority`, and the FK chain back to extraction → source.
+- Only server functions may write these tables; clients have no INSERT/UPDATE grant. The server function is the authorization point: an ingestion run may only insert rows with an AI origin and an authority no higher than `ai_extracted_pending_review`, and may never target an existing human/manufacturer row.
+- Database-level rules stay to what SQL can actually enforce: `knowledge_extractions` has no UPDATE/DELETE grant to any app role (append-only), and CHECK constraints keep `origin` and `source_authority` consistent so an AI-origin row cannot claim verified authority.
+- Corrections are new rows plus a `knowledge_review_log` entry, never in-place edits of original technician or manufacturer content.
 
 ## Extensions and storage
 
+### Embedding model — verify before writing the migration
+
+Default choice is `google/gemini-embedding-001` via the Lovable AI Gateway (3072 dims, 2048-token input cap, max 100 inputs per batch). **First implementation step is a live call to the gateway to confirm the model id is accepted and to read back the actual vector length**, and the migration is written only after that number is confirmed. Chunking targets ~1000 characters with overlap so every chunk stays well inside the input cap. If a 1536-dim column is preferred for cost/index reasons, that means `openai/text-embedding-3-small` — the model and column are decided together, never mismatched.
+
 - Enable `vector` (pgvector 0.8.0) and `pg_trgm`.
-- HNSW index on `knowledge_chunks.embedding`; btree/GIN on the filter columns; trigram index on fact text for keyword fallback.
+- HNSW index on `knowledge_chunks.embedding`. At 3072 dims that exceeds pgvector's 2000-dim index limit, so the index and every query use a matching `::halfvec(3072)` cast. btree/GIN on the filter columns; trigram index on fact text for keyword fallback.
+- `embedding_model` is stored per chunk so a future model change can re-embed instead of silently comparing incompatible vectors.
 - New private storage bucket `knowledge-documents`, path `{user_id}/{source_id}.{ext}`, owner-write + owner/uploader-read RLS. `repair-photos` stays as-is.
 
 ## Security / RLS
