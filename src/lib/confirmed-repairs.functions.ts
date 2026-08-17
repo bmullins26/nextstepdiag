@@ -5,10 +5,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 /**
  * Confirmed Repairs — the Community view over `diagnostic_outcomes`.
  * `diagnostic_outcomes` remains the single authoritative repair record; nothing
- * is copied into a second table. Only rows the technician explicitly shared
- * (`shared_to_community`) are readable here, and only through the safe-column
- * projection below. Private notes, photos and internal diagnostic data never
- * leave the owner's row.
+ * is copied into a second table. Community reads go through the database view
+ * `shared_confirmed_repairs`, which exposes only rows the technician explicitly
+ * shared and only the safe columns below. Private notes, photos and internal
+ * diagnostic evidence are not reachable from that view at all.
  */
 const PUBLIC_COLUMNS =
   "id,user_id,manufacturer,appliance_type,model_number,complaint,actual_failure,recommended_failure,part_replaced,confirming_test,repair_successful,public_notes,confirmed_at,shared_at,created_at";
@@ -94,10 +94,8 @@ export const listConfirmedRepairs = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ListInput.parse(d ?? {}))
   .handler(async ({ data, context }): Promise<{ items: ConfirmedRepair[]; hasMore: boolean }> => {
     let q = context.supabase
-      .from("diagnostic_outcomes")
+      .from("shared_confirmed_repairs")
       .select(PUBLIC_COLUMNS)
-      .eq("outcome", "confirmed")
-      .eq("shared_to_community", true)
       .order("shared_at", { ascending: false })
       .limit(400);
     if (data.brand) q = q.ilike("manufacturer", data.brand);
@@ -145,11 +143,9 @@ export const getConfirmedRepair = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ outcomeId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }): Promise<ConfirmedRepair | null> => {
     const { data: row, error } = await context.supabase
-      .from("diagnostic_outcomes")
+      .from("shared_confirmed_repairs")
       .select(PUBLIC_COLUMNS)
       .eq("id", data.outcomeId)
-      .eq("outcome", "confirmed")
-      .eq("shared_to_community", true)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) return null;
@@ -162,10 +158,8 @@ export const getModelConfirmedRepairStats = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ brand: z.string(), model: z.string() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
-      .from("diagnostic_outcomes")
+      .from("shared_confirmed_repairs")
       .select("actual_failure,recommended_failure")
-      .eq("outcome", "confirmed")
-      .eq("shared_to_community", true)
       .ilike("manufacturer", data.brand)
       .ilike("model_number", data.model)
       .limit(500);
