@@ -39,6 +39,7 @@ import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_auth
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
 import { Route as AuthenticatedOwnerIndexRouteImport } from './routes/_authenticated/owner/index'
 import { Route as AuthenticatedOwnerEmailsRouteImport } from './routes/_authenticated/owner/emails'
+import { Route as AuthenticatedOwnerJenovaRouteImport } from './routes/_authenticated/owner/jenova'
 import { Route as AuthenticatedOwnerKnowledgeRouteImport } from './routes/_authenticated/owner/knowledge'
 import { Route as AuthenticatedOwnerPaymentsRouteImport } from './routes/_authenticated/owner/payments'
 import { Route as AuthenticatedOwnerToolsRouteImport } from './routes/_authenticated/owner/tools'
@@ -211,6 +212,12 @@ const AuthenticatedOwnerEmailsRoute =
     path: '/emails',
     getParentRoute: () => AuthenticatedOwnerRoute,
   } as any)
+const AuthenticatedOwnerJenovaRoute =
+  AuthenticatedOwnerJenovaRouteImport.update({
+    id: '/jenova',
+    path: '/jenova',
+    getParentRoute: () => AuthenticatedOwnerRoute,
+  } as any)
 const AuthenticatedOwnerKnowledgeRoute =
   AuthenticatedOwnerKnowledgeRouteImport.update({
     id: '/knowledge',
@@ -309,6 +316,7 @@ export interface FileRoutesByFullPath {
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/owner/emails': typeof AuthenticatedOwnerEmailsRoute
+  '/owner/jenova': typeof AuthenticatedOwnerJenovaRoute
   '/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
@@ -351,6 +359,7 @@ export interface FileRoutesByTo {
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
   '/owner/emails': typeof AuthenticatedOwnerEmailsRoute
+  '/owner/jenova': typeof AuthenticatedOwnerJenovaRoute
   '/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
@@ -396,6 +405,7 @@ export interface FileRoutesById {
   '/_authenticated/community/search': typeof AuthenticatedCommunitySearchRoute
   '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
   '/_authenticated/owner/emails': typeof AuthenticatedOwnerEmailsRoute
+  '/_authenticated/owner/jenova': typeof AuthenticatedOwnerJenovaRoute
   '/_authenticated/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/_authenticated/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
   '/_authenticated/owner/tools': typeof AuthenticatedOwnerToolsRouteWithChildren
@@ -441,6 +451,7 @@ export interface FileRouteTypes {
     | '/community/search'
     | '/history/$id'
     | '/owner/emails'
+    | '/owner/jenova'
     | '/owner/knowledge'
     | '/owner/payments'
     | '/owner/tools'
@@ -483,6 +494,7 @@ export interface FileRouteTypes {
     | '/community/search'
     | '/history/$id'
     | '/owner/emails'
+    | '/owner/jenova'
     | '/owner/knowledge'
     | '/owner/payments'
     | '/owner/tools'
@@ -527,6 +539,7 @@ export interface FileRouteTypes {
     | '/_authenticated/community/search'
     | '/_authenticated/history/$id'
     | '/_authenticated/owner/emails'
+    | '/_authenticated/owner/jenova'
     | '/_authenticated/owner/knowledge'
     | '/_authenticated/owner/payments'
     | '/_authenticated/owner/tools'
@@ -777,6 +790,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOwnerEmailsRouteImport
       parentRoute: typeof AuthenticatedOwnerRoute
     }
+    '/_authenticated/owner/jenova': {
+      id: '/_authenticated/owner/jenova'
+      path: '/jenova'
+      fullPath: '/owner/jenova'
+      preLoaderRoute: typeof AuthenticatedOwnerJenovaRouteImport
+      parentRoute: typeof AuthenticatedOwnerRoute
+    }
     '/_authenticated/owner/knowledge': {
       id: '/_authenticated/owner/knowledge'
       path: '/knowledge'
@@ -930,6 +950,7 @@ const AuthenticatedOwnerToolsRouteWithChildren =
 
 interface AuthenticatedOwnerRouteChildren {
   AuthenticatedOwnerEmailsRoute: typeof AuthenticatedOwnerEmailsRoute
+  AuthenticatedOwnerJenovaRoute: typeof AuthenticatedOwnerJenovaRoute
   AuthenticatedOwnerKnowledgeRoute: typeof AuthenticatedOwnerKnowledgeRoute
   AuthenticatedOwnerPaymentsRoute: typeof AuthenticatedOwnerPaymentsRoute
   AuthenticatedOwnerToolsRoute: typeof AuthenticatedOwnerToolsRouteWithChildren
@@ -938,6 +959,7 @@ interface AuthenticatedOwnerRouteChildren {
 
 const AuthenticatedOwnerRouteChildren: AuthenticatedOwnerRouteChildren = {
   AuthenticatedOwnerEmailsRoute: AuthenticatedOwnerEmailsRoute,
+  AuthenticatedOwnerJenovaRoute: AuthenticatedOwnerJenovaRoute,
   AuthenticatedOwnerKnowledgeRoute: AuthenticatedOwnerKnowledgeRoute,
   AuthenticatedOwnerPaymentsRoute: AuthenticatedOwnerPaymentsRoute,
   AuthenticatedOwnerToolsRoute: AuthenticatedOwnerToolsRouteWithChildren,
