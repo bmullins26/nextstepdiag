@@ -38,6 +38,7 @@ const OWNER_NAV = [
   { to: "/owner/emails", label: "Email Exports" },
   { to: "/owner/tools", label: "Tool Manager" },
   { to: "/owner/knowledge", label: "Knowledge Engine" },
+  { to: "/owner/jenova", label: "AI Providers" },
 ] as const;
 
 function OwnerLayout() {
