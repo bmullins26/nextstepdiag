@@ -169,30 +169,48 @@ export type Database = {
       }
       ai_usage: {
         Row: {
+          agent_id: string | null
+          cost_usd: number | null
           created_at: string
+          error_message: string | null
           feature: string
           id: string
           input_tokens: number
           model: string
           output_tokens: number
+          provider: string
+          session_id: string | null
+          success: boolean
           user_id: string | null
         }
         Insert: {
+          agent_id?: string | null
+          cost_usd?: number | null
           created_at?: string
+          error_message?: string | null
           feature: string
           id?: string
           input_tokens?: number
           model?: string
           output_tokens?: number
+          provider?: string
+          session_id?: string | null
+          success?: boolean
           user_id?: string | null
         }
         Update: {
+          agent_id?: string | null
+          cost_usd?: number | null
           created_at?: string
+          error_message?: string | null
           feature?: string
           id?: string
           input_tokens?: number
           model?: string
           output_tokens?: number
+          provider?: string
+          session_id?: string | null
+          success?: boolean
           user_id?: string | null
         }
         Relationships: []
@@ -1140,6 +1158,36 @@ export type Database = {
           subject?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      jenova_sessions: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          diagnostic_session_id: string
+          id: string
+          jenova_session_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          diagnostic_session_id: string
+          id?: string
+          jenova_session_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          diagnostic_session_id?: string
+          id?: string
+          jenova_session_id?: string
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
