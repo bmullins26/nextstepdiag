@@ -28,7 +28,10 @@ const FactSchema = z.object({
   confidence_reason: z.string(),
 });
 
-const ResultSchema = z.object({ facts: z.array(FactSchema).max(40) });
+// NOTE: Gemini's structured-output compiler rejects array bounds on nested
+// object schemas, so the cap is enforced in code instead of in the schema.
+const ResultSchema = z.object({ facts: z.array(FactSchema) });
+const MAX_FACTS_PER_SEGMENT = 40;
 
 export type NormalizedFact = z.infer<typeof FactSchema>;
 
@@ -64,7 +67,7 @@ export async function normalizeToFacts(args: {
     ].join("\n"),
   });
 
-  return { facts: object.facts, model: DEFAULT_MODEL };
+  return { facts: object.facts.slice(0, MAX_FACTS_PER_SEGMENT), model: DEFAULT_MODEL };
 }
 
 /** Human-readable one-line rendering of a fact, used as the chunk content. */
