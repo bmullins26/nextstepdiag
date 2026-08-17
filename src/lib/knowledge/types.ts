@@ -17,6 +17,7 @@ export const SOURCE_TYPES = [
   "repair_record",
   "service_call",
   "community_thread",
+  "external_repair_data",
   "other",
 ] as const;
 export type KnowledgeSourceType = (typeof SOURCE_TYPES)[number];
@@ -26,6 +27,7 @@ export const SOURCE_AUTHORITIES = [
   "technician_verified_repair",
   "technician_entered",
   "reviewed_normalized",
+  "external_verified_source",
   "ai_extracted_pending_review",
   "ai_inference",
 ] as const;
@@ -36,6 +38,7 @@ export const AUTHORITY_WEIGHT: Record<KnowledgeAuthority, number> = {
   technician_verified_repair: 0.9,
   technician_entered: 0.75,
   reviewed_normalized: 0.6,
+  external_verified_source: 0.5,
   ai_extracted_pending_review: 0.3,
   ai_inference: 0.15,
 };
@@ -45,6 +48,7 @@ export const AUTHORITY_LABEL: Record<KnowledgeAuthority, string> = {
   technician_verified_repair: "Verified technician repair",
   technician_entered: "Technician entered",
   reviewed_normalized: "Reviewed knowledge",
+  external_verified_source: "External verified source",
   ai_extracted_pending_review: "AI extracted — pending review",
   ai_inference: "AI inference",
 };

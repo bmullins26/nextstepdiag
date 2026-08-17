@@ -33,7 +33,12 @@ export function clampAuthorityForOrigin(
 ): KnowledgeAuthority {
   if (origin === "human") return requested;
   if (origin === "ai_inference") return "ai_inference";
-  return requested === "reviewed_normalized" ? requested : AI_MAX_AUTHORITY;
+  // An external publisher's trust level survives AI restructuring: it says who
+  // published the material, not that AI verified it. Manufacturer- and
+  // technician-verified authority still cannot be reached this way.
+  return requested === "reviewed_normalized" || requested === "external_verified_source"
+    ? requested
+    : AI_MAX_AUTHORITY;
 }
 
 export function modelFamilyOf(model: string | null | undefined): string | null {
