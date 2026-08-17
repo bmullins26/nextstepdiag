@@ -47,11 +47,12 @@ export const Route = createFileRoute("/_authenticated/owner/knowledge")({
   component: KnowledgePage,
 });
 
-const TABS = ["sources", "sessions", "inspect", "review", "search"] as const;
+const TABS = ["sources", "sessions", "external", "inspect", "review", "search"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   sources: "Sources",
   sessions: "Sessions",
+  external: "External sources",
   inspect: "Inspect",
   review: "Review queue",
   search: "Retrieval test",
@@ -125,6 +126,7 @@ function KnowledgePage() {
       )}
       {tab === "inspect" && <InspectTab sourceId={selected} />}
       {tab === "sessions" && <SessionsTab />}
+      {tab === "external" && <ExternalSourcesTab />}
       {tab === "review" && <ReviewTab />}
       {tab === "search" && <SearchTab />}
     </section>
