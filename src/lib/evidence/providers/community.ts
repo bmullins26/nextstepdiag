@@ -162,12 +162,11 @@ async function fetchVerifiedRepairs(
     complaint.toLowerCase().split(/\W+/).filter((t) => t.length >= 4),
   );
   const { data, error } = await supabase
-    .from("diagnostic_outcomes")
+    // Safe projection view: shared + confirmed rows only, public columns only.
+    .from("shared_confirmed_repairs")
     .select(
       "id,manufacturer,appliance_type,model_number,complaint,actual_failure,recommended_failure,part_replaced,confirming_test,public_notes,confirmed_at,shared_at,created_at",
     )
-    .eq("outcome", "confirmed")
-    .eq("shared_to_community", true)
     .ilike("manufacturer", brand)
     .limit(80);
   if (error || !data) return [];

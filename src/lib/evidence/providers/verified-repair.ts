@@ -8,13 +8,25 @@ export const verifiedRepairProvider: EvidenceProvider = {
   async fetch(q, { supabase }) {
     if (!q.brand || !q.complaint) return [];
     const cand = candidateModels(q.brand, q.model);
-    const { data, error } = await supabase
-      .from("diagnostic_outcomes")
-      .select("id,manufacturer,model_number,appliance_type,complaint,recommended_failure,actual_failure,outcome,confirmed_at,created_at")
-      .eq("outcome", "confirmed")
-      .ilike("manufacturer", q.brand)
-      .limit(200);
-    if (error || !data) return [];
+    const COLUMNS =
+      "id,manufacturer,model_number,appliance_type,complaint,recommended_failure,actual_failure,confirmed_at,created_at";
+    // Two reads on purpose: the caller's own confirmed repairs (row-level scoped
+    // to them) plus repairs other technicians explicitly shared, which are only
+    // reachable through the safe-column view.
+    const [mine, shared] = await Promise.all([
+      supabase
+        .from("diagnostic_outcomes")
+        .select(COLUMNS)
+        .eq("outcome", "confirmed")
+        .ilike("manufacturer", q.brand)
+        .limit(200),
+      supabase.from("shared_confirmed_repairs").select(COLUMNS).ilike("manufacturer", q.brand).limit(200),
+    ]);
+    if (mine.error && shared.error) return [];
+    const byId = new Map<string, any>();
+    for (const row of [...(mine.data ?? []), ...(shared.data ?? [])] as any[]) byId.set(row.id, row);
+    const data = [...byId.values()];
+    if (data.length === 0) return [];
 
     type Row = {
       id: string;
