@@ -1,0 +1,1257 @@
+--- CODE BLOCK ---
+https://api.jenova.ai/v1
+--- CODE BLOCK ---
+Authorization
+--- CODE BLOCK ---
+jnv_sk_*
+--- CODE BLOCK ---
+curl -N -X POST https://api.jenova.ai/v1/messages \
+  -H "Authorization: Bearer jnv_sk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "my-support-agent",
+    "user": "user_12345",
+    "content": "What can you help me with?"
+  }'
+
+--- CODE BLOCK ---
+event: stream_started
+data: {"session_id":"ses_xyz789","run_id":"run_abc123","agent":"my-support-agent"}
+
+event: stream_delta
+data: {"session_id":"ses_xyz789","run_id":"run_abc123","chunk_content":"I can help you with ","seq":1}
+
+event: stream_ended
+data: {"session_id":"ses_xyz789","run_id":"run_abc123","success":true,"stop_reason":"end_run","usage":{"cost":"0.0032"}}
+
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+stream_started
+--- CODE BLOCK ---
+my-support-agent
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+ses_abc123
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+ephemeral: true
+--- CODE BLOCK ---
+from
+--- CODE BLOCK ---
+type
+--- CODE BLOCK ---
+"user"
+--- CODE BLOCK ---
+"agent"
+--- CODE BLOCK ---
+name
+--- CODE BLOCK ---
+type
+--- CODE BLOCK ---
+external
+--- CODE BLOCK ---
+internal
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+404 session_not_owned
+--- CODE BLOCK ---
+GET
+--- CODE BLOCK ---
+DELETE
+--- CODE BLOCK ---
+POST
+--- CODE BLOCK ---
+PATCH
+--- CODE BLOCK ---
+Authorization
+--- CODE BLOCK ---
+Authorization: Bearer jnv_sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+--- CODE BLOCK ---
+User-Agent
+--- CODE BLOCK ---
+jnv_sk_
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+POST /sessions/{session_id}/messages
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+POST /messages
+
+--- CODE BLOCK ---
+ephemeral: true
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+content
+--- CODE BLOCK ---
+file_urls
+--- CODE BLOCK ---
+file_urls
+--- CODE BLOCK ---
+content
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+session_name
+--- CODE BLOCK ---
+ephemeral
+--- CODE BLOCK ---
+false
+--- CODE BLOCK ---
+stream
+--- CODE BLOCK ---
+true
+--- CODE BLOCK ---
+true
+--- CODE BLOCK ---
+false
+--- CODE BLOCK ---
+model
+--- CODE BLOCK ---
+claude-sonnet-5
+--- CODE BLOCK ---
+curl -N -X POST https://api.jenova.ai/v1/messages \
+  -H "Authorization: Bearer jnv_sk_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "my-support-agent",
+    "user": "user_12345",
+    "content": "Hello, I need help with my account"
+  }'
+
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+ephemeral: true
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+curl -X POST https://api.jenova.ai/v1/messages \
+  -H "Authorization: Bearer jnv_sk_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "my-support-agent",
+    "user": "user_12345",
+    "content": "Hello, I need help with my account",
+    "stream": false
+  }'
+
+--- CODE BLOCK ---
+stop_reason
+--- CODE BLOCK ---
+usage
+--- CODE BLOCK ---
+202 Accepted
+--- CODE BLOCK ---
+status: "processing"
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+message
+--- CODE BLOCK ---
+missing_required_field
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+invalid_payload
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+session_name
+--- CODE BLOCK ---
+content_or_uploaded_files_required
+--- CODE BLOCK ---
+content
+--- CODE BLOCK ---
+file_urls
+--- CODE BLOCK ---
+content_too_long
+--- CODE BLOCK ---
+exceed_max_upload_files
+--- CODE BLOCK ---
+unsupported_file_format
+--- CODE BLOCK ---
+invalid_file_url
+--- CODE BLOCK ---
+invalid_model_selection
+--- CODE BLOCK ---
+insufficient_credits
+--- CODE BLOCK ---
+agent_not_found
+--- CODE BLOCK ---
+POST /sessions/{session_id}/messages
+
+--- CODE BLOCK ---
+stream: false
+--- CODE BLOCK ---
+content
+--- CODE BLOCK ---
+file_urls
+--- CODE BLOCK ---
+file_urls
+--- CODE BLOCK ---
+content
+--- CODE BLOCK ---
+stream
+--- CODE BLOCK ---
+true
+--- CODE BLOCK ---
+true
+--- CODE BLOCK ---
+false
+--- CODE BLOCK ---
+model
+--- CODE BLOCK ---
+claude-sonnet-5
+--- CODE BLOCK ---
+curl -N -X POST https://api.jenova.ai/v1/sessions/ses_abc123/messages \
+  -H "Authorization: Bearer jnv_sk_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "How do I reset my password?"
+  }'
+
+--- CODE BLOCK ---
+curl -X POST https://api.jenova.ai/v1/sessions/ses_abc123/messages \
+  -H "Authorization: Bearer jnv_sk_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "How do I reset my password?",
+    "stream": false
+  }'
+
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "id": "msg_xyz789",
+  "session_id": "ses_abc123",
+  "sequence": 4,
+  "from": {
+    "type": "agent",
+    "name": "my-support-agent"
+  },
+  "type": "external",
+  "time": "2026-05-19T10:31:05Z",
+  "content": "To reset your password, go to Settings > Security > Change Password...",
+  "model": "claude-sonnet-5",
+  "files": [],
+  "stop_reason": "end_run",
+  "usage": {
+    "cost": "0.0015"
+  }
+}
+
+--- CODE BLOCK ---
+202 Accepted
+--- CODE BLOCK ---
+status: "queued"
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+message_id
+--- CODE BLOCK ---
+invalid_payload
+--- CODE BLOCK ---
+content_or_uploaded_files_required
+--- CODE BLOCK ---
+content
+--- CODE BLOCK ---
+file_urls
+--- CODE BLOCK ---
+content_too_long
+--- CODE BLOCK ---
+exceed_max_upload_files
+--- CODE BLOCK ---
+unsupported_file_format
+--- CODE BLOCK ---
+invalid_file_url
+--- CODE BLOCK ---
+invalid_model_selection
+--- CODE BLOCK ---
+insufficient_credits
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+POST /sessions/{session_id}/messages
+--- CODE BLOCK ---
+Idempotency-Key
+--- CODE BLOCK ---
+curl -N -X POST https://api.jenova.ai/v1/messages \
+  -H "Authorization: Bearer jnv_sk_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: send-user_12345-2026-05-19T10:30:00Z" \
+  -d '{
+    "agent": "my-support-agent",
+    "user": "user_12345",
+    "content": "Hello"
+  }'
+
+--- CODE BLOCK ---
+200
+--- CODE BLOCK ---
+202
+--- CODE BLOCK ---
+Idempotent-Replayed: true
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+GET /sessions/{session_id}/runs/{run_id}
+--- CODE BLOCK ---
+GET /sessions/{session_id}/messages
+--- CODE BLOCK ---
+HTTP/1.1 409 Conflict
+Content-Type: application/json
+
+--- CODE BLOCK ---
+{
+  "error": {
+    "code": "idempotency_key_reused",
+    "message": "This Idempotency-Key has already completed. Streaming responses cannot be replayed; use the returned session_id and run_id to retrieve the result."
+  },
+  "idempotency": {
+    "status": "completed",
+    "session_id": "ses_abc123",
+    "run_id": "run_abc123"
+  }
+}
+
+--- CODE BLOCK ---
+idempotency_key_reused
+--- CODE BLOCK ---
+idempotency_key_in_use
+--- CODE BLOCK ---
+idempotency_key_reused
+--- CODE BLOCK ---
+GET /sessions/{session_id}/messages
+
+--- CODE BLOCK ---
+sequence
+--- CODE BLOCK ---
+limit
+--- CODE BLOCK ---
+cursor
+--- CODE BLOCK ---
+curl "https://api.jenova.ai/v1/sessions/ses_abc123/messages?limit=50" \
+  -H "Authorization: Bearer jnv_sk_xxx"
+
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "items": [
+    {
+      "id": "msg_002",
+      "session_id": "ses_abc123",
+      "sequence": 4,
+      "from": {
+        "type": "agent",
+        "name": "my-support-agent"
+      },
+      "type": "external",
+      "time": "2026-05-19T10:31:05Z",
+      "content": "To reset your password, go to Settings > Security...",
+      "model": "claude-sonnet-5",
+      "files": []
+    }
+  ],
+  "next_cursor": "",
+  "has_more": false
+}
+
+--- CODE BLOCK ---
+id
+--- CODE BLOCK ---
+msg_
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+sequence
+--- CODE BLOCK ---
+from
+--- CODE BLOCK ---
+type
+--- CODE BLOCK ---
+"user"
+--- CODE BLOCK ---
+"agent"
+--- CODE BLOCK ---
+name
+--- CODE BLOCK ---
+type
+--- CODE BLOCK ---
+external
+--- CODE BLOCK ---
+time
+--- CODE BLOCK ---
+content
+--- CODE BLOCK ---
+model
+--- CODE BLOCK ---
+files
+--- CODE BLOCK ---
+file_id
+--- CODE BLOCK ---
+name
+--- CODE BLOCK ---
+url
+--- CODE BLOCK ---
+format
+--- CODE BLOCK ---
+size
+--- CODE BLOCK ---
+stop_reason
+--- CODE BLOCK ---
+end_run
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+agent_name
+--- CODE BLOCK ---
+file_id
+--- CODE BLOCK ---
+name
+--- CODE BLOCK ---
+url
+--- CODE BLOCK ---
+format
+--- CODE BLOCK ---
+pdf
+--- CODE BLOCK ---
+png
+--- CODE BLOCK ---
+csv
+--- CODE BLOCK ---
+size
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+GET /sessions/{session_id}/messages/{message_id}
+
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+not_found
+--- CODE BLOCK ---
+file_urls
+--- CODE BLOCK ---
+files
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+POST /sessions
+
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+ephemeral
+--- CODE BLOCK ---
+POST /sessions
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+ephemeral: true
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+session_name
+--- CODE BLOCK ---
+curl -X POST https://api.jenova.ai/v1/sessions \
+  -H "Authorization: Bearer jnv_sk_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "my-support-agent",
+    "user": "user_12345",
+    "session_name": "Billing inquiry"
+  }'
+
+--- CODE BLOCK ---
+201 Created
+--- CODE BLOCK ---
+{
+  "id": "ses_abc123",
+  "session_name": "Billing inquiry",
+  "agent": "my-support-agent",
+  "user": "user_12345",
+  "model": "claude-sonnet-5",
+  "created_at": "2026-05-19T10:30:00Z",
+  "updated_at": "2026-05-19T10:30:00Z"
+}
+
+--- CODE BLOCK ---
+invalid_payload
+--- CODE BLOCK ---
+missing_required_field
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+ephemeral
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+session_name
+--- CODE BLOCK ---
+insufficient_credits
+--- CODE BLOCK ---
+agent_not_found
+--- CODE BLOCK ---
+GET /sessions
+
+--- CODE BLOCK ---
+limit
+--- CODE BLOCK ---
+cursor
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+curl "https://api.jenova.ai/v1/sessions?user=user_12345&limit=10" \
+  -H "Authorization: Bearer jnv_sk_xxx"
+
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "items": [
+    {
+      "id": "ses_abc123",
+      "session_name": "Billing inquiry",
+      "agent": "my-support-agent",
+      "user": "user_12345",
+      "model": "claude-sonnet-5",
+      "created_at": "2026-05-19T10:30:00Z",
+      "updated_at": "2026-05-19T11:15:00Z"
+    }
+  ],
+  "next_cursor": "eyJ2IjoxLCJrIjoiY3VyXzAxIn0",
+  "has_more": true
+}
+
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+GET /sessions/{session_id}
+
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+PATCH /sessions/{session_id}
+
+--- CODE BLOCK ---
+session_name
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+invalid_payload
+--- CODE BLOCK ---
+missing_required_field
+--- CODE BLOCK ---
+session_name
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+session_name
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+DELETE /sessions/{session_id}
+
+--- CODE BLOCK ---
+204 No Content
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+busy
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+POST /sessions/{session_id}/cancel
+
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+409 stale_run
+--- CODE BLOCK ---
+204 No Content
+--- CODE BLOCK ---
+cancel_not_allowed
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+stale_run
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+POST /sessions/{session_id}/undo
+
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+409 stale_run
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "session_id": "ses_abc123",
+  "run_id": "run_abc123",
+  "deleted": ["msg_002", "msg_001"]
+}
+
+--- CODE BLOCK ---
+deleted
+--- CODE BLOCK ---
+cancel_not_allowed
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+stale_run
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+busy
+--- CODE BLOCK ---
+POST /sessions/{session_id}/messages/delete
+
+--- CODE BLOCK ---
+count
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "deleted": ["msg_002", "msg_001"]
+}
+
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+count
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+busy
+--- CODE BLOCK ---
+POST /sessions/{session_id}/fork
+
+--- CODE BLOCK ---
+message_id
+--- CODE BLOCK ---
+201 Created
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+message_id
+--- CODE BLOCK ---
+insufficient_credits
+--- CODE BLOCK ---
+not_found
+--- CODE BLOCK ---
+message_id
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+busy
+--- CODE BLOCK ---
+GET /sessions/{session_id}/runs/{run_id}
+
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+GET /sessions/{session_id}/messages
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "session_id": "ses_abc123",
+  "run_id": "run_abc123",
+  "status": "streaming",
+  "started_at": "2026-05-19T10:30:00Z",
+  "updated_at": "2026-05-19T10:30:06Z",
+  "content": "Partial visible response text so far"
+}
+
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+not_found
+--- CODE BLOCK ---
+GET /credits/balance
+
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "balance": "123.45"
+}
+
+--- CODE BLOCK ---
+GET /agents
+
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "agents": [
+    {
+      "agent": "jenova",
+      "display_name": "Jenova",
+      "description": "General-purpose Jenova agent"
+    },
+    {
+      "agent": "my-support-agent",
+      "display_name": "Support Agent",
+      "description": "Answers customer questions"
+    }
+  ]
+}
+
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+display_name
+--- CODE BLOCK ---
+description
+--- CODE BLOCK ---
+GET /models
+
+--- CODE BLOCK ---
+model
+--- CODE BLOCK ---
+200 OK
+--- CODE BLOCK ---
+{
+  "models": [
+    {
+      "id": "claude-opus-4-8",
+      "name": "Claude Opus 4.8",
+      "thinking_variant": "claude-opus-4-8-thinking"
+    },
+    {
+      "id": "claude-opus-4-8-thinking",
+      "name": "Claude Opus 4.8 (Thinking)"
+    },
+    {
+      "id": "kimi-k2.6",
+      "name": "Kimi K2.6",
+      "thinking_variant": "kimi-k2.6-thinking"
+    }
+  ]
+}
+
+--- CODE BLOCK ---
+id
+--- CODE BLOCK ---
+model
+--- CODE BLOCK ---
+name
+--- CODE BLOCK ---
+thinking_variant
+--- CODE BLOCK ---
+thinking_variant
+--- CODE BLOCK ---
+model
+--- CODE BLOCK ---
+model
+--- CODE BLOCK ---
+GET /docs?lang=en
+GET /doc?lang=en
+
+--- CODE BLOCK ---
+lang
+--- CODE BLOCK ---
+stream
+--- CODE BLOCK ---
+true
+--- CODE BLOCK ---
+message_completed
+--- CODE BLOCK ---
+202 Accepted
+--- CODE BLOCK ---
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+X-Accel-Buffering: no
+X-Run-Id: run_abc123
+
+--- CODE BLOCK ---
+X-Run-Id
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+curl "https://api.jenova.ai/v1/sessions/ses_abc123/runs/run_abc123" \
+  -H "Authorization: Bearer jnv_sk_xxx"
+
+--- CODE BLOCK ---
+404 not_found
+--- CODE BLOCK ---
+curl "https://api.jenova.ai/v1/sessions/ses_abc123/messages?limit=20" \
+  -H "Authorization: Bearer jnv_sk_xxx"
+
+--- CODE BLOCK ---
+event: <event_type>
+data: <json_payload>
+
+
+--- CODE BLOCK ---
+ephemeral: true
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+stream_ended
+--- CODE BLOCK ---
+session_id
+--- CODE BLOCK ---
+stream_started
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+stream_started
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+stream_delta
+--- CODE BLOCK ---
+chunk_content
+--- CODE BLOCK ---
+seq
+--- CODE BLOCK ---
+event: stream_delta
+data: {"session_id":"ses_abc123","run_id":"run_abc123","chunk_content":"To reset your ","seq":1}
+
+--- CODE BLOCK ---
+chunk_content
+--- CODE BLOCK ---
+seq
+--- CODE BLOCK ---
+stream_thinking
+--- CODE BLOCK ---
+content
+--- CODE BLOCK ---
+stream_progress
+--- CODE BLOCK ---
+include_progress: false
+--- CODE BLOCK ---
+stream_progress
+--- CODE BLOCK ---
+ping
+--- CODE BLOCK ---
+message_completed
+--- CODE BLOCK ---
+state
+--- CODE BLOCK ---
+running
+--- CODE BLOCK ---
+in-progress
+--- CODE BLOCK ---
+success
+--- CODE BLOCK ---
+failed
+--- CODE BLOCK ---
+skipped
+--- CODE BLOCK ---
+complete
+--- CODE BLOCK ---
+cancelled
+--- CODE BLOCK ---
+label
+--- CODE BLOCK ---
+url
+--- CODE BLOCK ---
+file_name
+--- CODE BLOCK ---
+server_name
+--- CODE BLOCK ---
+message_completed
+--- CODE BLOCK ---
+event: message_completed
+data: {"session_id":"ses_abc123","run_id":"run_abc123","message_id":"msg_abc123","sequence":4,"from":{"type":"agent","name":"Jenova"},"type":"external"}
+
+--- CODE BLOCK ---
+message_id
+--- CODE BLOCK ---
+sequence
+--- CODE BLOCK ---
+from
+--- CODE BLOCK ---
+type
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+agent
+--- CODE BLOCK ---
+name
+--- CODE BLOCK ---
+type
+--- CODE BLOCK ---
+external
+--- CODE BLOCK ---
+internal
+--- CODE BLOCK ---
+mcp_connection
+--- CODE BLOCK ---
+connection_server_list
+--- CODE BLOCK ---
+mcp_server_id
+--- CODE BLOCK ---
+mcp_server_name
+--- CODE BLOCK ---
+auth_url
+--- CODE BLOCK ---
+user_action_deadline_unix
+--- CODE BLOCK ---
+mcp_connection_resolved
+--- CODE BLOCK ---
+warning
+--- CODE BLOCK ---
+message
+--- CODE BLOCK ---
+code
+--- CODE BLOCK ---
+stream_error
+--- CODE BLOCK ---
+stream_ended
+--- CODE BLOCK ---
+success:false
+--- CODE BLOCK ---
+stop_reason:"error"
+--- CODE BLOCK ---
+code
+--- CODE BLOCK ---
+message
+--- CODE BLOCK ---
+stream_ended
+--- CODE BLOCK ---
+event: stream_ended
+data: {"session_id":"ses_abc123","run_id":"run_abc123","success":true,"stop_reason":"end_run","usage":{"cost":"0.0032"}}
+
+--- CODE BLOCK ---
+event: stream_ended
+data: {"session_id":"ses_abc123","run_id":"run_abc123","success":false,"stop_reason":"user_cancelled","usage":{"cost":"0.0012"}}
+
+--- CODE BLOCK ---
+success
+--- CODE BLOCK ---
+stop_reason
+--- CODE BLOCK ---
+end_run
+--- CODE BLOCK ---
+user_cancelled
+--- CODE BLOCK ---
+user_action_timeout
+--- CODE BLOCK ---
+error
+--- CODE BLOCK ---
+usage
+--- CODE BLOCK ---
+cost
+--- CODE BLOCK ---
+ping
+--- CODE BLOCK ---
+event: stream_progress
+data: {"session_id":"ses_...","run_id":"run_...","state":"running","label":"Searching Google"}
+
+--- CODE BLOCK ---
+mcp_connection
+--- CODE BLOCK ---
+mcp_connection_resolved
+--- CODE BLOCK ---
+auth_url
+--- CODE BLOCK ---
+user_action_deadline_unix
+--- CODE BLOCK ---
+stop_reason:"user_action_timeout"
+--- CODE BLOCK ---
+POST /sessions/{session_id}/cancel
+--- CODE BLOCK ---
+auth_url
+--- CODE BLOCK ---
+user_action_deadline_unix
+--- CODE BLOCK ---
+stream: false
+--- CODE BLOCK ---
+POST /sessions/{session_id}/mcp/connection/skip
+
+--- CODE BLOCK ---
+mcp_server_id
+--- CODE BLOCK ---
+mute
+--- CODE BLOCK ---
+24h
+--- CODE BLOCK ---
+forever
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+mcp_connection
+--- CODE BLOCK ---
+mcp_server_id
+--- CODE BLOCK ---
+mute
+--- CODE BLOCK ---
+mcp_server_id
+--- CODE BLOCK ---
+mute
+--- CODE BLOCK ---
+24h
+--- CODE BLOCK ---
+forever
+--- CODE BLOCK ---
+204 No Content
+--- CODE BLOCK ---
+mcp_connection_resolved
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+bad_request
+--- CODE BLOCK ---
+mute
+--- CODE BLOCK ---
+mcp_server_id
+--- CODE BLOCK ---
+mute
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+session_not_owned
+--- CODE BLOCK ---
+user
+--- CODE BLOCK ---
+stale_run
+--- CODE BLOCK ---
+run_id
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+stream_ended.usage.cost
+--- CODE BLOCK ---
+usage.cost
+--- CODE BLOCK ---
+POST /messages
+--- CODE BLOCK ---
+GET
+--- CODE BLOCK ---
+HEAD
+--- CODE BLOCK ---
+cancel
+--- CODE BLOCK ---
+undo
+--- CODE BLOCK ---
+mcp/connection/skip
+--- CODE BLOCK ---
+X-RateLimit-Limit
+--- CODE BLOCK ---
+X-RateLimit-Remaining
+--- CODE BLOCK ---
+X-RateLimit-Reset
+--- CODE BLOCK ---
+Retry-After
+--- CODE BLOCK ---
+{
+  "error": {
+    "code": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Please retry after 12 seconds."
+  }
+}
+
+--- CODE BLOCK ---
+{
+  "error": {
+    "code": "error_code_string",
+    "message": "Human-readable description"
+  }
+}
+
+--- CODE BLOCK ---
+lang
+--- CODE BLOCK ---
+stream_error
+--- CODE BLOCK ---
+stream_ended
+--- CODE BLOCK ---
+success:false
+--- CODE BLOCK ---
+stop_reason
+--- CODE BLOCK ---
+usage
+--- CODE BLOCK ---
+stream_error
+--- CODE BLOCK ---
+stream_ended
+--- CODE BLOCK ---
+success:false
+--- CODE BLOCK ---
+content_policy_violation
+--- CODE BLOCK ---
+session_not_found
+--- CODE BLOCK ---
+busy
+--- CODE BLOCK ---
+total_image_size_exceeded
+--- CODE BLOCK ---
+internal_error
+--- CODE BLOCK ---
+llm_api_error
+--- CODE BLOCK ---
+{
+  "items": [],
+  "next_cursor": "eyJ2IjoxLCJrIjoiY3VyXzAyIn0",
+  "has_more": true
+}
+
+--- CODE BLOCK ---
+limit
+--- CODE BLOCK ---
+cursor
+--- CODE BLOCK ---
+next_cursor
+--- CODE BLOCK ---
+next_cursor
+--- CODE BLOCK ---
+cursor
+--- CODE BLOCK ---
+has_more
+--- CODE BLOCK ---
+false
+--- CODE BLOCK ---
+lang
+--- CODE BLOCK ---
+lang
+--- CODE BLOCK ---
+?lang=zh
+--- CODE BLOCK ---
+Accept-Language
+--- CODE BLOCK ---
+Accept-Language: ja
+--- CODE BLOCK ---
+en
+--- CODE BLOCK ---
+?lang=xx
+--- CODE BLOCK ---
+POST /sessions?lang=zh
+GET /sessions/ses_abc123/messages?lang=ja
+
+--- CODE BLOCK ---
+en
+--- CODE BLOCK ---
+zh
+--- CODE BLOCK ---
+ja
+--- CODE BLOCK ---
+ko
+--- CODE BLOCK ---
+es
+--- CODE BLOCK ---
+fr
+--- CODE BLOCK ---
+de
+--- CODE BLOCK ---
+it
+--- CODE BLOCK ---
+pt
+--- CODE BLOCK ---
+ru
+--- CODE BLOCK ---
+id
+--- CODE BLOCK ---
+th
+--- CODE BLOCK ---
+vi
