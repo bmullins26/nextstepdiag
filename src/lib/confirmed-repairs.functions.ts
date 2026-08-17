@@ -62,12 +62,16 @@ async function decorate(supabase: any, rows: Row[]): Promise<ConfirmedRepair[]> 
       .from("community_discussions")
       .select("id,verified_outcome_id,helpful_count,reply_count")
       .in("verified_outcome_id", ids),
-    supabase.from("profiles").select("id,display_name,full_name").in("id", userIds),
+    supabase.from("profiles").select("id,display_name,full_name,email").in("id", userIds),
   ]);
   const byOutcome = new Map<string, any>();
   for (const d of discussions ?? []) byOutcome.set(d.verified_outcome_id, d);
   const nameById = new Map<string, string>();
-  for (const p of profiles ?? []) nameById.set(p.id, p.display_name || p.full_name || "Technician");
+  // The technician here is always the original repair outcome owner (`user_id`).
+  // Importers and Knowledge Engine reviewers are tracked separately and never
+  // substituted for this identity.
+  for (const p of profiles ?? [])
+    nameById.set(p.id, p.display_name || p.full_name || p.email || "Technician");
   return rows.map((r) => baseMap(r, byOutcome.get(r['id']), nameById.get(r['user_id']) ?? "Technician"));
 }
 

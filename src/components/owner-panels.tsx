@@ -616,9 +616,14 @@ function UserDetailDialog({ userId, onClose }: { userId: string | null; onClose:
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <StatCard label="Plan" value={data.profile?.plan ?? "—"} />
-              <StatCard label="Diagnoses" value={data.totalDiagnoses} />
+              <StatCard label="Diagnostic Sessions" value={data.totalDiagnoses} />
               <StatCard label="AI Calls" value={data.totalAiCalls} />
               <StatCard label="Est. Cost" value={formatUsd(data.totalCostUsd)} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard label="Completed" value={data.sessionsByStatus.completed} />
+              <StatCard label="Active" value={data.sessionsByStatus.active} />
+              <StatCard label="Abandoned" value={data.sessionsByStatus.abandoned} />
             </div>
             <div className="text-xs text-muted-foreground">
               Signed up {fmtDate(data.profile?.created_at)} · Last activity {fmtDate(data.profile?.last_activity_at)}
