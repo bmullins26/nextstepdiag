@@ -24,7 +24,15 @@ export const fixtures: Fixture[] = [
     model: "WDT750SAKZ0",
     serial: "CC1212345",
     now: NOW,
-    expect: { status: "ok", year: 2015, week: 12, ruleId: "whirlpool.year-letter-week" },
+    expect: { status: "ok", year: 2023, week: 12, ruleId: "whirlpool.year-letter-week" },
+  },
+  {
+    label: "Maytag VMAX top-load (ServiceBench verified 1/6/2026)",
+    brand: "Maytag",
+    model: "MTW6205RW1",
+    serial: "CF0104204",
+    now: NOW,
+    expect: { status: "ok", year: 2026, week: 1 },
   },
   {
     label: "GE month/year letters",

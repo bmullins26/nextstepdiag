@@ -121,11 +121,11 @@ describe("decode engine explainability + cross-validation", () => {
       model: "WDT750SAKZ0",
       serial: "CF2328200",
       now: NOW,
-      crossChecks: { confirmedYear: 1998, communityConfirmations: 3 },
+      crossChecks: { confirmedYear: 2005, communityConfirmations: 3 },
     });
     expect(out.status).toBe("ok");
     if (out.status !== "ok") return;
-    expect(out.manufactureYear).toBe(1998);
+    expect(out.manufactureYear).toBe(2005);
     expect(out.confidenceBreakdown.points.some((p) => p.label === "Community verified")).toBe(true);
   });
 

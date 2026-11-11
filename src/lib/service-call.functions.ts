@@ -122,3 +122,19 @@ export const generateCloseout = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Couldn't build the closeout right now. Try again." };
     }
   });
+
+// Live Whirlpool-family factory entitlement (ServiceBench). Never blocks the call.
+export const lookupFactoryWarranty = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    brand: z.string().min(1).max(80),
+    modelNumber: z.string().min(1).max(60),
+    serialNumber: z.string().min(3).max(60),
+  }).parse(d))
+  .handler(async ({ data }) => {
+    const { isWhirlpoolFamily } = await import("@/lib/warranty/whirlpool-family");
+    if (!isWhirlpoolFamily(data.brand, data.modelNumber)) return { supported: false as const, entitlement: null };
+    const { lookupServiceBench } = await import("@/lib/warranty/servicebench.server");
+    const entitlement = await lookupServiceBench(data.modelNumber, data.serialNumber);
+    return { supported: true as const, entitlement };
+  });

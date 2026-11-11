@@ -8,18 +8,20 @@ const WP_LETTERS = "ABCDEFGHJKLMNPRSTVWXY".split("");
 
 /**
  * Returns ALL plausible years for a given year-letter (homespy behavior).
- * Cycles: 1973, 1993, 2013, 2033, ...
+ * 21-letter alphabet → 21-year cycle anchored at A=2021 (verified against
+ * Whirlpool's ServiceBench entitlement: "CF01…" = built 1/6/2026). Earlier
+ * cycles: A=2000, A=1979.
  */
 function whirlpoolYearsFromLetter(letter: string): number[] {
   const idx = WP_LETTERS.indexOf(letter.toUpperCase());
   if (idx < 0) return [];
   const now = new Date().getFullYear();
   const years: number[] = [];
-  for (let base = 1973; base <= now; base += 20) {
+  for (let base = 2021; base >= 1979; base -= WP_LETTERS.length) {
     const y = base + idx;
-    if (y >= 1973 && y <= now + 1) years.push(y);
+    if (y >= 1979 && y <= now + 1) years.push(y);
   }
-  return years;
+  return years.sort((a, b) => a - b);
 }
 
 /**
@@ -54,7 +56,7 @@ const whirlpoolLetterWeek: Rule = {
   },
   explain: (serial, c) => {
     const s = serial.toUpperCase();
-    return `Whirlpool: plant '${s[0]}', year letter '${s[1]}' → ${c.year}${c.week ? `, week ${c.week}` : ""}. Year-letter cycles every 20 years; chosen by recency + model corroboration.`;
+    return `Whirlpool: plant '${s[0]}', year letter '${s[1]}' → ${c.year}${c.week ? `, week ${c.week}` : ""}. Year-letter cycles every 21 years (A=2021); chosen by recency + model corroboration.`;
   },
 };
 

@@ -7,12 +7,13 @@ import { AlertTriangle, Check, ClipboardCopy, ExternalLink, Loader2, MessageSqua
 import { Button } from "@/components/ui/button";
 import { computeWarranty } from "@/lib/warranty/rules";
 import { PART_SUPPLIERS } from "@/lib/parts/suppliers";
-import { scanRecalls, generateCloseout, type Closeout, type RecallHit, type KnownIssue } from "@/lib/service-call.functions";
+import { scanRecalls, generateCloseout, lookupFactoryWarranty, type Closeout, type RecallHit, type KnownIssue } from "@/lib/service-call.functions";
 
 type Props = {
   brand: string;
   applianceType: string;
   modelNumber: string;
+  serialNumber?: string;
   manufactureYear: number | null;
   ageYears: number | null;
   complaint: string;
@@ -32,6 +33,18 @@ export function ServiceCallPipeline(p: Props) {
   const close = useServerFn(generateCloseout);
   const [recalls, setRecalls] = useState<{ recalls: RecallHit[]; knownIssues: KnownIssue[]; cpscError: string | null } | null>(null);
   const [closeout, setCloseout] = useState<Closeout | null>(null);
+  const factoryFn = useServerFn(lookupFactoryWarranty);
+  const [factory, setFactory] = useState<Awaited<ReturnType<typeof lookupFactoryWarranty>> | "loading" | null>(null);
+  useEffect(() => {
+    if (!p.serialNumber || p.serialNumber.length < 3) { setFactory(null); return; }
+    let off = false;
+    setFactory("loading");
+    factoryFn({ data: { brand: p.brand, modelNumber: p.modelNumber, serialNumber: p.serialNumber } })
+      .then((r) => !off && setFactory(r))
+      .catch(() => !off && setFactory(null));
+    return () => { off = true; };
+  }, [p.brand, p.modelNumber, p.serialNumber]);
+  const ent = factory && factory !== "loading" ? factory.entitlement : null;
   const [building, setBuilding] = useState(false);
   const [done, setDone] = useState<Set<number>>(new Set());
 
@@ -57,7 +70,7 @@ export function ServiceCallPipeline(p: Props) {
     finally { setBuilding(false); }
   }
 
-  const reached = [true, warranty.status !== "unknown", !!recalls, p.failures.length > 0, !!closeout, !!closeout, !!closeout];
+  const reached = [true, !!ent || warranty.status !== "unknown", !!recalls, p.failures.length > 0, !!closeout, !!closeout, !!closeout];
 
   return (
     <div className="space-y-3">
@@ -79,8 +92,55 @@ export function ServiceCallPipeline(p: Props) {
         <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-primary">
           <ShieldCheck className="h-3.5 w-3.5" /> Warranty intelligence
         </div>
-        <p className="mt-1 text-sm font-semibold">{warranty.headline}</p>
-        {warranty.items.length > 0 && (
+        {factory === "loading" && (
+          <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Checking factory warranty records…</p>
+        )}
+        {ent ? (
+          <div className="mt-2 space-y-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${/in warranty/i.test(ent.markedAs ?? "") ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{ent.markedAs ?? "Status unknown"}</span>
+              <span className="text-[10px] text-muted-foreground">Verified · Whirlpool factory records</span>
+            </div>
+            {ent.productName && <p className="text-sm font-semibold">{ent.productName}</p>}
+            <div className="grid grid-cols-2 gap-2">
+              <div><div className="text-muted-foreground">Built</div><div className="font-mono">{ent.manufacturedDate ?? "—"}</div></div>
+              <div><div className="text-muted-foreground">Purchased</div><div className="font-mono">{ent.purchaseDate ?? "—"}</div></div>
+              <div><div className="text-muted-foreground">Parts until</div><div className="font-mono">{ent.standard.partsExpires ?? "—"}</div></div>
+              <div><div className="text-muted-foreground">Labor until</div><div className="font-mono">{ent.standard.laborExpires ?? "—"}</div></div>
+            </div>
+            {ent.extended.length > 0 && (
+              <ul className="space-y-1">
+                {ent.extended.map((x) => (
+                  <li key={x.component} className="flex justify-between gap-2">
+                    <span>{x.component} · {x.partsMonths} parts</span>
+                    <span className="font-mono text-muted-foreground">{x.partsExpires}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {ent.notices.length > 0 && ent.notices.map((n, i) => (
+              <div key={i} className="rounded-lg border border-primary/40 bg-primary/10 p-2">
+                <span className="font-semibold">{n.number}</span> {n.description}{n.expires ? ` · until ${n.expires}` : ""}
+              </div>
+            ))}
+            {ent.history.length > 0 && (
+              <details className="rounded-lg border border-border p-2" open>
+                <summary className="cursor-pointer font-semibold">Prior warranty repairs ({ent.history.length})</summary>
+                <ul className="mt-2 space-y-2">
+                  {ent.history.map((h, i) => (
+                    <li key={i} className="border-l-2 border-primary/50 pl-2">
+                      <div className="font-mono text-muted-foreground">{h.date} · {h.claimNumber}</div>
+                      {h.complaint && <div>{h.complaint}</div>}
+                      {h.parts.length > 0 && <div className="text-muted-foreground">Parts: {h.parts.map((pt) => `${pt.name}${pt.number ? ` (${pt.number})` : ""}`).join(", ")}</div>}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        ) : null}
+        {!ent && <p className="mt-1 text-sm font-semibold">{warranty.headline}</p>}
+        {!ent && warranty.items.length > 0 && (
           <ul className="mt-2 space-y-1 text-xs">
             {warranty.items.map((it) => (
               <li key={it.component} className="flex justify-between gap-2">
@@ -92,7 +152,7 @@ export function ServiceCallPipeline(p: Props) {
             ))}
           </ul>
         )}
-        <p className="mt-2 text-[10px] text-muted-foreground">Typical manufacturer terms from build date. Confirm with proof of purchase.</p>
+        {!ent && <p className="mt-2 text-[10px] text-muted-foreground">Typical manufacturer terms from build date. Confirm with proof of purchase.</p>}
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4">

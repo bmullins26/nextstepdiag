@@ -569,6 +569,7 @@ function Phase3(props: {
         brand={appliance.manufacturer || appliance.brand}
         applianceType={appliance.applianceType}
         modelNumber={appliance.modelNumber}
+        serialNumber={appliance.serialNumber || undefined}
         manufactureYear={appliance.manufactureDate?.year ?? null}
         ageYears={appliance.ageYears ?? null}
         complaint={complaint}
