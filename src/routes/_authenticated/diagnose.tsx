@@ -38,6 +38,7 @@ import {
 } from "@/lib/sessions.functions";
 import { z } from "zod";
 import { UpgradeDialog } from "@/components/paywall/upgrade-dialog";
+import { ServiceCallPipeline } from "@/components/service-call/service-call-pipeline";
 
 export const Route = createFileRoute("/_authenticated/diagnose")({
   head: () => ({
@@ -563,6 +564,18 @@ function Phase3(props: {
         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Complaint</div>
         <p className="mt-1 text-sm">{complaint}</p>
       </div>
+
+      <ServiceCallPipeline
+        brand={appliance.manufacturer || appliance.brand}
+        applianceType={appliance.applianceType}
+        modelNumber={appliance.modelNumber}
+        manufactureYear={appliance.manufactureDate?.year ?? null}
+        ageYears={appliance.ageYears ?? null}
+        complaint={complaint}
+        failures={failures}
+        history={history}
+        diagnosisReady={failures.length > 0 && !thinking}
+      />
 
       <CurrentFindings findings={findings} setFindings={setFindings} onChange={onReevaluate} />
 
