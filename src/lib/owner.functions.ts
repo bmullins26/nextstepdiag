@@ -531,6 +531,40 @@ export const setUserPlan = createServerFn({ method: "POST" })
       .update({ plan: data.plan })
       .eq("id", data.userId);
     if (error) throw new Error(error.message);
+
+    // Access is decided by the subscriptions row (has_pro_access / getMyEntitlements),
+    // not profiles.plan — so owner grants must write it too. Owner grants are
+    // stored as plan_type='grandfathered' (permanent, no Stripe link).
+    const { data: sub } = await supabaseAdmin
+      .from("subscriptions")
+      .select("id, stripe_subscription_id, tier, plan_type")
+      .eq("user_id", data.userId)
+      .maybeSingle();
+    const now = new Date().toISOString();
+    if (data.plan === "free") {
+      // Never silently cancel a paying Stripe subscription from here.
+      if (sub && !sub.stripe_subscription_id) {
+        const { error: e2 } = await supabaseAdmin
+          .from("subscriptions")
+          .update({ tier: "free", plan_type: null, status: "canceled", current_period_end: now, updated_at: now })
+          .eq("user_id", data.userId);
+        if (e2) throw new Error(e2.message);
+      }
+      return { ok: true, note: sub?.stripe_subscription_id ? "User has a paid subscription; cancel it in Payments." : undefined };
+    }
+    const { error: e3 } = await supabaseAdmin.from("subscriptions").upsert(
+      {
+        user_id: data.userId,
+        tier: "pro",
+        status: "grandfathered",
+        plan_type: "grandfathered",
+        environment: "live",
+        cancel_at_period_end: false,
+        updated_at: now,
+      },
+      { onConflict: "user_id" },
+    );
+    if (e3) throw new Error(e3.message);
     return { ok: true };
   });
 
