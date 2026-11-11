@@ -10,6 +10,7 @@ import { loadOutcomeStats } from "./diagnostic-outcomes.server";
 import { gatherEvidence, tieredPromptBlock, provenanceBlock } from "./evidence/engine";
 import type { EvidenceItem } from "./evidence/types";
 import { enforceLookupQuota, QuotaExceededError } from "./billing/quota.server";
+import { classifyDriveTopology, topologyPromptBlock } from "@/lib/appliance/drive-topology";
 import { runDiagnosticStep } from "./ai/diagnostic-provider.server";
 
 const ApplianceInput = z.object({
@@ -271,6 +272,7 @@ Rules:
 APPLIANCE: ${data.appliance.applianceType}
 MODEL: ${data.appliance.modelNumber}${data.appliance.serialNumber ? `\nSERIAL: ${data.appliance.serialNumber}` : ""}${data.appliance.manufactureYear ? `\nMANUFACTURED: ${data.appliance.manufactureYear}${data.appliance.ageYears != null ? ` (~${Math.round(data.appliance.ageYears)} yr old — factor wear-related failures accordingly)` : ""}` : ""}
 
+${topologyPromptBlock(classifyDriveTopology(data.appliance.applianceType, data.appliance.modelNumber))}
 Customer Complaint: ${data.complaint}
 
 Already verified by the technician (do NOT ask them to repeat these tests):

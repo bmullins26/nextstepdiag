@@ -5,6 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { classifyDriveTopology, topologyPromptBlock, filterForTopology } from "@/lib/appliance/drive-topology";
 
 const ApplianceRef = z.object({
   brand: z.string().min(1).max(80),
@@ -92,6 +93,7 @@ export const generateCloseout = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { getGateway, DEFAULT_MODEL } = await import("./ai-gateway.server");
     const { logAiUsage } = await import("./ai-usage-log.server");
+    const topo = classifyDriveTopology(data.applianceType, data.modelNumber);
     try {
       const { object, usage } = await generateObject({
         model: getGateway()(DEFAULT_MODEL),
@@ -100,6 +102,7 @@ export const generateCloseout = createServerFn({ method: "POST" })
           "You are a senior appliance repair technician. Produce an ordered, safe test plan to confirm the suspected failure, the likely OEM replacement parts, and a friendly homeowner text. Only give an OEM part number if you are confident it fits this exact model; otherwise leave partNumber empty. Always include 'Disconnect power' before electrical resistance tests.",
         prompt: [
           `Appliance: ${data.brand} ${data.applianceType} model ${data.modelNumber}${data.ageYears != null ? `, ~${data.ageYears} yrs old` : ""}`,
+          topologyPromptBlock(topo),
           data.warrantyHeadline ? `Warranty: ${data.warrantyHeadline}` : "",
           `Complaint: ${data.complaint}`,
           `Suspected failures (ranked): ${data.failures.join("; ") || "unknown"}`,
@@ -107,7 +110,13 @@ export const generateCloseout = createServerFn({ method: "POST" })
         ].filter(Boolean).join("\n"),
       });
       await logAiUsage({ userId: context.userId, feature: "service_closeout", model: DEFAULT_MODEL, usage });
-      return { ok: true as const, closeout: object };
+      // Deterministic guardrail: drop parts/tests for components this machine lacks.
+      const closeout = {
+        ...object,
+        parts: filterForTopology(object.parts, topo, (p) => p.name),
+        testPlan: filterForTopology(object.testPlan, topo, (t) => t.step),
+      };
+      return { ok: true as const, closeout };
     } catch (e) {
       console.error("[closeout] failed", e);
       return { ok: false as const, error: "Couldn't build the closeout right now. Try again." };
