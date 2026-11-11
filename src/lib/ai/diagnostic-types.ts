@@ -14,6 +14,8 @@ export interface DiagnosticStepOutput {
   currentFindings: string;
   mostLikelyFailure: string;
   mostLikelyFailures: string[];
+  /** Estimated % per mostLikelyFailures entry (same order). Estimate, not verification. */
+  likelihoods?: number[];
   recommendedNextTest: string;
   nextQuestion: DiagnosticNextQuestion;
   /** Optional provider reasoning surface. */

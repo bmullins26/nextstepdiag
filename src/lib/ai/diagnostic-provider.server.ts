@@ -20,6 +20,7 @@ export const StepSchema = z.object({
   currentFindings: z.string().describe("One short sentence summarizing what's been ruled in/out so far."),
   mostLikelyFailure: z.string().describe("Best current hypothesis. Empty string only if there's truly nothing yet."),
   mostLikelyFailures: z.array(z.string()).describe("Top 2-3 ranked failure hypotheses, best first."),
+  likelihoods: z.array(z.number()).describe("Estimated likelihood percent (0-100) for each entry in mostLikelyFailures, same order, summing to about 100. Base it on current test evidence and any historical repair outcomes."),
   recommendedNextTest: z.string().describe("The specific physical test the tech should perform next."),
   nextQuestion: z.object({
     text: z.string().describe("ONE focused diagnostic question to ask the technician next. Empty if done=true."),

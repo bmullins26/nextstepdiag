@@ -63,6 +63,7 @@ type Step = {
   currentFindings: string;
   mostLikelyFailure: string;
   mostLikelyFailures?: string[];
+  likelihoods?: number[];
   recommendedNextTest: string;
   safetyWarning?: string;
   reasoning?: string;
@@ -610,14 +611,24 @@ function Phase3(props: {
           <div className="rounded-xl border border-primary/50 bg-card p-4">
             <div className="text-[11px] font-bold uppercase tracking-wide text-primary">Most Likely Failures</div>
             {failures.length > 0 ? (
-              <ol className="mt-2 space-y-1.5">
-                {failures.map((f, i) => (
-                  <li key={i} className="flex gap-2 text-sm font-semibold leading-snug">
-                    <span className="text-primary">{i + 1}.</span>
-                    <span>{f}</span>
-                  </li>
-                ))}
+              <ol className="mt-3 space-y-2">
+                {failures.map((f, i) => {
+                  const pct = likelihoodPercents(failures.length, step.likelihoods)[i];
+                  return (
+                    <li key={i} className="rounded-lg border border-border bg-muted/30 p-2.5">
+                      <div className="flex items-start gap-2 text-sm font-semibold leading-snug">
+                        <span className="font-mono text-primary">{i + 1}</span>
+                        <span className="flex-1">{f}</span>
+                        <span className="font-mono text-xs text-primary">{pct}%</span>
+                      </div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${pct}%` }} />
+                      </div>
+                    </li>
+                  );
+                })}
               </ol>
+              <p className="mt-2 text-[10px] text-muted-foreground">Estimated likelihood — updates as you answer.</p>
             ) : (
               <p className="mt-1 text-sm text-muted-foreground">Gathering evidence…</p>
             )}
@@ -1166,4 +1177,16 @@ function ResumePrompt({
       </Button>
     </div>
   );
+}
+/** Normalizes AI likelihoods to whole percents summing to 100; falls back to a ranked split. */
+function likelihoodPercents(count: number, raw?: number[]): number[] {
+  if (count === 0) return [];
+  const vals = Array.from({ length: count }, (_, i) => {
+    const v = raw?.[i];
+    return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0;
+  });
+  const total = vals.reduce((a, b) => a + b, 0);
+  const base = total > 0 ? vals : Array.from({ length: count }, (_, i) => count - i);
+  const sum = base.reduce((a, b) => a + b, 0);
+  return base.map((v) => Math.round((v / sum) * 100));
 }
