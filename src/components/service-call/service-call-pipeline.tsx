@@ -32,7 +32,9 @@ export function ServiceCallPipeline(p: Props) {
   const scan = useServerFn(scanRecalls);
   const close = useServerFn(generateCloseout);
   const [recalls, setRecalls] = useState<{ recalls: RecallHit[]; knownIssues: KnownIssue[]; cpscError: string | null } | null>(null);
-  const [closeout, setCloseout] = useState<Closeout | null>(null);
+  type UiPart = Closeout["parts"][number] & { verified?: boolean; price?: number | null; url?: string | null };
+  const [closeout, setCloseout] = useState<(Omit<Closeout, "parts"> & { parts: UiPart[] }) | null>(null);
+  const [partsSource, setPartsSource] = useState<{ name: string; modelUrl: string | null; count: number } | null>(null);
   const factoryFn = useServerFn(lookupFactoryWarranty);
   const [factory, setFactory] = useState<Awaited<ReturnType<typeof lookupFactoryWarranty>> | "loading" | null>(null);
   useEffect(() => {
@@ -65,7 +67,7 @@ export function ServiceCallPipeline(p: Props) {
         complaint: p.complaint, failures: p.failures.slice(0, 5), history: p.history.slice(-40),
         ageYears: p.ageYears, warrantyHeadline: warranty.headline,
       } });
-      if (r.ok) { setCloseout(r.closeout); setDone(new Set()); } else toast.error(r.error);
+      if (r.ok) { setCloseout(r.closeout); setPartsSource(r.partsSource); setDone(new Set()); } else toast.error(r.error);
     } catch { toast.error("Couldn't build the closeout."); }
     finally { setBuilding(false); }
   }
@@ -220,8 +222,8 @@ export function ServiceCallPipeline(p: Props) {
                     const q = pt.partNumber || `${p.modelNumber} ${pt.name}`;
                     return (
                       <li key={i} className="rounded-lg border border-border p-3 text-sm">
-                        <div className="flex justify-between gap-2"><span className="font-semibold">{pt.name}</span><span className="text-[10px] uppercase text-muted-foreground">{pt.confidence}</span></div>
-                        {pt.partNumber && <div className="font-mono text-xs text-primary">{pt.partNumber}</div>}
+                        <div className="flex justify-between gap-2"><span className="font-semibold">{pt.name}</span><span className="text-[10px] uppercase text-muted-foreground">{pt.verified ? "Fits this model" : pt.confidence}</span></div>
+                        {pt.partNumber && <div className="font-mono text-xs text-primary">{pt.partNumber}{pt.price != null && <span className="ml-2 text-muted-foreground">${pt.price.toFixed(2)}</span>}</div>}
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {PART_SUPPLIERS.map((s) => (
                             <a key={s.id} href={s.url(q)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:border-primary">
@@ -233,7 +235,12 @@ export function ServiceCallPipeline(p: Props) {
                     );
                   })}
                 </ul>
-                <p className="mt-1 text-[10px] text-muted-foreground">Part numbers are suggestions — confirm against the model's parts diagram before ordering.</p>
+                {closeout.parts.length === 0 && <p className="mt-1 text-xs text-muted-foreground">No parts on this model's parts list matched the suspected failure.</p>}
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {partsSource
+                    ? <>Matched against {partsSource.count} parts on this model's diagrams from {partsSource.name}.{partsSource.modelUrl && <> <a className="underline" href={partsSource.modelUrl} target="_blank" rel="noreferrer">Open diagrams</a></>}</>
+                    : "Couldn't load this model's parts list — part numbers are suggestions, confirm against the parts diagram before ordering."}
+                </p>
               </div>
               <div>
                 <div className="flex items-center gap-1 text-[10px] font-semibold uppercase text-muted-foreground"><MessageSquare className="h-3 w-3" /> Homeowner message</div>

@@ -94,6 +94,14 @@ export const generateCloseout = createServerFn({ method: "POST" })
     const { getGateway, DEFAULT_MODEL } = await import("./ai-gateway.server");
     const { logAiUsage } = await import("./ai-usage-log.server");
     const topo = classifyDriveTopology(data.applianceType, data.modelNumber);
+    // Real parts list for this exact model (V&V Appliance Parts). Best-effort.
+    const { getModelParts } = await import("./parts/vv/catalog.server");
+    const { matchToCatalog } = await import("./parts/vv/parse");
+    const vv = await getModelParts(data.modelNumber).catch(() => ({ parts: [], modelUrl: null }));
+    const catalog = filterForTopology(vv.parts, topo, (p) => p.description);
+    const catalogBlock = catalog.length
+      ? `PARTS LIST FOR THIS EXACT MODEL (from the model's parts diagrams). You MUST pick parts only from this list and copy the part number exactly. Never suggest a part that is not listed:\n${catalog.slice(0, 160).map((c) => `- ${c.partNumber} | ${c.description} | ${c.diagram}`).join("\n")}`
+      : "";
     try {
       const { object, usage } = await generateObject({
         model: getGateway()(DEFAULT_MODEL),
@@ -103,6 +111,7 @@ export const generateCloseout = createServerFn({ method: "POST" })
         prompt: [
           `Appliance: ${data.brand} ${data.applianceType} model ${data.modelNumber}${data.ageYears != null ? `, ~${data.ageYears} yrs old` : ""}`,
           topologyPromptBlock(topo),
+          catalogBlock,
           data.warrantyHeadline ? `Warranty: ${data.warrantyHeadline}` : "",
           `Complaint: ${data.complaint}`,
           `Suspected failures (ranked): ${data.failures.join("; ") || "unknown"}`,
@@ -113,10 +122,16 @@ export const generateCloseout = createServerFn({ method: "POST" })
       // Deterministic guardrail: drop parts/tests for components this machine lacks.
       const closeout = {
         ...object,
-        parts: filterForTopology(object.parts, topo, (p) => p.name),
+        parts: filterForTopology(object.parts, topo, (p) => p.name).flatMap((p) => {
+          if (!catalog.length) return [{ ...p, verified: false, price: null as number | null, url: null as string | null }];
+          const hit = matchToCatalog(p.name, p.partNumber, catalog);
+          // Not on this model's parts list → drop it rather than show a wrong part.
+          if (!hit) return [];
+          return [{ name: hit.description || p.name, partNumber: hit.partNumber, confidence: p.confidence, verified: true, price: hit.price, url: hit.url }];
+        }).filter((p, i, a) => !p.partNumber || a.findIndex((x) => x.partNumber === p.partNumber) === i),
         testPlan: filterForTopology(object.testPlan, topo, (t) => t.step),
       };
-      return { ok: true as const, closeout };
+      return { ok: true as const, closeout, partsSource: catalog.length ? { name: "V&V Appliance Parts", modelUrl: vv.modelUrl, count: catalog.length } : null };
     } catch (e) {
       console.error("[closeout] failed", e);
       return { ok: false as const, error: "Couldn't build the closeout right now. Try again." };
