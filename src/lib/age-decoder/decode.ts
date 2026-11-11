@@ -10,7 +10,7 @@ import type {
   UnknownReason,
   ValidationCheck,
 } from "./types";
-import { resolveBrand, rulesForBrand } from "./registry";
+import { resolveBrand, inferBrandFromModel, rulesForBrand } from "./registry";
 import { computeAgeYears, applyCorroboration } from "./scoring";
 import { validateCandidate } from "./validate";
 import { computeConfidence } from "./confidence";
@@ -30,7 +30,7 @@ type AttemptedRule = { id: string; name: string; matched: boolean; reason?: stri
 
 /** Pure deterministic age decode. No AI. No network. No DB. */
 export function decodeAge(input: DecodeInput): DecodeOutcome {
-  const brandKey = resolveBrand(input.brand);
+  const brandKey = resolveBrand(input.brand) ?? inferBrandFromModel(input.model);
   const serial = normalizeSerial(input.serial || "");
   const corroboration = input.corroboration ?? EMPTY_CORROBORATION;
   const now = input.now ?? new Date();
@@ -78,6 +78,15 @@ export function decodeAge(input: DecodeInput): DecodeOutcome {
   const rules = rulesForBrand(input.brand, input.model)
     .slice()
     .sort((a, b) => (b.priority ?? 50) - (a.priority ?? 50));
+
+  // Brands whose serial date format isn't documented yet: say so honestly
+  // instead of telling the tech their serial is invalid.
+  if (rules.length && rules.every((r) => r.weight === 0)) {
+    return unknown(
+      "missing_date_code",
+      `${brandKey} serial date decoding isn't supported yet. The serial may be valid — check the data plate for a printed build date.`,
+    );
+  }
 
   const attemptedRules: AttemptedRule[] = [];
   const rejected: RejectedCandidate[] = [];

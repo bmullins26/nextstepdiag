@@ -188,7 +188,7 @@ export function ServiceCallPipeline(p: Props) {
                 {r.url && <a href={r.url} target="_blank" rel="noreferrer" className="text-primary underline">View recall</a>}
               </div>
             )) : (
-              <p className="text-xs text-muted-foreground">{recalls.cpscError ? `Recall check unavailable (${recalls.cpscError}).` : "No open U.S. recalls found for this model."}</p>
+              <p className="text-xs text-muted-foreground">{recalls.cpscError ? `Recall check unavailable (${recalls.cpscError}).` : "No matching CPSC recall records for this model number. This search only covers models listed in CPSC notices — check the manufacturer's recall page to be sure."}</p>
             )}
             {recalls.knownIssues.length > 0 && (
               <div>

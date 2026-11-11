@@ -22,28 +22,43 @@ export const scanRecalls = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const recalls: RecallHit[] = [];
     let cpscError: string | null = null;
-    // 1) U.S. CPSC public recall API — hard 4s cap so it never blocks the call.
-    try {
-      const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), 4000);
-      const url = `https://www.saferproducts.gov/RestWebServices/Recall?format=json&ProductModel=${encodeURIComponent(data.modelNumber.slice(0, 20))}`;
-      const res = await fetch(url, { signal: ctl.signal });
-      clearTimeout(t);
-      if (res.ok) {
-        const rows = (await res.json()) as Array<Record<string, any>>;
-        for (const r of rows.slice(0, 5)) {
-          recalls.push({
-            title: String(r.Title ?? "Recall"),
-            date: r.RecallDate ? String(r.RecallDate).slice(0, 10) : null,
-            url: r.URL ? String(r.URL) : null,
-            hazard: r.Hazards?.[0]?.Name ? String(r.Hazards[0].Name) : null,
-            source: "cpsc",
-          });
+    // 1) U.S. CPSC public recall API — searched by the full model AND the
+    // base model (trim/revision suffix stripped). Zero hits is NOT proof of
+    // no recall: CPSC only matches models typed into its ProductModel field.
+    const full = data.modelNumber.split("/")[0]!.trim().replace(/\s+/g, "").toUpperCase();
+    const base = full.replace(/^([A-Z]+\d+[A-Z]*?)(\d?[A-Z]{0,3}\d?)$/, "$1");
+    const queries = Array.from(new Set([full, base.length >= 5 ? base : full, full.slice(0, 7)])).filter((q) => q.length >= 5);
+    const seen = new Set<string>();
+    let okCount = 0;
+    await Promise.all(
+      queries.map(async (q) => {
+        try {
+          const ctl = new AbortController();
+          const t = setTimeout(() => ctl.abort(), 4000);
+          const url = `https://www.saferproducts.gov/RestWebServices/Recall?format=json&ProductModel=${encodeURIComponent(q.slice(0, 20))}`;
+          const res = await fetch(url, { signal: ctl.signal });
+          clearTimeout(t);
+          if (!res.ok) { cpscError = `CPSC ${res.status}`; return; }
+          okCount++;
+          const rows = (await res.json()) as Array<Record<string, any>>;
+          for (const r of rows.slice(0, 5)) {
+            const key = String(r.RecallID ?? r.Title);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            recalls.push({
+              title: String(r.Title ?? "Recall"),
+              date: r.RecallDate ? String(r.RecallDate).slice(0, 10) : null,
+              url: r.URL ? String(r.URL) : null,
+              hazard: r.Hazards?.[0]?.Name ? String(r.Hazards[0].Name) : null,
+              source: "cpsc",
+            });
+          }
+        } catch {
+          cpscError = "CPSC lookup timed out";
         }
-      } else cpscError = `CPSC ${res.status}`;
-    } catch {
-      cpscError = "CPSC lookup timed out";
-    }
+      }),
+    );
+    if (okCount > 0) cpscError = null;
     // 2) Known failure patterns from our own Knowledge Engine for this model / family.
     const prefix = data.modelNumber.replace(/[^A-Za-z0-9]/g, "").slice(0, 6);
     const { data: facts } = await context.supabase

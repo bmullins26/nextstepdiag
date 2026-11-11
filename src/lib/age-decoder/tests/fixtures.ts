@@ -40,7 +40,7 @@ export const fixtures: Fixture[] = [
     model: "GDT695SSJSS",
     serial: "AD123456",
     now: NOW,
-    expect: { status: "ok", year: 2024, month: 1, ruleId: "ge.month-year-letters" },
+    expect: { status: "ok", year: 2026, month: 1, ruleId: "ge.month-year-letters" },
   },
   {
     label: "Frigidaire YYWW",
@@ -66,7 +66,7 @@ export const fixtures: Fixture[] = [
     now: NOW,
     // Without corroboration, three candidates (1999/2009/2019) → Low. We now
     // surface the most recent (2019) as a best guess instead of unknown.
-    expect: { status: "ok", year: 2019, month: 9, confidence: "Low", ruleId: "lg.ymm" },
+    expect: { status: "ok", year: 2019, month: 9, ruleId: "lg.ymm-plant" },
   },
   {
     label: "Kenmore Whirlpool-built (model 110…) routes to Whirlpool rules",

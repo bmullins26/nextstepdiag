@@ -164,8 +164,28 @@ function brandFromModel(model?: string): BrandKey | null {
   return KENMORE_PREFIX_TO_BRAND[prefix] ?? null;
 }
 
+/**
+ * Guess the manufacturer from an unmistakable model-number prefix. Used only
+ * when the brand field is blank/unknown so techs aren't blocked.
+ */
+const MODEL_PREFIX_BRAND: Array<[RegExp, BrandKey]> = [
+  [/^(FF|LF|FG|FP|FC|GC|CF|EI|EW|FR|FE)[A-Z]{1,3}\d/, "frigidaire"],
+  [/^(WTW|WFW|WED|WGD|WRF|WRS|WRT|WDT|WFG|WFE|MHW|MTW|MED|MGD|MVW|MDB|MFI|KDF|KDT|KRF|KSR|NTW|NED)/, "whirlpool"],
+  [/^(GSS|GSH|GFW|GFD|GTW|GTD|GDF|GDT|GNE|GYE|GFE|GTS|GBS|JGB|JB\d|PFE|PYE|PDT|CFE|PGB)/, "ge"],
+  [/^(WA\d|WF\d|WV\d|DV[EG]?\d|NX\d|NE\d|RF\d|RS\d|DW80|ME\d)/, "samsung"],
+  [/^(WM\d|WT\d|DLE|DLG|DLEX|DLGX|LRF|LFX|LDF|LSE|LRE|LRG|LMX)/, "lg"],
+  [/^(DE\d|DG\d|WL\d|WH\d|DD\d|RF\d{3}|OR\d|GWL|IWL)/, "fisherpaykel"],
+];
+
+export function inferBrandFromModel(model?: string | null): BrandKey | null {
+  const m = (model ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!m) return null;
+  for (const [re, key] of MODEL_PREFIX_BRAND) if (re.test(m)) return key;
+  return null;
+}
+
 export function rulesForBrand(brand: string, model?: string): Rule[] {
-  let key = resolveBrand(brand);
+  let key = resolveBrand(brand) ?? inferBrandFromModel(model);
   // Kenmore is registered as a Whirlpool alias above, but other prefixes
   // (GE/Frigidaire/LG/Samsung-built) need model-prefix detection.
   if (brand.trim().toLowerCase().includes("kenmore")) {

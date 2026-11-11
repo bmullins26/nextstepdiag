@@ -17,7 +17,8 @@ const lgYYM: Rule = {
   priority: 85,
   name: "LG YY+M Decoder (modern)",
   family: "LG",
-  pattern: /^\d{2}[0-9ABC]/,
+  // Skip 12-char Y+MM+plant serials (e.g. 112TNU…) — those are lg.ymm-plant.
+  pattern: /^(?!\d(0[1-9]|1[0-2])[A-Z]{3})\d{2}[0-9ABC]/,
   weight: 0.85,
   extract: (serial) => {
     const s = serial.toUpperCase();
@@ -75,5 +76,34 @@ const lgYMM: Rule = {
     `LG legacy: year-digit '${serial[0]}' + MM '${serial.slice(1, 3)}' → ${c.month}/${c.year} (decade chosen by recency + model corroboration).`,
 };
 
+/**
+ * LG current washer/dryer/fridge format: Y + MM + 3-letter plant + sequence.
+ * e.g. 112TNUW1W694 → Dec of a year ending in 1 (2021 / 2011).
+ */
+const lgYMMPlant: Rule = {
+  id: "lg.ymm-plant",
+  formatId: "lg.ymm-plant",
+  effectiveFrom: 2000,
+  effectiveTo: null,
+  priority: 90,
+  name: "LG Y+MM+Plant Decoder",
+  family: "LG",
+  pattern: /^\d(0[1-9]|1[0-2])[A-Z]{3}/,
+  weight: 0.85,
+  extract: (serial) => {
+    const s = serial.toUpperCase();
+    const d = parseInt(s[0]!, 10);
+    const mm = parseInt(s.slice(1, 3), 10);
+    const now = new Date().getFullYear();
+    const out: DateCandidate[] = [];
+    for (let y = Math.floor(now / 10) * 10 + d; y >= 2000; y -= 10) {
+      if (y <= now + 1) out.push({ year: y, month: mm, score: Math.max(0.15, 0.6 - out.length * 0.2) });
+    }
+    return out.slice(0, 3);
+  },
+  explain: (serial, c) =>
+    `LG: year digit '${serial[0]}' → ${c.year}, month '${serial.slice(1, 3)}' → ${c.month}, plant '${serial.slice(3, 6)}'. Year digit repeats every 10 years.`,
+};
+
 // Order matters: modern format first (single candidate, higher weight).
-export const lgRules: Rule[] = [lgYYM, lgYMM];
+export const lgRules: Rule[] = [lgYMMPlant, lgYYM, lgYMM];
