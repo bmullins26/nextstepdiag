@@ -81,7 +81,7 @@ function Index() {
               <Link to="/diagnose">Start Diagnosis <ArrowRight className="ml-1 h-5 w-5" /></Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="h-14 px-8 text-base font-semibold">
-              <a href="#demo">Watch it work</a>
+              <a href="#demo">Try the demo</a>
             </Button>
           </div>
           <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">

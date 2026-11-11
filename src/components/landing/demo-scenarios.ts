@@ -1,68 +1,73 @@
-// Structured scenario data for the landing-page diagnostic simulation.
-// Kept as data (not markup) so new scenarios can be added without touching UI.
-export type DemoStep = { title: string; working: string; result: string; tag?: string };
+// Structured sample data for the landing-page demo. Mirrors the real Diagnose flow:
+// data plate → age & warranty → parts diagram → one question at a time → next test → verified parts.
+// Sample data only — no backend calls.
+export type DemoQuestion = { q: string; choices: string[]; pick: number };
+export type DemoPart = { name: string; number: string; price: string };
 export type DemoScenario = {
   id: string;
   label: string;
+  brand: string;
+  type: string;
+  model: string;
+  serial: string;
   complaint: string;
-  steps: DemoStep[];
+  built: string;
+  age: string;
+  warranty: { status: string; good: boolean; source: string };
+  drive?: string;
+  diagramParts: number;
+  questions: DemoQuestion[];
+  failures: { name: string; pct: number }[];
+  nextTest: string;
+  reading: string;
+  safety: string;
+  parts: DemoPart[];
 };
 
 export const DEMO_SCENARIOS: DemoScenario[] = [
   {
-    id: "fridge",
-    label: "Fridge",
-    complaint: "Samsung French door — fresh food warm, freezer fine.",
-    steps: [
-      { title: "Model & serial decode", working: "Decoding serial date code…", result: "RF28R7351SR · Built Mar 2021 · Mexico", tag: "VERIFIED" },
-      { title: "Warranty intelligence", working: "Checking coverage windows…", result: "Out of 1-yr parts · Sealed system covered to 2026", tag: "COVERAGE" },
-      { title: "Bulletin & recall scan", working: "Scanning service bulletins…", result: "Known evaporator icing pattern on this series", tag: "TSB" },
-      { title: "Grounded diagnosis", working: "Matching confirmed repairs…", result: "Evap fan motor / defrost failure · 84% match", tag: "142 REPAIRS" },
-      { title: "Test sequence", working: "Building test order…", result: "Check evap coil frost → fan motor 12 VDC at harness", tag: "STEP-BY-STEP" },
-      { title: "Part lookup", working: "Cross-referencing OEM part…", result: "DA97-12540G evaporator fan assembly", tag: "OEM" },
-      { title: "Customer summary", working: "Writing plain-English summary…", result: "Ready to text the homeowner", tag: "DONE" },
+    id: "washer", label: "Washer", brand: "Maytag", type: "Top-load washer",
+    model: "MTW6205RW1", serial: "CF0104204", complaint: "Fills, hums, won't spin",
+    built: "Jan 2026", age: "< 1 yr", warranty: { status: "In warranty", good: true, source: "Whirlpool factory record" },
+    drive: "Direct drive · stator/rotor (no belt, no cap, no shifter)", diagramParts: 78,
+    questions: [
+      { q: "Does the basket turn freely by hand with the lid open?", choices: ["Yes, freely", "Stiff / grinding", "Won't move"], pick: 0 },
+      { q: "Any code in service mode?", choices: ["F7E1 (motor)", "F5E2 (lid lock)", "No code"], pick: 0 },
     ],
+    failures: [{ name: "Stator winding open", pct: 64 }, { name: "Rotor position sensor", pct: 21 }, { name: "Motor control board", pct: 15 }],
+    nextTest: "Unplug → disconnect stator harness → measure each winding pair",
+    reading: "Expect ~10–15 Ω each pair. Open = stator.",
+    safety: "Unplug before pulling harness.",
+    parts: [{ name: "Stator assembly", number: "W10915700", price: "$189" }, { name: "Rotor, magnetic", number: "W10915701", price: "$96" }],
   },
   {
-    id: "washer",
-    label: "Washer",
-    complaint: "Whirlpool top load — fills and agitates, won't spin.",
-    steps: [
-      { title: "Model & serial decode", working: "Decoding serial date code…", result: "WTW5000DW1 · Built Aug 2018 · Clyde, OH", tag: "VERIFIED" },
-      { title: "Warranty intelligence", working: "Checking coverage windows…", result: "Out of factory warranty · 7.2 yrs old", tag: "COVERAGE" },
-      { title: "Bulletin & recall scan", working: "Scanning service bulletins…", result: "No open recalls · lid lock wear is common", tag: "CLEAR" },
-      { title: "Grounded diagnosis", working: "Matching confirmed repairs…", result: "Lid lock assembly · 71% · shifter 18%", tag: "96 REPAIRS" },
-      { title: "Test sequence", working: "Building test order…", result: "Run diag mode → check lid lock status & error F5E2", tag: "STEP-BY-STEP" },
-      { title: "Part lookup", working: "Cross-referencing OEM part…", result: "W11307249 lid lock assembly", tag: "OEM" },
-      { title: "Customer summary", working: "Writing plain-English summary…", result: "Ready to text the homeowner", tag: "DONE" },
+    id: "dryer", label: "Dryer", brand: "Maytag", type: "Electric dryer",
+    model: "MED6230HW", serial: "C04512345", complaint: "Tumbles, no heat",
+    built: "2020", age: "6 yrs", warranty: { status: "Out of warranty", good: false, source: "Serial decode" },
+    diagramParts: 112,
+    questions: [
+      { q: "Is the vent clear with strong airflow outside?", choices: ["Yes", "Weak / clogged", "Not sure"], pick: 1 },
+      { q: "Thermal fuse continuity?", choices: ["Open", "Closed (0 Ω)"], pick: 0 },
     ],
+    failures: [{ name: "Thermal fuse (from blocked vent)", pct: 71 }, { name: "Heating element", pct: 18 }, { name: "Cycling thermostat", pct: 11 }],
+    nextTest: "Clean vent first, then check element across terminals",
+    reading: "Element ~10 Ω. Open = replace element too.",
+    safety: "240 V — unplug and verify dead.",
+    parts: [{ name: "Thermal fuse", number: "WP3392519", price: "$12" }, { name: "Cycling thermostat", number: "WP3387134", price: "$24" }],
   },
   {
-    id: "dryer",
-    label: "Dryer",
-    complaint: "Maytag electric dryer — tumbles, no heat.",
-    steps: [
-      { title: "Model & serial decode", working: "Decoding serial date code…", result: "MED6230HW · Built Jan 2020 · Marion, OH", tag: "VERIFIED" },
-      { title: "Warranty intelligence", working: "Checking coverage windows…", result: "Out of 1-yr parts · check 10-yr limited parts", tag: "COVERAGE" },
-      { title: "Bulletin & recall scan", working: "Scanning service bulletins…", result: "No open recalls · check venting first", tag: "CLEAR" },
-      { title: "Grounded diagnosis", working: "Matching confirmed repairs…", result: "Thermal fuse · 58% · heating element 27%", tag: "211 REPAIRS" },
-      { title: "Test sequence", working: "Building test order…", result: "Unplug → thermal fuse continuity → element ~10 Ω", tag: "STEP-BY-STEP" },
-      { title: "Part lookup", working: "Cross-referencing OEM part…", result: "WP3392519 thermal fuse", tag: "OEM" },
-      { title: "Customer summary", working: "Writing plain-English summary…", result: "Ready to text the homeowner", tag: "DONE" },
+    id: "fridge", label: "Fridge", brand: "Samsung", type: "French door fridge",
+    model: "RF28R7351SR", serial: "0B8F4BBN300123", complaint: "Fresh food warm, freezer fine",
+    built: "Mar 2021", age: "5 yrs", warranty: { status: "Sealed system may be covered", good: true, source: "Brand warranty rules" },
+    diagramParts: 146,
+    questions: [
+      { q: "Remove rear panel — is the evap coil frosted over?", choices: ["Heavy frost", "Light frost", "Clear"], pick: 0 },
+      { q: "Is the evap fan running with door switch held?", choices: ["Running", "Not running", "Noisy"], pick: 0 },
     ],
-  },
-  {
-    id: "dishwasher",
-    label: "Dishwasher",
-    complaint: "GE dishwasher — water left in tub after cycle.",
-    steps: [
-      { title: "Model & serial decode", working: "Decoding serial date code…", result: "GDT665SSNSS · Built 2022 · Louisville, KY", tag: "VERIFIED" },
-      { title: "Warranty intelligence", working: "Checking coverage windows…", result: "Past 1-yr parts & labor", tag: "COVERAGE" },
-      { title: "Bulletin & recall scan", working: "Scanning service bulletins…", result: "No open recalls", tag: "CLEAR" },
-      { title: "Grounded diagnosis", working: "Matching confirmed repairs…", result: "Clogged filter / drain hose · 62% · pump 24%", tag: "88 REPAIRS" },
-      { title: "Test sequence", working: "Building test order…", result: "Clean filter → check air gap/hose → pump ~13 Ω", tag: "STEP-BY-STEP" },
-      { title: "Part lookup", working: "Cross-referencing OEM part…", result: "WD26X25156 drain pump", tag: "OEM" },
-      { title: "Customer summary", working: "Writing plain-English summary…", result: "Ready to text the homeowner", tag: "DONE" },
-    ],
+    failures: [{ name: "Defrost heater / sensor", pct: 58 }, { name: "Evap fan icing", pct: 27 }, { name: "Main PCB", pct: 15 }],
+    nextTest: "Force defrost (Fridge + Energy Saver 8 s) → watch for melt",
+    reading: "No melt in 10 min → test defrost heater for continuity.",
+    safety: "Unplug before removing the evap cover.",
+    parts: [{ name: "Defrost heater assembly", number: "DA47-00243K", price: "$38" }, { name: "Defrost sensor", number: "DA32-00006W", price: "$15" }],
   },
 ];
