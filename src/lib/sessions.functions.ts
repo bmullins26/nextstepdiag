@@ -152,3 +152,13 @@ export const deleteSession = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+/** Heartbeat: marks the signed-in user as active right now (powers "Active now" in the Owner Console). */
+export const touchActivity = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await context.supabase
+      .from("profiles")
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq("id", context.userId);
+    return { ok: true };
+  });

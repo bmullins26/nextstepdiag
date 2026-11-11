@@ -393,6 +393,7 @@ export const listUsers = createServerFn({ method: "POST" })
     let q = supabaseAdmin
       .from("profiles")
       .select("id, email, full_name, display_name, plan, is_suspended, last_login_at, last_activity_at, created_at")
+      .order("last_activity_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(200);
 

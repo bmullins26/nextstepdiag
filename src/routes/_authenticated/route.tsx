@@ -9,6 +9,24 @@ import {
 import { AppSidebar } from "@/components/app-sidebar";
 import { BrandLogo } from "@/components/brand-logo";
 import { FeedbackWidget } from "@/components/feedback-widget";
+import { useEffect } from "react";
+import { touchActivity } from "@/lib/sessions.functions";
+
+/** Pings activity on open and every 2 minutes while the tab is visible. */
+function useActivityHeartbeat() {
+  useEffect(() => {
+    const ping = () => {
+      if (document.visibilityState === "visible") void touchActivity().catch(() => {});
+    };
+    ping();
+    const id = window.setInterval(ping, 120_000);
+    document.addEventListener("visibilitychange", ping);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", ping);
+    };
+  }, []);
+}
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -30,6 +48,7 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthenticatedLayout() {
+  useActivityHeartbeat();
   return (
     <SidebarProvider defaultOpen={false}>
       <AppSidebar />

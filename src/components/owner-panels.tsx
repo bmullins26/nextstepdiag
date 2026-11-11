@@ -188,10 +188,57 @@ function ErrorBlock({ error }: { error: unknown }) {
   );
 }
 
+const ACTIVE_WINDOW_MS = 5 * 60_000;
+function isActiveNow(at: string | null | undefined) {
+  return !!at && Date.now() - new Date(at).getTime() < ACTIVE_WINDOW_MS;
+}
+function timeAgo(at: string | null | undefined) {
+  if (!at) return "Never";
+  const m = Math.floor((Date.now() - new Date(at).getTime()) / 60_000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+function ActivityLabel({ at }: { at: string | null | undefined }) {
+  if (isActiveNow(at)) {
+    return (
+      <span className="inline-flex items-center gap-1.5 font-semibold text-primary">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" /> Active now
+      </span>
+    );
+  }
+  return <span className="text-muted-foreground">{timeAgo(at)}</span>;
+}
+function ActiveNowStrip({ users }: { users: Array<{ id: string; email: string | null; display_name?: string | null; full_name?: string | null; last_activity_at: string | null }> }) {
+  const active = users.filter((u) => isActiveNow(u.last_activity_at));
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/60 p-3">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <span className="h-2 w-2 rounded-full bg-primary" />
+        Active now <span className="text-muted-foreground">({active.length})</span>
+      </div>
+      {active.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {active.map((u) => (
+            <span key={u.id} className="max-w-full truncate rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
+              {u.display_name || u.full_name || u.email || "User"}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-xs text-muted-foreground">No one in the app in the last 5 minutes.</p>
+      )}
+    </div>
+  );
+}
+
 export function OwnerPanels() {
   return (
     <Tabs defaultValue="overview" className="w-full">
-      <TabsList className="flex w-full flex-wrap justify-start gap-1">
+      <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+      <TabsList className="inline-flex w-max min-w-full justify-start gap-1 sm:flex sm:h-auto sm:w-full sm:flex-wrap">
         <TabsTrigger value="overview">Overview</TabsTrigger>
         <TabsTrigger value="accuracy">Accuracy</TabsTrigger>
         <TabsTrigger value="ai">AI Usage</TabsTrigger>
@@ -204,6 +251,7 @@ export function OwnerPanels() {
         <TabsTrigger value="tools">Tool Manager</TabsTrigger>
         <TabsTrigger value="beta">Beta</TabsTrigger>
       </TabsList>
+      </div>
 
       <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
       <TabsContent value="accuracy" className="mt-6"><AccuracyTab /></TabsContent>
@@ -316,6 +364,7 @@ function UsersTab() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["owner", "users", search],
     queryFn: () => fn({ data: { search } }),
+    refetchInterval: 60_000,
   });
 
   const invalidate = () => {
@@ -358,6 +407,7 @@ function UsersTab() {
   return (
     <div className="space-y-4">
       <EmailComposeDialog target={emailTarget} onOpenChange={(o) => !o && setEmailTarget(null)} />
+      <ActiveNowStrip users={data ?? []} />
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -425,7 +475,7 @@ function UsersTab() {
                   <td className="px-3 py-2 text-xs tabular-nums">{u.sessions ?? 0}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.created_at)}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.last_sign_in_at)}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{fmtDate(u.last_activity_at)}</td>
+                  <td className="px-3 py-2 text-xs"><ActivityLabel at={u.last_activity_at} /></td>
                   <td className="px-3 py-2 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

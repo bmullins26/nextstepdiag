@@ -45,12 +45,12 @@ function OwnerLayout() {
     <main className="min-h-screen bg-background">
       <div className="border-b border-border/70 bg-card/40 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Shield className="h-6 w-6 text-primary" />
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Owner Console</h1>
-                <p className="text-sm text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <Shield className="h-6 w-6 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">Owner Console</h1>
+                <p className="hidden text-sm text-muted-foreground sm:block">
                   Platform administration: users, revenue, communication and analytics.
                 </p>
               </div>
@@ -63,7 +63,7 @@ function OwnerLayout() {
             </Link>
           </div>
 
-          <nav className="mt-4 flex flex-wrap gap-1">
+          <nav className="-mx-4 mt-4 flex gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
             {OWNER_NAV.map((item) => (
               <Link
                 key={item.to}
@@ -71,11 +71,11 @@ function OwnerLayout() {
                 activeOptions={{ exact: (item as { exact?: boolean }).exact ?? false }}
                 activeProps={{
                   className:
-                    "rounded-lg bg-primary/15 px-3 py-1.5 text-sm font-semibold text-primary",
+                    "shrink-0 whitespace-nowrap rounded-lg bg-primary/15 px-3 py-1.5 text-sm font-semibold text-primary",
                 }}
                 inactiveProps={{
                   className:
-                    "rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                    "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 }}
               >
                 {item.label}
@@ -85,7 +85,7 @@ function OwnerLayout() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
         <Outlet />
       </div>
     </main>
