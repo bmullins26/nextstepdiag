@@ -9,7 +9,7 @@
  */
 
 import type { DecodeOutcome, Corroboration } from "@/lib/age-decoder";
-import type { NormalizedAgeResult } from "@/lib/appliance-age-api.server";
+type NormalizedAgeResult = { manufactureYear: number | null; manufactureMonth: number | null; confidencePercent: number | null; alternativeYears: Array<{ year: number; month: number | null; confidencePercent: number; fullDate: string | null }>; source: "appliance_age_api" | "local_fallback" | "cache"; description?: string | null; rawProvider: unknown };
 
 export type ReconcileSource = {
   kind: "ground_truth" | "appliance_age_api" | "local_decoder" | "web_manufacturer" | "web_retailer" | "web_review" | "web_general";

@@ -8,7 +8,6 @@ import { decodeAge } from "./age-decoder";
 import type { DecodeOutcome, Corroboration } from "./age-decoder";
 import { resolveBrand } from "./age-decoder";
 import { decodeSerial as legacyDecodeSerial, pickBestCandidate as legacyPick } from "./serial-decode.legacy";
-import { lookupApplianceAgeWithCache } from "./appliance-age.functions";
 import { applyTypeOverrideServerSide } from "./appliance-type-overrides.functions";
 import { reconcileAge, type ReconcileSource } from "./age-verify/reconcile.server";
 
@@ -140,25 +139,13 @@ export const decodeAppliance = createServerFn({ method: "POST" })
 
     // === Age lookup is OPTIONAL. Never throw out of this block. ===
     // Priority: cached -> Appliance Age Finder API -> local decoder -> unknown.
-    let apiLookup: Awaited<ReturnType<typeof lookupApplianceAgeWithCache>> | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const apiLookup = null as any;
     let outcome: DecodeOutcome | null = null;
     let crossChecksOut: { communityConfirmations?: number; confirmedYear?: number | null } | null = null;
 
     if (hasSerial) {
-      const brandKeyForApi = resolveBrand(data.brand) ?? data.brand.toLowerCase();
-      try {
-        apiLookup = await lookupApplianceAgeWithCache({
-          supabase: context.supabase,
-          userId: context.userId,
-          brand: data.brand,
-          brandKey: brandKeyForApi,
-          modelNumber: data.modelNumber,
-          serialNumber: serial,
-        });
-      } catch (e) {
-        console.warn("[age-finder] API lookup threw — continuing without age:", e);
-        apiLookup = null;
-      }
+      // External age APIs removed — the local rules engine is the only source.
 
       // Model production window + technician cross-checks feed validation and
       // the weighted confidence engine. Both fail soft to null.
@@ -186,13 +173,7 @@ export const decodeAppliance = createServerFn({ method: "POST" })
         const shouldCorroborate = candidateYears.length >= 1 && candidateYears.length <= 12;
         if (shouldCorroborate) {
           let corroboration = await loadCorroborationCache(context.supabase, brandKey, data.modelNumber);
-          if (!corroboration) {
-            const { corroborateAge } = await import("./age-decoder/corroborate.server");
-            corroboration = await corroborateAge({ brandKey, modelNumber: data.modelNumber, candidateYears });
-            if (corroboration.used && corroboration.hits.length) {
-              await saveCorroborationCache(brandKey, data.modelNumber, corroboration);
-            }
-          }
+          // Only cached corroboration is used; no live web lookups.
           outcome = decodeAge({
             brand: data.brand,
             model: data.modelNumber,
@@ -415,7 +396,7 @@ Identify the appliance. Do not state any date or age.`,
             error: apiLookup.error ?? null,
             responseTimeMs: apiLookup.responseTimeMs,
           }
-        : { ok: false, statusCode: 0, source: null, error: hasSerial ? "no_serial_or_skipped" : null, responseTimeMs: 0 },
+        : { ok: false, statusCode: 0, source: null, error: null, responseTimeMs: 0 },
       ageProvider: apiLookup?.ok
         ? {
             source: apiLookup.source ?? "appliance_age_api",
@@ -436,7 +417,7 @@ Identify the appliance. Do not state any date or age.`,
             alternativeYears: [],
             description: null,
             responseTimeMs: apiLookup?.responseTimeMs ?? 0,
-            error: apiLookup?.error ?? null,
+            error: null,
           } : undefined),
       brand: data.brand,
       modelNumber: data.modelNumber,

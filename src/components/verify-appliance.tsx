@@ -379,13 +379,9 @@ export function VerifyAppliance({
                 <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
                   Verified by user
                 </span>
-              ) : result.ageProvider.source === "appliance_age_api" || result.ageProvider.source === "cache" ? (
-                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
-                  Verified by Appliance Age Finder{result.ageProvider.cached ? " (cached)" : ""}
-                </span>
               ) : result.manufactureDate ? (
                 <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                  Cross-referenced (API unavailable)
+                  Decoded from serial
                 </span>
               ) : (
                 <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -419,11 +415,6 @@ export function VerifyAppliance({
               </span>
             </div>
           )}
-          {result.apiStatus && !result.apiStatus.ok && result.apiStatus.error && result.serialNumber ? (
-            <p className="text-[10px] text-amber-300/80">
-              Age API: {result.apiStatus.error}. Cross-referenced serial rules + web sources instead.
-            </p>
-          ) : null}
           {result.reconciled && result.reconciled.sources.length > 0 ? (
             <details className="rounded-lg border border-border bg-background/40 p-3" open={result.reconciled.disagreement}>
               <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
