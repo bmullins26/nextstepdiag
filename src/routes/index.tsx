@@ -57,7 +57,7 @@ function Index() {
           <nav className="flex items-center gap-1 sm:gap-4">
             <a href="#demo" className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline">Demo</a>
             <a href="#pricing" className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline">Pricing</a>
-            <Button asChild size="sm" variant="ghost"><Link to="/auth">Sign in</Link></Button>
+            <Button asChild size="sm" variant="ghost"><Link to="/auth" search={{ next: "" }}>Sign in</Link></Button>
             <Button asChild size="sm"><Link to="/diagnose">Start</Link></Button>
           </nav>
         </div>
