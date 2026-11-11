@@ -611,6 +611,7 @@ function Phase3(props: {
           <div className="rounded-xl border border-primary/50 bg-card p-4">
             <div className="text-[11px] font-bold uppercase tracking-wide text-primary">Most Likely Failures</div>
             {failures.length > 0 ? (
+              <>
               <ol className="mt-3 space-y-2">
                 {failures.map((f, i) => {
                   const pct = likelihoodPercents(failures.length, step.likelihoods)[i];
@@ -629,6 +630,7 @@ function Phase3(props: {
                 })}
               </ol>
               <p className="mt-2 text-[10px] text-muted-foreground">Estimated likelihood — updates as you answer.</p>
+              </>
             ) : (
               <p className="mt-1 text-sm text-muted-foreground">Gathering evidence…</p>
             )}
