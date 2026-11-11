@@ -9,6 +9,8 @@ import type { DecodeOutcome, Corroboration } from "./age-decoder";
 import { resolveBrand } from "./age-decoder";
 import { decodeSerial as legacyDecodeSerial, pickBestCandidate as legacyPick } from "./serial-decode.legacy";
 import { applyTypeOverrideServerSide } from "./appliance-type-overrides.functions";
+import { isWhirlpoolFamily } from "./warranty/whirlpool-family";
+import { lookupServiceBench } from "./warranty/servicebench.server";
 import { reconcileAge, type ReconcileSource } from "./age-verify/reconcile.server";
 
 const DecodeInput = z.object({
@@ -142,6 +144,7 @@ export const decodeAppliance = createServerFn({ method: "POST" })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const apiLookup = null as any;
     let outcome: DecodeOutcome | null = null;
+    let factory: { year: number; month: number | null; detail: string; date: string; warrantyStatus: string | null } | null = null;
     let crossChecksOut: { communityConfirmations?: number; confirmedYear?: number | null } | null = null;
 
     if (hasSerial) {
@@ -162,6 +165,22 @@ export const decodeAppliance = createServerFn({ method: "POST" })
       ]);
 
       crossChecksOut = crossChecks;
+
+      // Whirlpool family: ask Whirlpool's own records (ServiceBench) for the
+      // exact build date. Best-effort, 3s cap, never blocks the decode.
+      if (isWhirlpoolFamily(data.brand, data.modelNumber)) {
+        const sb = await lookupServiceBench(data.modelNumber, serial).catch(() => null);
+        const m = sb?.manufacturedDate?.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m) {
+          factory = {
+            year: Number(m[3]),
+            month: Number(m[1]),
+            detail: `Built ${sb!.manufacturedDate}${sb!.markedAs ? ` · ${sb!.markedAs}` : ""}`,
+            date: sb!.manufacturedDate!,
+            warrantyStatus: sb!.markedAs ?? null,
+          };
+        }
+      }
 
       try {
         outcome = decodeAge({ brand: data.brand, model: data.modelNumber, serial, modelWindow, crossChecks });
@@ -331,6 +350,7 @@ Identify the appliance. Do not state any date or age.`,
           local: outcome,
           corroboration: outcome?.corroboration ?? null,
           groundTruth,
+          factory,
         })
       : null;
 
@@ -388,6 +408,7 @@ Identify the appliance. Do not state any date or age.`,
             groundTruthLocked: !!groundTruth,
           }
         : null,
+      factoryRecord: factory ? { date: factory.date, warrantyStatus: factory.warrantyStatus } : null,
       apiStatus: apiLookup
         ? {
             ok: !!apiLookup.ok,

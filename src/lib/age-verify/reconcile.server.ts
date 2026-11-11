@@ -12,7 +12,7 @@ import type { DecodeOutcome, Corroboration } from "@/lib/age-decoder";
 type NormalizedAgeResult = { manufactureYear: number | null; manufactureMonth: number | null; confidencePercent: number | null; alternativeYears: Array<{ year: number; month: number | null; confidencePercent: number; fullDate: string | null }>; source: "appliance_age_api" | "local_fallback" | "cache"; description?: string | null; rawProvider: unknown };
 
 export type ReconcileSource = {
-  kind: "ground_truth" | "appliance_age_api" | "local_decoder" | "web_manufacturer" | "web_retailer" | "web_review" | "web_general";
+  kind: "ground_truth" | "factory_record" | "appliance_age_api" | "local_decoder" | "web_manufacturer" | "web_retailer" | "web_review" | "web_general";
   year: number;
   month?: number | null;
   weight: number;      // 0..1 — base credibility of the source
@@ -36,6 +36,7 @@ export type ReconcileResult = {
 
 const KIND_LABEL: Record<ReconcileSource["kind"], string> = {
   ground_truth: "User-verified data plate",
+  factory_record: "Whirlpool factory record (ServiceBench)",
   appliance_age_api: "Appliance Age Finder API",
   local_decoder: "Serial-number rule",
   web_manufacturer: "Manufacturer site",
@@ -55,6 +56,7 @@ function corroborationKind(sourceType?: string): ReconcileSource["kind"] {
 
 const KIND_WEIGHT: Record<ReconcileSource["kind"], number> = {
   ground_truth: 1.0,
+  factory_record: 1.0,
   web_manufacturer: 0.9,
   appliance_age_api: 0.85,
   web_retailer: 0.55,
@@ -69,6 +71,8 @@ export type ReconcileInput = {
   local: DecodeOutcome | null;
   corroboration: Corroboration | null;
   groundTruth?: { year: number; month?: number | null; source?: string | null } | null;
+  /** Manufacturer's own build date (e.g. Whirlpool ServiceBench). Authoritative unless a tech overrides. */
+  factory?: { year: number; month: number | null; detail?: string } | null;
 };
 
 export function reconcileAge(input: ReconcileInput): ReconcileResult {
@@ -85,6 +89,18 @@ export function reconcileAge(input: ReconcileInput): ReconcileResult {
       detail: input.groundTruth.source
         ? `Reported from ${input.groundTruth.source.replace("_", " ")}`
         : "Reported by a technician",
+    });
+  }
+
+  if (input.factory) {
+    sources.push({
+      kind: "factory_record",
+      year: input.factory.year,
+      month: input.factory.month,
+      weight: KIND_WEIGHT.factory_record,
+      confidence: 1.0,
+      label: KIND_LABEL.factory_record,
+      detail: input.factory.detail,
     });
   }
 
@@ -123,8 +139,15 @@ export function reconcileAge(input: ReconcileInput): ReconcileResult {
       label: `${KIND_LABEL.local_decoder} · ${input.local.appliedRule.name}`,
       detail: input.local.breakdown,
     });
+    // One alternate per year (best score only). Summing several alternates for
+    // the same year let reused-digit layouts outvote the decoder's own pick.
+    const bestAlt = new Map<number, (typeof input.local.candidates)[number]>();
     for (const c of input.local.candidates) {
       if (c.year === primary) continue;
+      const prev = bestAlt.get(c.year);
+      if (!prev || (c.score ?? 0) > (prev.score ?? 0)) bestAlt.set(c.year, c);
+    }
+    for (const c of bestAlt.values()) {
       sources.push({
         kind: "local_decoder",
         year: c.year,
@@ -205,7 +228,7 @@ export function reconcileAge(input: ReconcileInput): ReconcileResult {
     .sort((a, b) => b.weight * b.confidence - a.weight * a.confidence)[0];
 
   // Ground truth is authoritative — lock the answer to it.
-  const gt = sources.find((s) => s.kind === "ground_truth");
+  const gt = sources.find((s) => s.kind === "ground_truth") ?? sources.find((s) => s.kind === "factory_record");
   const bestYear = gt ? gt.year : top.year;
   const bestMonth = gt ? gt.month ?? null : bestMonthSource?.month ?? null;
 

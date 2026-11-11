@@ -28,3 +28,15 @@ describe("age decoder (deterministic, no AI)", () => {
     expect(a).toEqual(b);
   });
 });
+import { reconcileAge } from "../../age-verify/reconcile.server";
+test("Maytag CF0104204 reconciles to 2026, not stacked 2020 alternates", () => {
+  const local = decodeAge({ brand: "Maytag", model: "MTW6205RW1", serial: "CF0104204" });
+  const r = reconcileAge({ api: null, apiOk: false, local, corroboration: null });
+  expect(r.bestYear).toBe(2026);
+});
+test("factory record locks the year", () => {
+  const local = decodeAge({ brand: "Maytag", model: "MTW6205RW1", serial: "CF0104204" });
+  const r = reconcileAge({ api: null, apiOk: false, local, corroboration: null, factory: { year: 2026, month: 1 } });
+  expect(r.bestYear).toBe(2026);
+  expect(r.bestMonth).toBe(1);
+});

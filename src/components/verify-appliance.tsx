@@ -78,6 +78,7 @@ export type DecodedAppliance = {
     }>;
   } | null;
   decodeLogic?: DecodeLogic | null;
+  factoryRecord?: { date: string; warrantyStatus: string | null } | null;
   apiStatus?: {
     ok: boolean;
     statusCode: number;
@@ -378,6 +379,11 @@ export function VerifyAppliance({
               {result.reconciled?.groundTruthLocked ? (
                 <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
                   Verified by user
+                </span>
+              ) : result.factoryRecord ? (
+                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                  Whirlpool record · built {result.factoryRecord.date}
+                  {result.factoryRecord.warrantyStatus ? ` · ${result.factoryRecord.warrantyStatus}` : ""}
                 </span>
               ) : result.manufactureDate ? (
                 <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
