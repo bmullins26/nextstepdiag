@@ -20,4 +20,12 @@ describe("V&V parts catalog", () => {
     expect(matchToCatalog("Stator", "W10006483", cat)?.partNumber).toBe("W10915700"));
   test("a belt does not match a direct-drive catalog", () =>
     expect(matchToCatalog("Drive belt", "", cat)).toBeNull());
+  test("user interface maps to Whirlpool fascia assembly, not the UI harness", () => {
+    const ui = [
+      { partNumber: "W11600727", description: "Harness, User Interface (hmi)", replaces: null, price: null, inStock: false, diagram: "Console", url: "" },
+      { partNumber: "W11806067", description: "Fascia Assembly (includes, Encoder And Hmi)", replaces: "W11790084", price: 359.99, inStock: true, diagram: "Console", url: "" },
+    ];
+    expect(matchToCatalog("User Interface", "W11586716", ui)?.partNumber).toBe("W11806067");
+    expect(matchToCatalog("UI board", "", ui)?.partNumber).toBe("W11806067");
+  });
 });

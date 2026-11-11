@@ -1659,6 +1659,57 @@ export type Database = {
         }
         Relationships: []
       }
+      model_parts_catalogs: {
+        Row: {
+          brand: string | null
+          created_at: string
+          diagrams: Json
+          fetched_at: string
+          hit_count: number
+          id: string
+          last_used_at: string | null
+          model_display: string
+          model_key: string
+          model_url: string | null
+          part_count: number
+          parts: Json
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          diagrams?: Json
+          fetched_at?: string
+          hit_count?: number
+          id?: string
+          last_used_at?: string | null
+          model_display: string
+          model_key: string
+          model_url?: string | null
+          part_count?: number
+          parts?: Json
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          diagrams?: Json
+          fetched_at?: string
+          hit_count?: number
+          id?: string
+          last_used_at?: string | null
+          model_display?: string
+          model_key?: string
+          model_url?: string | null
+          part_count?: number
+          parts?: Json
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       model_production_windows: {
         Row: {
           brand: string | null

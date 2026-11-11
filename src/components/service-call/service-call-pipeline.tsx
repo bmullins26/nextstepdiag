@@ -7,7 +7,7 @@ import { AlertTriangle, Check, ClipboardCopy, ExternalLink, Loader2, MessageSqua
 import { Button } from "@/components/ui/button";
 import { computeWarranty } from "@/lib/warranty/rules";
 import { PART_SUPPLIERS } from "@/lib/parts/suppliers";
-import { scanRecalls, generateCloseout, lookupFactoryWarranty, type Closeout, type RecallHit, type KnownIssue } from "@/lib/service-call.functions";
+import { scanRecalls, generateCloseout, lookupFactoryWarranty, preloadPartsCatalog, type Closeout, type RecallHit, type KnownIssue } from "@/lib/service-call.functions";
 
 type Props = {
   brand: string;
@@ -34,7 +34,18 @@ export function ServiceCallPipeline(p: Props) {
   const [recalls, setRecalls] = useState<{ recalls: RecallHit[]; knownIssues: KnownIssue[]; cpscError: string | null } | null>(null);
   type UiPart = Closeout["parts"][number] & { verified?: boolean; price?: number | null; url?: string | null };
   const [closeout, setCloseout] = useState<(Omit<Closeout, "parts"> & { parts: UiPart[] }) | null>(null);
-  const [partsSource, setPartsSource] = useState<{ name: string; modelUrl: string | null; count: number } | null>(null);
+  const [partsSource, setPartsSource] = useState<{ name: string; modelUrl: string | null; count: number; internal?: boolean } | null>(null);
+  const preload = useServerFn(preloadPartsCatalog);
+  const [diagram, setDiagram] = useState<"loading" | { provider: string | null; internal: boolean; count: number; modelUrl: string | null } | null>(null);
+  // Load this model's parts diagrams up front (saved copy first, outside sites only once).
+  useEffect(() => {
+    let off = false;
+    setDiagram("loading");
+    preload({ data: { brand: p.brand, modelNumber: p.modelNumber } })
+      .then((r) => !off && setDiagram(r))
+      .catch(() => !off && setDiagram(null));
+    return () => { off = true; };
+  }, [p.brand, p.modelNumber]);
   const factoryFn = useServerFn(lookupFactoryWarranty);
   const [factory, setFactory] = useState<Awaited<ReturnType<typeof lookupFactoryWarranty>> | "loading" | null>(null);
   useEffect(() => {
@@ -88,6 +99,11 @@ export function ServiceCallPipeline(p: Props) {
             </li>
           ))}
         </ol>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          {diagram === "loading" ? <><Loader2 className="mr-1 inline h-3 w-3 animate-spin" />Loading this model's parts diagrams…</>
+            : diagram && diagram.count > 0 ? <>Parts diagrams: {diagram.count} parts {diagram.internal ? "from NextStep's saved library" : `pulled from ${diagram.provider} and saved for next time`}.{diagram.modelUrl && <> <a className="underline" href={diagram.modelUrl} target="_blank" rel="noreferrer">Open diagrams</a></>}</>
+            : "No parts diagram found for this model — part suggestions will be marked unconfirmed."}
+        </p>
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4">
@@ -238,7 +254,7 @@ export function ServiceCallPipeline(p: Props) {
                 {closeout.parts.length === 0 && <p className="mt-1 text-xs text-muted-foreground">No parts on this model's parts list matched the suspected failure.</p>}
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   {partsSource
-                    ? <>Matched against {partsSource.count} parts on this model's diagrams from {partsSource.name}.{partsSource.modelUrl && <> <a className="underline" href={partsSource.modelUrl} target="_blank" rel="noreferrer">Open diagrams</a></>}</>
+                    ? <>Matched against {partsSource.count} parts on this model's diagrams from {partsSource.internal ? `NextStep's saved library (${partsSource.name})` : partsSource.name}.{partsSource.modelUrl && <> <a className="underline" href={partsSource.modelUrl} target="_blank" rel="noreferrer">Open diagrams</a></>}</>
                     : "Couldn't load this model's parts list — part numbers are suggestions, confirm against the parts diagram before ordering."}
                 </p>
               </div>

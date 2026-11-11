@@ -95,9 +95,9 @@ export const generateCloseout = createServerFn({ method: "POST" })
     const { logAiUsage } = await import("./ai-usage-log.server");
     const topo = classifyDriveTopology(data.applianceType, data.modelNumber);
     // Real parts list for this exact model (V&V Appliance Parts). Best-effort.
-    const { getModelParts } = await import("./parts/vv/catalog.server");
+    const { getGroundedCatalog } = await import("./parts/catalog-service.server");
     const { matchToCatalog } = await import("./parts/vv/parse");
-    const vv = await getModelParts(data.modelNumber).catch(() => ({ parts: [], modelUrl: null }));
+    const vv = await getGroundedCatalog(data.modelNumber, data.brand);
     const catalog = filterForTopology(vv.parts, topo, (p) => p.description);
     const catalogBlock = catalog.length
       ? `PARTS LIST FOR THIS EXACT MODEL (from the model's parts diagrams). You MUST pick parts only from this list and copy the part number exactly. Never suggest a part that is not listed:\n${catalog.slice(0, 160).map((c) => `- ${c.partNumber} | ${c.description} | ${c.diagram}`).join("\n")}`
@@ -123,7 +123,7 @@ export const generateCloseout = createServerFn({ method: "POST" })
       const closeout = {
         ...object,
         parts: filterForTopology(object.parts, topo, (p) => p.name).flatMap((p) => {
-          if (!catalog.length) return [{ ...p, verified: false, price: null as number | null, url: null as string | null }];
+          if (!catalog.length) return [{ ...p, partNumber: "", verified: false, price: null as number | null, url: null as string | null }];
           const hit = matchToCatalog(p.name, p.partNumber, catalog);
           // Not on this model's parts list → drop it rather than show a wrong part.
           if (!hit) return [];
@@ -131,11 +131,21 @@ export const generateCloseout = createServerFn({ method: "POST" })
         }).filter((p, i, a) => !p.partNumber || a.findIndex((x) => x.partNumber === p.partNumber) === i),
         testPlan: filterForTopology(object.testPlan, topo, (t) => t.step),
       };
-      return { ok: true as const, closeout, partsSource: catalog.length ? { name: "V&V Appliance Parts", modelUrl: vv.modelUrl, count: catalog.length } : null };
+      return { ok: true as const, closeout, partsSource: catalog.length ? { name: vv.provider ?? "Parts diagrams", modelUrl: vv.modelUrl, count: catalog.length, internal: vv.internal } : null };
     } catch (e) {
       console.error("[closeout] failed", e);
       return { ok: false as const, error: "Couldn't build the closeout right now. Try again." };
     }
+  });
+
+// Load (or pull once and save) the real parts diagrams for a model, so diagnosis is grounded.
+export const preloadPartsCatalog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ brand: z.string().max(80).default(""), modelNumber: z.string().min(1).max(60) }).parse(d))
+  .handler(async ({ data }) => {
+    const { getGroundedCatalog } = await import("./parts/catalog-service.server");
+    const c = await getGroundedCatalog(data.modelNumber, data.brand || undefined);
+    return { provider: c.provider, internal: c.internal, count: c.parts.length, modelUrl: c.modelUrl, diagrams: c.diagrams.slice(0, 20) };
   });
 
 // Live Whirlpool-family factory entitlement (ServiceBench). Never blocks the call.

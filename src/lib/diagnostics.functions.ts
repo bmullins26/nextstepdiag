@@ -12,6 +12,13 @@ import type { EvidenceItem } from "./evidence/types";
 import { enforceLookupQuota, QuotaExceededError } from "./billing/quota.server";
 import { classifyDriveTopology, topologyPromptBlock } from "@/lib/appliance/drive-topology";
 import { runDiagnosticStep } from "./ai/diagnostic-provider.server";
+import { readSavedCatalog, catalogGroundingBlock } from "./parts/catalog-service.server";
+
+// Saved parts diagrams only (instant); the service-call screen pre-loads them on model entry.
+async function savedPartsGrounding(model: string): Promise<string> {
+  const c = await readSavedCatalog(model).catch(() => null);
+  return c ? catalogGroundingBlock(c) : "";
+}
 
 const ApplianceInput = z.object({
   brand: z.string().min(1),
@@ -273,6 +280,7 @@ APPLIANCE: ${data.appliance.applianceType}
 MODEL: ${data.appliance.modelNumber}${data.appliance.serialNumber ? `\nSERIAL: ${data.appliance.serialNumber}` : ""}${data.appliance.manufactureYear ? `\nMANUFACTURED: ${data.appliance.manufactureYear}${data.appliance.ageYears != null ? ` (~${Math.round(data.appliance.ageYears)} yr old — factor wear-related failures accordingly)` : ""}` : ""}
 
 ${topologyPromptBlock(classifyDriveTopology(data.appliance.applianceType, data.appliance.modelNumber))}
+${await savedPartsGrounding(data.appliance.modelNumber)}
 Customer Complaint: ${data.complaint}
 
 Already verified by the technician (do NOT ask them to repeat these tests):

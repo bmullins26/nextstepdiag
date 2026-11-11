@@ -7,7 +7,7 @@ const FIRECRAWL = "https://api.firecrawl.dev/v2/scrape";
 const cache = new Map<string, { at: number; parts: VvPart[]; modelUrl: string | null }>();
 const TTL = 1000 * 60 * 60 * 12;
 
-async function scrape(url: string, signal: AbortSignal): Promise<string | null> {
+export async function scrape(url: string, signal: AbortSignal): Promise<string | null> {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) return null;
   try {

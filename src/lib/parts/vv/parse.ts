@@ -1,5 +1,7 @@
 // Pure parsers for V&V Appliance Parts (vvapplianceparts.com) pages rendered as markdown.
 // Kept pure so they are unit-testable without network access.
+import { aliasWords, ACCESSORY } from "../aliases";
+
 export const VV_BASE = "https://www.vvapplianceparts.com";
 
 export type VvDiagram = { title: string; url: string };
@@ -78,13 +80,21 @@ export function matchToCatalog(name: string, partNumber: string, catalog: VvPart
       || (c.replaces ?? "").split(/[,\s]+/).some((r) => r && norm(r) === pn));
     if (hit) return hit;
   }
-  const want = words(name);
-  if (!want.length) return null;
+  // Expand technician vocabulary to OEM diagram wording (e.g. user interface -> fascia/HMI).
+  const base = words(name);
+  const alias = aliasWords(name);
+  if (!base.length && !alias.length) return null;
+  const wantsAccessory = ACCESSORY.test(name);
   let best: VvPart | null = null;
   let bestScore = 0;
   for (const c of catalog) {
+    const desc = c.description.toLowerCase();
     const have = new Set(words(c.description));
-    const score = want.filter((w) => have.has(w) || have.has(w.replace(/s$/, ""))).length / want.length;
+    const direct = base.length ? base.filter((w) => have.has(w) || have.has(w.replace(/s$/, ""))).length / base.length : 0;
+    const aliasHit = alias.some((a) => desc.includes(a)) ? 0.6 : 0;
+    let score = Math.max(direct, aliasHit) + (direct > 0 && aliasHit > 0 ? 0.2 : 0);
+    // A harness/bracket must never outrank the actual component the tech asked for.
+    if (!wantsAccessory && ACCESSORY.test(c.description)) score *= 0.4;
     if (score > bestScore) { bestScore = score; best = c; }
   }
   return bestScore >= 0.5 ? best : null;
