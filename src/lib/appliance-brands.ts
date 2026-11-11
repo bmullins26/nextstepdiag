@@ -76,7 +76,7 @@ export const APPLIANCE_BRANDS: ApplianceBrand[] = [
   { name: "White-Westinghouse",ocrSupported: false, decodeSupported: true  },
   { name: "Wolf",              ocrSupported: false, decodeSupported: false },
   { name: "Other",             ocrSupported: false, decodeSupported: false },
-];
+].sort((a, b) => (a.name === "Other" ? 1 : b.name === "Other" ? -1 : a.name.localeCompare(b.name)));
 
 export function findBrand(name: string): ApplianceBrand | undefined {
   const n = name.trim().toLowerCase();
