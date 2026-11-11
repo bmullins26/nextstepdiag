@@ -9,6 +9,7 @@ import { samsungRules } from "./rules/samsung";
 import { boschRules } from "./rules/bosch";
 import { fisherPaykelRules } from "./rules/fisherpaykel";
 import { mieleRules } from "./rules/miele";
+import { allianceRules, goodmanRules, aoSmithRules, traneRules, carrierRules, lennoxRules, rheemRules, bradfordWhiteRules } from "./rules/hvac-water-laundry";
 
 // Canonical brand keys (lowercase). Map any alias → canonical via BRAND_ALIASES.
 export type BrandKey =
@@ -19,7 +20,15 @@ export type BrandKey =
   | "samsung"
   | "bosch"
   | "fisherpaykel"
-  | "miele";
+  | "miele"
+  | "alliance"
+  | "goodman"
+  | "carrier"
+  | "lennox"
+  | "trane"
+  | "rheem"
+  | "bradfordwhite"
+  | "aosmith";
 
 // Brand families: any of these alias strings (lowercase) maps to the canonical key.
 const BRAND_ALIASES: Record<string, BrandKey> = {
@@ -79,6 +88,21 @@ const BRAND_ALIASES: Record<string, BrandKey> = {
 
   // Miele
   miele: "miele",
+
+  // Alliance Laundry
+  "speed queen": "alliance", speedqueen: "alliance", huebsch: "alliance", unimac: "alliance", alliance: "alliance",
+  // HVAC
+  goodman: "goodman", daikin: "goodman", janitrol: "goodman", "amana hvac": "goodman",
+  carrier: "carrier", bryant: "carrier", payne: "carrier", tempstar: "carrier", heil: "carrier",
+  comfortmaker: "carrier", keeprite: "carrier", "day & night": "carrier", icp: "carrier",
+  lennox: "lennox", armstrong: "lennox", ducane: "lennox", airease: "lennox", concord: "lennox",
+  trane: "trane", "american standard": "trane", ameristar: "trane",
+  rheem: "rheem", ruud: "rheem", weatherking: "rheem", richmond: "rheem",
+  // Water heaters
+  "bradford white": "bradfordwhite", bradfordwhite: "bradfordwhite",
+  "a.o. smith": "aosmith", "ao smith": "aosmith", aosmith: "aosmith", state: "aosmith", reliance: "aosmith", american: "aosmith", lochinvar: "aosmith",
+  // Other appliance brands built by existing parents
+  philco: "frigidaire", dacor: "samsung", rca: "ge", americana: "ge", caloric: "whirlpool",
 };
 
 const REGISTRY: Record<BrandKey, Rule[]> = {
@@ -90,6 +114,14 @@ const REGISTRY: Record<BrandKey, Rule[]> = {
   bosch: [...boschRules],
   fisherpaykel: [...fisherPaykelRules],
   miele: [...mieleRules],
+  alliance: [...allianceRules],
+  goodman: [...goodmanRules],
+  carrier: [...carrierRules],
+  lennox: [...lennoxRules],
+  trane: [...traneRules],
+  rheem: [...rheemRules],
+  bradfordwhite: [...bradfordWhiteRules],
+  aosmith: [...aoSmithRules],
 };
 
 export function resolveBrand(brand: string): BrandKey | null {
@@ -115,6 +147,14 @@ const KENMORE_PREFIX_TO_BRAND: Record<string, BrandKey> = {
   "362": "ge",        // GE-built
   "795": "lg",        // LG-built (newer refrigerators)
   "401": "samsung",   // Samsung-built (newer washers)
+  "596": "whirlpool", // Whirlpool-built refrigerators
+  "253": "frigidaire", // Frigidaire-built refrigerators
+  "587": "frigidaire", // Frigidaire-built dishwashers
+  "790": "frigidaire", // Frigidaire-built ranges
+  "721": "lg",        // LG-built microwaves
+  "796": "lg",        // LG-built laundry
+  "592": "lg",        // LG-built
+  "647": "alliance",  // Speed Queen-built laundry
 };
 
 function brandFromModel(model?: string): BrandKey | null {

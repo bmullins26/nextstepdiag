@@ -490,10 +490,22 @@ export function VerifyAppliance({
           <KV k="Applied Rule" v={result.ruleName || result.ruleFamily || "—"} />
           {result.decodeLogic ? <DecodeLogicPanel logic={result.decodeLogic} /> : null}
 
+          {result.candidates && new Set(result.candidates.map((c) => c.year)).size > 1 ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              <div className="font-semibold uppercase tracking-wide">Date code repeats — all possible years</div>
+              <div className="mt-1">
+                This brand reuses serial date codes, so the same serial can match more than one year:{" "}
+                <span className="font-mono font-semibold">
+                  {Array.from(new Set(result.candidates.map((c) => c.year))).sort((a, b) => b - a).join(" · ")}
+                </span>
+                . Check the data plate, install paperwork, or model era to confirm.
+              </div>
+            </div>
+          ) : null}
           {result.candidates && result.candidates.length > 1 ? (
-            <details className="rounded-lg border border-border bg-background/40 p-3">
+            <details open className="rounded-lg border border-border bg-background/40 p-3">
               <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Other possible years ({result.candidates.length})
+                All possible dates ({result.candidates.length})
               </summary>
               <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                 {result.candidates.map((c) => (

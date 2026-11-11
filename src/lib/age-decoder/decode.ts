@@ -159,14 +159,22 @@ export function decodeAge(input: DecodeInput): DecodeOutcome {
   const best = ranked[0]!;
   const appliedRule = best.rule;
   const chosen = best.candidate;
+  // Every surviving date across ALL matching rules (deduped), so reused/recycled
+  // serial codes surface every possible date instead of one silent guess.
+  const seen = new Set<string>();
   const candidates = ranked
-    .filter((r) => r.rule.id === appliedRule.id)
+    .filter((r) => {
+      const k = `${r.candidate.year}-${r.candidate.month ?? ""}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
     .map((r) => r.candidate);
 
   const confidenceBreakdown = computeConfidence({
     rule: appliedRule,
     chosen,
-    candidates,
+    candidates: ranked.filter((r) => r.rule.id === appliedRule.id).map((r) => r.candidate),
     corroboration,
     modelWindow,
     crossChecks,
