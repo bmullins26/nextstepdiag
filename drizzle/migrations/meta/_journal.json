@@ -8,6 +8,13 @@
       "when": 1794416031186,
       "tag": "0000_model_parts_catalogs",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794524326757,
+      "tag": "0001_partner_perk_claims",
+      "breakpoints": true
     }
   ]
 }

@@ -1752,6 +1752,33 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_perk_claims: {
+        Row: {
+          claimed_at: string
+          expires_at: string
+          id: string
+          partner: string
+          perk: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          expires_at: string
+          id?: string
+          partner: string
+          perk?: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          expires_at?: string
+          id?: string
+          partner?: string
+          perk?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

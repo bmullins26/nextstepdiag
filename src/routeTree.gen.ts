@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AccessDeniedRouteImport } from './routes/access-denied'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BetaRouteImport } from './routes/beta'
+import { Route as FredsAcademyRouteImport } from './routes/freds-academy'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
@@ -74,6 +75,11 @@ const AuthRoute = AuthRouteImport.update({
 const BetaRoute = BetaRouteImport.update({
   id: '/beta',
   path: '/beta',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FredsAcademyRoute = FredsAcademyRouteImport.update({
+  id: '/freds-academy',
+  path: '/freds-academy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const McpRoute = McpRouteImport.update({
@@ -285,6 +291,7 @@ export interface FileRoutesByFullPath {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/freds-academy': typeof FredsAcademyRoute
   '/mcp': typeof McpRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -328,6 +335,7 @@ export interface FileRoutesByTo {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/freds-academy': typeof FredsAcademyRoute
   '/mcp': typeof McpRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -372,6 +380,7 @@ export interface FileRoutesById {
   '/access-denied': typeof AccessDeniedRoute
   '/auth': typeof AuthRoute
   '/beta': typeof BetaRoute
+  '/freds-academy': typeof FredsAcademyRoute
   '/mcp': typeof McpRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -417,6 +426,7 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/freds-academy'
     | '/mcp'
     | '/unsubscribe'
     | '/.mcp/list-tools'
@@ -460,6 +470,7 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/freds-academy'
     | '/mcp'
     | '/unsubscribe'
     | '/.mcp/list-tools'
@@ -503,6 +514,7 @@ export interface FileRouteTypes {
     | '/access-denied'
     | '/auth'
     | '/beta'
+    | '/freds-academy'
     | '/mcp'
     | '/unsubscribe'
     | '/.mcp/list-tools'
@@ -548,6 +560,7 @@ export interface RootRouteChildren {
   AccessDeniedRoute: typeof AccessDeniedRoute
   AuthRoute: typeof AuthRoute
   BetaRoute: typeof BetaRoute
+  FredsAcademyRoute: typeof FredsAcademyRoute
   McpRoute: typeof McpRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
@@ -600,6 +613,13 @@ declare module '@tanstack/react-router' {
       path: '/beta'
       fullPath: '/beta'
       preLoaderRoute: typeof BetaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/freds-academy': {
+      id: '/freds-academy'
+      path: '/freds-academy'
+      fullPath: '/freds-academy'
+      preLoaderRoute: typeof FredsAcademyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mcp': {
@@ -980,6 +1000,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccessDeniedRoute: AccessDeniedRoute,
   AuthRoute: AuthRoute,
   BetaRoute: BetaRoute,
+  FredsAcademyRoute: FredsAcademyRoute,
   McpRoute: McpRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
