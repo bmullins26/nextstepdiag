@@ -990,6 +990,30 @@ export type Database = {
         }
         Relationships: []
       }
+      diagnostic_usage: {
+        Row: {
+          created_at: string
+          id: string
+          period_month: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          period_month: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          period_month?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_send_log: {
         Row: {
           created_at: string
@@ -2183,6 +2207,10 @@ export type Database = {
       community_family_key: {
         Args: { brand: string; model: string }
         Returns: string
+      }
+      consume_diagnostic: {
+        Args: { _session_id: string; _user_id: string }
+        Returns: Json
       }
       delete_email: {
         Args: { message_id: number; queue_name: string }

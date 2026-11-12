@@ -15,6 +15,20 @@
       "when": 1794524326757,
       "tag": "0001_partner_perk_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794527163522,
+      "tag": "0002_session_based_diagnostic_quota",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794527185710,
+      "tag": "0003_keep_resumed_diagnostic_sessions_included",
+      "breakpoints": true
     }
   ]
 }

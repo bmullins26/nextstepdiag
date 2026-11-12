@@ -9,7 +9,7 @@ import type { GroundingResult } from "./tech-sheets/types";
 import { loadOutcomeStats } from "./diagnostic-outcomes.server";
 import { gatherEvidence, tieredPromptBlock, provenanceBlock } from "./evidence/engine";
 import type { EvidenceItem } from "./evidence/types";
-import { enforceLookupQuota, QuotaExceededError } from "./billing/quota.server";
+import { enforceDiagnosticQuota, QuotaExceededError } from "./billing/quota.server";
 import { classifyDriveTopology, topologyPromptBlock } from "@/lib/appliance/drive-topology";
 import { runDiagnosticStep } from "./ai/diagnostic-provider.server";
 import { readSavedCatalog, catalogGroundingBlock } from "./parts/catalog-service.server";
@@ -30,25 +30,8 @@ export const verifyAppliance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ApplianceInput.parse(d))
   .handler(async ({ data, context }) => {
-    try {
-      await enforceLookupQuota(context.userId);
-    } catch (e) {
-      if (e instanceof QuotaExceededError) {
-        return {
-          identified: false,
-          manufacturer: "",
-          applianceType: "",
-          confidence: "Unknown" as const,
-          notes: "",
-          brand: data.brand,
-          modelNumber: data.modelNumber,
-          serialNumber: data.serialNumber,
-          quotaExceeded: true as const,
-          quota: { used: e.used, limit: e.limit },
-        };
-      }
-      throw e;
-    }
+    // Appliance identification is part of the diagnostic, not a separate
+    // session charge. The first actual diagnostic step consumes the session.
     const gateway = getGateway();
     const { object, usage } = await generateObject({
       model: gateway(DEFAULT_MODEL),
@@ -91,8 +74,11 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => StepInput.parse(d))
   .handler(async ({ data, context }) => {
+    if (!data.sessionId) {
+      throw new Error("Save the diagnostic session before continuing.");
+    }
     try {
-      await enforceLookupQuota(context.userId);
+      await enforceDiagnosticQuota(context.userId, data.sessionId);
     } catch (e) {
       if (e instanceof QuotaExceededError) {
         return {

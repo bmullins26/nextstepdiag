@@ -26,8 +26,8 @@ export function UsageMeter({ compact = false }: { compact?: boolean }) {
     );
   }
 
-  const used = data.lookupsUsed;
-  const limit = data.lookupsLimit;
+  const used = data.diagnosticsUsed;
+  const limit = data.diagnosticsLimit;
   const nearCap = used >= Math.floor(limit * 0.75);
 
   return (
@@ -43,7 +43,7 @@ export function UsageMeter({ compact = false }: { compact?: boolean }) {
         <span className="font-semibold">
           {used}/{limit}
         </span>
-        {!compact && <span>lookups · Upgrade</span>}
+        {!compact && <span>diagnostics · Upgrade</span>}
       </button>
       <UpgradeDialog open={open} onOpenChange={setOpen} />
     </>
@@ -60,8 +60,9 @@ export function QuotaExceededPrompt({ onUpgrade }: { onUpgrade?: () => void }) {
           <div className="flex-1">
             <h3 className="text-sm font-semibold">You've hit your monthly limit</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Free accounts get 8 AI lookups per month. Upgrade for unlimited
-              diagnostics, tech sheet uploads, and Tech Talk.
+              Free accounts get 8 full diagnostics per month, with every
+              follow-up step included. Upgrade for unlimited diagnostics,
+              tech sheet uploads, and Tech Talk.
             </p>
             <Button
               className="mt-3"

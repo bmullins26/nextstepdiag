@@ -13,8 +13,8 @@ export type Entitlements = {
   status: string;
   isPro: boolean;
   isGrandfathered: boolean;
-  lookupsUsed: number;
-  lookupsLimit: number;
+  diagnosticsUsed: number;
+  diagnosticsLimit: number;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   hasStripeCustomer: boolean;
@@ -49,12 +49,12 @@ export const getMyEntitlements = createServerFn({ method: "POST" })
               new Date(s.current_period_end as string) > new Date())),
       ) ?? (subs ?? [])[0];
 
-    const { data: usage } = await context.supabase
-      .from("usage_counters")
-      .select("lookups_used")
+    const { count: diagnosticsUsed, error: usageError } = await context.supabase
+      .from("diagnostic_usage")
+      .select("session_id", { count: "exact", head: true })
       .eq("user_id", context.userId)
-      .eq("period_month", periodMonth())
-      .maybeSingle();
+      .eq("period_month", periodMonth());
+    if (usageError) throw new Error(usageError.message);
 
     const tier = ((sub?.tier as string) ?? "free") as "free" | "pro";
     const planType = (sub?.plan_type ?? null) as Entitlements["planType"];
@@ -71,8 +71,8 @@ export const getMyEntitlements = createServerFn({ method: "POST" })
       status: (sub?.status ?? "active") as string,
       isPro,
       isGrandfathered,
-      lookupsUsed: (usage?.lookups_used as number | undefined) ?? 0,
-      lookupsLimit: isPro ? -1 : 8,
+      diagnosticsUsed: diagnosticsUsed ?? 0,
+      diagnosticsLimit: isPro ? -1 : 8,
       currentPeriodEnd,
       cancelAtPeriodEnd: !!sub?.cancel_at_period_end,
       hasStripeCustomer: !!(sub as any)?.stripe_customer_id,

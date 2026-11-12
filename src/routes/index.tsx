@@ -28,7 +28,7 @@ const PILLARS = [
 ];
 
 const PLANS = [
-  { name: "Free", price: "$0", per: "forever", feats: ["8 lookups / month", "Serial & age decoding", "Error code lookup"], cta: "Start free" },
+  { name: "Free", price: "$0", per: "forever", feats: ["8 full diagnostics / month", "All follow-up steps included", "Serial & age decoding", "Error code lookup"], cta: "Start free" },
   { name: "Pro Monthly", price: "$9.99", per: "/ month", feats: ["Unlimited diagnoses", "Confirmed-repair matching", "Tech Talk community", "Document assistant"], cta: "Go Pro", featured: true },
   { name: "Pro Yearly", price: "$99", per: "/ year", feats: ["Everything in Pro", "Two months free", "Priority beta features"], cta: "Save yearly" },
 ];

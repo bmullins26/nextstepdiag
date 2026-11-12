@@ -95,9 +95,9 @@ export function BillingPanel() {
               )
             ) : (
               <>
-                {data.lookupsUsed}/{data.lookupsLimit} AI lookups used this
-                month. Upgrade for unlimited access, tech sheet uploads, and
-                Tech Talk.
+                {data.diagnosticsUsed}/{data.diagnosticsLimit} full diagnostics used this
+                month. Every follow-up step is included. Upgrade for unlimited
+                diagnostics, tech sheet uploads, and Tech Talk.
               </>
             )}
           </div>

@@ -30,14 +30,14 @@ const PLANS: Array<{
     name: "7-Day Pass",
     price: "$1",
     cadence: "one-time · 7 days",
-    highlights: ["Try Pro for a week", "Unlimited AI lookups", "Tech Talk access"],
+    highlights: ["Try Pro for a week", "Unlimited full diagnostics", "Tech Talk access"],
   },
   {
     id: "pro_monthly",
     name: "Pro Monthly",
     price: "$9.99",
     cadence: "per month",
-    highlights: ["Unlimited AI lookups", "Tech sheet uploads", "Tech Talk access"],
+    highlights: ["Unlimited full diagnostics", "Tech sheet uploads", "Tech Talk access"],
   },
   {
     id: "pro_annual",

@@ -206,34 +206,37 @@ function DiagnosePage() {
     setTimeout(() => { hydrated.current = true; }, 100);
   }
 
-  // Autosave (debounced)
+  function buildSessionPayload(historyValue = history, findingsValue = findings) {
+    if (!appliance) return null;
+    return {
+      brand: appliance.brand ?? "",
+      appliance_type: appliance.applianceType ?? "",
+      model_number: appliance.modelNumber ?? "",
+      serial_number: appliance.serialNumber ?? "",
+      manufacture_year: appliance.manufactureDate?.year ?? null,
+      age_years: appliance.ageYears ?? null,
+      complaint,
+      findings: findingsValue,
+      history: historyValue,
+      most_likely_failures: step?.mostLikelyFailures ?? [],
+      most_likely_failure: step?.mostLikelyFailure ?? "",
+      recommended_next_test: step?.recommendedNextTest ?? "",
+      current_findings_summary: step?.currentFindings ?? "",
+      appliance: appliance as unknown as Record<string, unknown>,
+    };
+  }
+
+  // Autosave existing sessions only. Starting a diagnosis explicitly creates
+  // the session, preventing an autosave race from creating a duplicate.
   useEffect(() => {
-    if (!appliance) return;
-    if (!hydrated.current && !sessionId) {
-      hydrated.current = true; // first user action after fresh start
-    }
+    if (!appliance || !sessionId) return;
+    hydrated.current = true;
     setSaveState("saving");
     const t = setTimeout(async () => {
       try {
-        const payload = {
-          id: sessionId ?? undefined,
-          brand: appliance.brand ?? "",
-          appliance_type: appliance.applianceType ?? "",
-          model_number: appliance.modelNumber ?? "",
-          serial_number: appliance.serialNumber ?? "",
-          manufacture_year: appliance.manufactureDate?.year ?? null,
-          age_years: appliance.ageYears ?? null,
-          complaint,
-          findings,
-          history,
-          most_likely_failures: step?.mostLikelyFailures ?? [],
-          most_likely_failure: step?.mostLikelyFailure ?? "",
-          recommended_next_test: step?.recommendedNextTest ?? "",
-          current_findings_summary: step?.currentFindings ?? "",
-          appliance: appliance as unknown as Record<string, unknown>,
-        };
-        const saved = (await upsert({ data: payload })) as { id: string };
-        if (saved?.id && !sessionId) setSessionId(saved.id);
+        const payload = buildSessionPayload();
+        if (!payload) return;
+        await upsert({ data: { ...payload, id: sessionId } });
         setSaveState("saved");
         setLastSavedAt(Date.now());
       } catch {
@@ -242,7 +245,7 @@ function DiagnosePage() {
     }, 700);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliance, complaint, findings, history, step?.mostLikelyFailure, step?.recommendedNextTest, step?.currentFindings]);
+  }, [sessionId, appliance, complaint, findings, history, step?.mostLikelyFailure, step?.recommendedNextTest, step?.currentFindings]);
 
   async function startDiagnosis() {
     if (!complaint.trim()) {
@@ -265,6 +268,15 @@ function DiagnosePage() {
     }
     setThinking(true);
     try {
+      let activeSessionId = sessionId;
+      if (!activeSessionId) {
+        const payload = buildSessionPayload(h, f);
+        if (!payload) throw new Error("Could not save the diagnostic session.");
+        const saved = (await upsert({ data: payload })) as { id: string };
+        activeSessionId = saved.id;
+        setSessionId(saved.id);
+      }
+
       const r = await next({
         data: {
           appliance: {
@@ -279,7 +291,7 @@ function DiagnosePage() {
           complaint,
           history: h,
           currentFindings: f,
-          sessionId: sessionId ?? null,
+          sessionId: activeSessionId,
         },
       });
       if (r && (r as any).quotaExceeded) {
@@ -438,7 +450,7 @@ function DiagnosePage() {
       <UpgradeDialog
         open={quotaOpen}
         onOpenChange={setQuotaOpen}
-        reason="You've reached your free monthly AI lookup limit. Upgrade to keep diagnosing."
+        reason="You've used all 8 free full diagnostics this month. Upgrade to keep diagnosing; follow-up steps always stay included."
       />
     </main>
   );
