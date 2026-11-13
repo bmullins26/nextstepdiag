@@ -1781,25 +1781,37 @@ export type Database = {
           claimed_at: string
           expires_at: string
           id: string
+          owner_note: string | null
           partner: string
           perk: string
           user_id: string
+          verification_status: string
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
           claimed_at?: string
           expires_at: string
           id?: string
+          owner_note?: string | null
           partner: string
           perk?: string
           user_id: string
+          verification_status?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
           claimed_at?: string
           expires_at?: string
           id?: string
+          owner_note?: string | null
           partner?: string
           perk?: string
           user_id?: string
+          verification_status?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: []
       }

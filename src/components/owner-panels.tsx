@@ -76,6 +76,7 @@ import {
   deleteApplianceTypeOverride,
 } from "@/lib/appliance-type-overrides.functions";
 import { getOwnerOutcomeMetrics, getAccuracyMetrics, type AccuracyMetrics } from "@/lib/diagnostic-outcomes.functions";
+import { PartnerStudentsTab } from "@/components/owner/partner-students-tab";
 import { PendingRepairs } from "@/components/pending-repairs";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
 import { BetaProgramTab } from "@/components/owner/beta-program-tab";
@@ -243,6 +244,7 @@ export function OwnerPanels() {
         <TabsTrigger value="accuracy">Accuracy</TabsTrigger>
         <TabsTrigger value="ai">AI Usage</TabsTrigger>
         <TabsTrigger value="users">Users</TabsTrigger>
+        <TabsTrigger value="freds">Fred's Academy</TabsTrigger>
         <TabsTrigger value="feedback">Feedback</TabsTrigger>
         <TabsTrigger value="cost">AI Cost</TabsTrigger>
         <TabsTrigger value="age-decoder">Age Decoder</TabsTrigger>
@@ -257,6 +259,7 @@ export function OwnerPanels() {
       <TabsContent value="accuracy" className="mt-6"><AccuracyTab /></TabsContent>
       <TabsContent value="ai" className="mt-6"><AiUsageTab /></TabsContent>
       <TabsContent value="users" className="mt-6"><UsersTab /></TabsContent>
+      <TabsContent value="freds" className="mt-6"><PartnerStudentsTab partner="freds_academy" /></TabsContent>
       <TabsContent value="feedback" className="mt-6"><FeedbackTab /></TabsContent>
       <TabsContent value="cost" className="mt-6"><CostTab /></TabsContent>
       <TabsContent value="age-decoder" className="mt-6"><AgeDecoderTab /></TabsContent>

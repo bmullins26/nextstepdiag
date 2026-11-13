@@ -29,6 +29,13 @@
       "when": 1794527185710,
       "tag": "0003_keep_resumed_diagnostic_sessions_included",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794528549819,
+      "tag": "0004_partner_claim_verification",
+      "breakpoints": true
     }
   ]
 }
