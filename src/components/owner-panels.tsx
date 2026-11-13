@@ -66,6 +66,7 @@ import {
   sendPasswordReset,
   setUserSuspended,
   setUserOwnerRole,
+  setUserGroup,
   listFeedback,
   updateFeedbackStatus,
   getAgeDecoderStats,
@@ -348,6 +349,10 @@ function AiUsageTab() {
   );
 }
 
+type GroupKey = "beta" | "freds" | "outsider";
+type GroupFilter = "all" | "none" | GroupKey;
+const GROUP_LABELS: Record<GroupKey, string> = { beta: "Beta Testers", freds: "Fred's Students/Alumni", outsider: "Outsiders" };
+
 function UsersTab() {
   const qc = useQueryClient();
   const fn = useServerFn(listUsers);
@@ -363,6 +368,8 @@ function UsersTab() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; email: string } | null>(null);
   const [resetLink, setResetLink] = useState<{ email: string; link: string | null } | null>(null);
   const [emailTarget, setEmailTarget] = useState<ComposeTarget>(null);
+  const [groupFilter, setGroupFilter] = useState<GroupFilter>("all");
+  const groupFn = useServerFn(setUserGroup);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["owner", "users", search],
@@ -401,6 +408,14 @@ function UsersTab() {
     onSuccess: () => { toast.success("User deleted."); setDeleteTarget(null); invalidate(); },
     onError: (e) => toast.error((e as Error).message),
   });
+  const groupMut = useMutation({
+    mutationFn: (args: { userId: string; group: GroupKey; member: boolean }) => groupFn({ data: args }),
+    onSuccess: (_d, v) => { toast.success(`${v.member ? "Added to" : "Removed from"} ${GROUP_LABELS[v.group]}.`); invalidate(); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const visible = (data ?? []).filter((u) =>
+    groupFilter === "all" ? true : groupFilter === "none" ? u.groups.length === 0 : u.groups.includes(groupFilter),
+  );
   const resetMut = useMutation({
     mutationFn: (userId: string) => resetFn({ data: { userId } }),
     onSuccess: (res) => { setResetLink({ email: res.email, link: res.actionLink }); },
@@ -423,6 +438,16 @@ function UsersTab() {
         </div>
         <Button variant="outline" onClick={() => refetch()}>Refresh</Button>
       </div>
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {(["all", "none", "beta", "freds", "outsider"] as GroupFilter[]).map((g) => (
+          <Button key={g} size="sm" variant={groupFilter === g ? "default" : "outline"} onClick={() => setGroupFilter(g)} className="shrink-0">
+            {g === "all" ? "Everyone" : g === "none" ? "Users (no group)" : GROUP_LABELS[g]}
+            <span className="ml-1.5 tabular-nums opacity-70">
+              {(data ?? []).filter((u) => g === "all" ? true : g === "none" ? u.groups.length === 0 : u.groups.includes(g)).length}
+            </span>
+          </Button>
+        ))}
+      </div>
 
       {isLoading ? <Loading /> : error ? <ErrorBlock error={error} /> : (
         <div className="overflow-x-auto rounded-xl border border-border/60 bg-card/60 backdrop-blur">
@@ -441,11 +466,18 @@ function UsersTab() {
               </tr>
             </thead>
             <tbody>
-              {(data ?? []).map((u) => (
+              {visible.map((u) => (
                 <tr key={u.id} className="border-t border-border/40">
                   <td className="px-3 py-2">
                     <div className="font-medium">{u.email || "—"}</div>
                     {u.full_name ? <div className="text-xs text-muted-foreground">{u.full_name}</div> : null}
+                    {u.groups.length ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {u.groups.map((g) => (
+                          <span key={g} className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">{GROUP_LABELS[g]}</span>
+                        ))}
+                      </div>
+                    ) : null}
                     {u.is_suspended ? <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-destructive"><Ban className="h-3 w-3"/>Suspended</div> : null}
                   </td>
                   <td className="px-3 py-2">
@@ -495,6 +527,15 @@ function UsersTab() {
                         <DropdownMenuItem onClick={() => setRenameTarget({ id: u.id, current: u.display_name ?? null })}>
                           <Pencil className="mr-2 h-4 w-4"/>Edit display name
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {(["beta", "freds", "outsider"] as GroupKey[]).map((g) => {
+                          const member = u.groups.includes(g);
+                          return (
+                            <DropdownMenuItem key={g} onClick={() => groupMut.mutate({ userId: u.id, group: g, member: !member })}>
+                              {member ? `Remove from ${GROUP_LABELS[g]}` : `Add to ${GROUP_LABELS[g]}`}
+                            </DropdownMenuItem>
+                          );
+                        })}
                         <DropdownMenuSeparator />
                         {u.plan !== "pro" && <DropdownMenuItem onClick={() => planMut.mutate({ userId: u.id, plan: "pro" })}>Upgrade to Pro</DropdownMenuItem>}
                         {u.plan === "pro" && <DropdownMenuItem onClick={() => planMut.mutate({ userId: u.id, plan: "free" })}>Remove Pro</DropdownMenuItem>}

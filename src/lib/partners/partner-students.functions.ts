@@ -28,7 +28,7 @@ export const listPartnerStudents = createServerFn({ method: "POST" })
     if (!ids.length) return [];
     const [{ data: profiles }, { data: subs }, { data: sessions }] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, email, full_name, display_name, last_activity_at, created_at").in("id", ids),
-      supabaseAdmin.from("subscriptions").select("user_id, tier, status, plan_type, current_period_end").in("user_id", ids),
+      supabaseAdmin.from("subscriptions").select("user_id, tier, status, plan_type, current_period_end, stripe_customer_id").in("user_id", ids),
       supabaseAdmin.from("diagnostic_sessions").select("user_id").in("user_id", ids).limit(50000),
     ]);
     const pMap = new Map((profiles ?? []).map((p) => [p.id, p]));
@@ -49,7 +49,8 @@ export const listPartnerStudents = createServerFn({ method: "POST" })
         verification: c.verification_status as "pending" | "verified" | "rejected",
         verifiedAt: c.verified_at,
         note: c.owner_note,
-        proActive: s?.tier === "pro" && s?.status === "active" && !!s.current_period_end && new Date(s.current_period_end) > new Date(),
+        planLabel: s?.plan_type === "grandfathered" ? "Permanent Pro" : s?.stripe_customer_id ? "Paid" : s?.tier === "pro" ? "Academy Pro" : "Free",
+        proActive: s?.plan_type === "grandfathered" || s?.tier === "pro" && s?.status === "active" && !!s.current_period_end && new Date(s.current_period_end) > new Date(),
         diagnostics: counts.get(c.user_id) ?? 0,
       };
     });
@@ -98,5 +99,47 @@ export const setPartnerStudentVerification = createServerFn({ method: "POST" })
         .update({ tier: "pro", status: "active", current_period_end: claim.expires_at, updated_at: now })
         .eq("user_id", data.userId).eq("plan_type", planType);
     }
+    return { ok: true };
+  });
+
+/**
+ * Owner changes a student's subscription. "free" ends perk Pro; "extend"
+ * sets perk Pro to a new end date; "permanent" grants grandfathered Pro.
+ * Never touches a paid Stripe subscription.
+ */
+export const setPartnerStudentPlan = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      partner: Partner,
+      userId: z.string().uuid(),
+      action: z.enum(["free", "extend", "permanent"]),
+      endsAt: z.string().datetime().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const planType = PARTNER_PERKS[data.partner].planType;
+    const { data: sub } = await supabaseAdmin.from("subscriptions")
+      .select("stripe_subscription_id").eq("user_id", data.userId).maybeSingle();
+    if (sub?.stripe_subscription_id) throw new Error("This student has a paid subscription. Manage it in Payments.");
+    const now = new Date().toISOString();
+    let row: Record<string, unknown>;
+    if (data.action === "free") {
+      row = { tier: "free", status: "canceled", plan_type: planType, current_period_end: now };
+    } else if (data.action === "permanent") {
+      row = { tier: "pro", status: "grandfathered", plan_type: "grandfathered", current_period_end: null };
+    } else {
+      if (!data.endsAt || new Date(data.endsAt) <= new Date()) throw new Error("Pick a future end date.");
+      row = { tier: "pro", status: "active", plan_type: planType, current_period_end: data.endsAt };
+      await supabaseAdmin.from("partner_perk_claims").update({ expires_at: data.endsAt })
+        .eq("user_id", data.userId).eq("partner", data.partner);
+    }
+    const { error } = await supabaseAdmin.from("subscriptions").upsert(
+      { user_id: data.userId, environment: "live", cancel_at_period_end: false, updated_at: now, ...row } as never,
+      { onConflict: "user_id" },
+    );
+    if (error) throw new Error(error.message);
     return { ok: true };
   });

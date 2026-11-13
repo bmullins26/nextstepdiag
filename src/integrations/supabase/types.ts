@@ -2132,6 +2132,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_groups: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          group_key: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          group_key: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          group_key?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

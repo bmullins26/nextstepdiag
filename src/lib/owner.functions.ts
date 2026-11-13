@@ -429,6 +429,12 @@ export const listUsers = createServerFn({ method: "POST" })
       }
     }
 
+    const groupMap = new Map<string, UserGroup[]>();
+    if (ids.length) {
+      const { data: gRows } = await supabaseAdmin.from("user_groups").select("user_id, group_key").in("user_id", ids);
+      for (const g of gRows ?? []) groupMap.set(g.user_id, [...(groupMap.get(g.user_id) ?? []), g.group_key as UserGroup]);
+    }
+
     // Pull last_sign_in_at from auth.admin (limited to first 1000; fine for an owner table)
     const authMap = new Map<string, string | null>();
     try {
@@ -441,7 +447,32 @@ export const listUsers = createServerFn({ method: "POST" })
       role: ownerIds.has(r.id) ? ("owner" as const) : ("user" as const),
       sessions: sessionCounts.get(r.id) ?? 0,
       last_sign_in_at: authMap.get(r.id) ?? null,
+      groups: groupMap.get(r.id) ?? [],
     }));
+  });
+
+// ---------- User groups (owner-managed tags) ----------
+export const USER_GROUPS = ["beta", "freds", "outsider"] as const;
+export type UserGroup = (typeof USER_GROUPS)[number];
+
+/** Adds or removes an owner-managed group tag. Tags never change a user's plan. */
+export const setUserGroup = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ userId: z.string().uuid(), group: z.enum(USER_GROUPS), member: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertOwner(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const q = data.member
+      ? supabaseAdmin.from("user_groups").upsert(
+          { user_id: data.userId, group_key: data.group, added_by: context.userId },
+          { onConflict: "user_id,group_key" },
+        )
+      : supabaseAdmin.from("user_groups").delete().eq("user_id", data.userId).eq("group_key", data.group);
+    const { error } = await q;
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 // ---------- User detail ----------

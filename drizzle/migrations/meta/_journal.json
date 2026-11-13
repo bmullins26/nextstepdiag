@@ -43,6 +43,13 @@
       "when": 1794590909063,
       "tag": "0005_allow_partner_perk_plan_types",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794591947461,
+      "tag": "0006_user_groups",
+      "breakpoints": true
     }
   ]
 }

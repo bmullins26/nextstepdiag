@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Mail, RotateCcw, Search, XCircle } from "lucide-react";
+import { CreditCard, CheckCircle2, Loader2, Mail, RotateCcw, Search, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { EmailComposeDialog, type ComposeTarget } from "@/components/owner/email-compose-dialog";
-import { listPartnerStudents, setPartnerStudentVerification } from "@/lib/partners/partner-students.functions";
+import { listPartnerStudents, setPartnerStudentVerification, setPartnerStudentPlan } from "@/lib/partners/partner-students.functions";
 
 type Filter = "all" | "pending" | "verified" | "rejected";
 const DAY = 86_400_000;
@@ -37,6 +39,19 @@ export function PartnerStudentsTab({ partner = "freds_academy" as const }: { par
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const planFn = useServerFn(setPartnerStudentPlan);
+  const [planTarget, setPlanTarget] = useState<{ userId: string; email: string; expiresAt: string } | null>(null);
+  const [planAction, setPlanAction] = useState<"extend" | "free" | "permanent">("extend");
+  const [endDate, setEndDate] = useState("");
+  const planMut = useMutation({
+    mutationFn: () => planFn({ data: {
+      partner, userId: planTarget!.userId, action: planAction,
+      endsAt: planAction === "extend" ? new Date(`${endDate}T23:59:59`).toISOString() : undefined,
+    } }),
+    onSuccess: () => { toast.success("Subscription updated."); setPlanTarget(null); qc.invalidateQueries({ queryKey: ["owner", "partner-students", partner] }); qc.invalidateQueries({ queryKey: ["owner", "users"] }); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const now = Date.now();
   const stats = useMemo(() => ({
     total: data.length,
@@ -57,6 +72,32 @@ export function PartnerStudentsTab({ partner = "freds_academy" as const }: { par
   return (
     <div className="space-y-4">
       <EmailComposeDialog target={emailTarget} onOpenChange={(o) => !o && setEmailTarget(null)} />
+      <Dialog open={!!planTarget} onOpenChange={(o) => !o && setPlanTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change subscription</DialogTitle>
+            <DialogDescription>{planTarget?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-3">
+              {([["extend", "Pro until date"], ["permanent", "Permanent Pro"], ["free", "Free plan"]] as const).map(([v, l]) => (
+                <Button key={v} type="button" variant={planAction === v ? "default" : "outline"} onClick={() => setPlanAction(v)}>{l}</Button>
+              ))}
+            </div>
+            {planAction === "extend" && (
+              <div className="space-y-1">
+                <Label htmlFor="plan-end">Pro ends on</Label>
+                <input id="plan-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" />
+              </div>
+            )}
+            {planAction === "free" && <p className="text-sm text-muted-foreground">Their free Pro ends now. Paid plans are never changed here.</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPlanTarget(null)}>Cancel</Button>
+            <Button disabled={planMut.isPending || (planAction === "extend" && !endDate)} onClick={() => planMut.mutate()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[["Students", stats.total], ["Awaiting check", stats.pending], ["Active last 7 days", stats.active7], ["Diagnostics run", stats.diagnostics]].map(([l, v]) => (
           <div key={l as string} className="rounded-lg border border-border bg-card p-4">
@@ -92,7 +133,7 @@ export function PartnerStudentsTab({ partner = "freds_academy" as const }: { par
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{s.name || s.email}</span>
                     <Badge variant={s.verification === "verified" ? "default" : s.verification === "rejected" ? "destructive" : "secondary"} className="capitalize">{s.verification}</Badge>
-                    {s.proActive ? <Badge variant="outline">Pro · {daysLeft}d left</Badge> : <Badge variant="outline">Pro ended</Badge>}
+                    <Badge variant="outline">{s.planLabel === "Academy Pro" ? (s.proActive ? `Academy Pro · ${daysLeft}d left` : "Pro ended") : s.planLabel}</Badge>
                   </div>
                   <p className="truncate text-sm text-muted-foreground">{s.email}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -109,6 +150,7 @@ export function PartnerStudentsTab({ partner = "freds_academy" as const }: { par
                   {s.verification !== "pending" && (
                     <Button size="sm" variant="ghost" disabled={mut.isPending} onClick={() => mut.mutate({ userId: s.userId, status: "pending" })}><RotateCcw className="mr-1 h-4 w-4" />Reset</Button>
                   )}
+                  <Button size="sm" variant="outline" onClick={() => { setPlanTarget({ userId: s.userId, email: s.email, expiresAt: s.expiresAt }); setPlanAction("extend"); setEndDate(s.expiresAt.slice(0, 10)); }}><CreditCard className="mr-1 h-4 w-4" />Subscription</Button>
                   <Button size="sm" variant="ghost" onClick={() => setEmailTarget({ email: s.email, name: s.name || null })}><Mail className="h-4 w-4" /></Button>
                 </div>
               </div>
