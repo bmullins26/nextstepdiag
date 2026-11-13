@@ -1,5 +1,6 @@
 // Server-side lookup of model production windows + technician cross-checks.
 import type { CrossChecks, ModelWindow } from "./types";
+import { staticModelWindow } from "./oem-timelines";
 
 function normalizeModel(model: string): string {
   return (model || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -10,6 +11,17 @@ function normalizeModel(model: string): string {
  * Falls back to null when nothing is on file (validation then skips the check).
  */
 export async function loadModelWindow(
+  supabase: any,
+  manufacturer: string,
+  model: string,
+): Promise<ModelWindow | null> {
+  // Database rows (technician/owner curated) win; manufacturer-published
+  // timelines bundled with the decoder are the fallback.
+  const fromDb = await loadDbModelWindow(supabase, manufacturer, model);
+  return fromDb ?? staticModelWindow(manufacturer, model);
+}
+
+async function loadDbModelWindow(
   supabase: any,
   manufacturer: string,
   model: string,

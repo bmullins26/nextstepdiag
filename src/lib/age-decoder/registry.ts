@@ -9,6 +9,8 @@ import { samsungRules } from "./rules/samsung";
 import { boschRules } from "./rules/bosch";
 import { fisherPaykelRules } from "./rules/fisherpaykel";
 import { mieleRules } from "./rules/miele";
+import { dacorRules } from "./rules/dacor";
+import { subZeroRules } from "./rules/subzero";
 import { allianceRules, goodmanRules, aoSmithRules, traneRules, carrierRules, lennoxRules, rheemRules, bradfordWhiteRules } from "./rules/hvac-water-laundry";
 
 // Canonical brand keys (lowercase). Map any alias → canonical via BRAND_ALIASES.
@@ -21,6 +23,8 @@ export type BrandKey =
   | "bosch"
   | "fisherpaykel"
   | "miele"
+  | "dacor"
+  | "subzero"
   | "alliance"
   | "goodman"
   | "carrier"
@@ -102,7 +106,9 @@ const BRAND_ALIASES: Record<string, BrandKey> = {
   "bradford white": "bradfordwhite", bradfordwhite: "bradfordwhite",
   "a.o. smith": "aosmith", "ao smith": "aosmith", aosmith: "aosmith", state: "aosmith", reliance: "aosmith", american: "aosmith", lochinvar: "aosmith",
   // Other appliance brands built by existing parents
-  philco: "frigidaire", dacor: "samsung", rca: "ge", americana: "ge", caloric: "whirlpool",
+  philco: "frigidaire", dacor: "dacor",
+  // Sub-Zero Group (serials carry no date code)
+  "sub-zero": "subzero", "sub zero": "subzero", subzero: "subzero", wolf: "subzero", cove: "subzero", "sub-zero group": "subzero", rca: "ge", americana: "ge", caloric: "whirlpool",
 };
 
 const REGISTRY: Record<BrandKey, Rule[]> = {
@@ -114,6 +120,8 @@ const REGISTRY: Record<BrandKey, Rule[]> = {
   bosch: [...boschRules],
   fisherpaykel: [...fisherPaykelRules],
   miele: [...mieleRules],
+  dacor: [...dacorRules, ...samsungRules],
+  subzero: [...subZeroRules],
   alliance: [...allianceRules],
   goodman: [...goodmanRules],
   carrier: [...carrierRules],

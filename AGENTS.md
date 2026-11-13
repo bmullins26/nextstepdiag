@@ -4,3 +4,4 @@
 - Partner perks (free Pro periods) are granted only by `claimPartnerPerk` in src/lib/partners, recorded once per user in `partner_perk_claims`, and never overwrite paid or grandfathered Pro — keeps perks auditable and non-stackable.
 - Free diagnostic usage is consumed once per saved session through `consume_diagnostic`; all later steps reuse that session, while unrelated AI lookups keep their separate quota — prevents multi-step calls from draining the monthly diagnostic allowance.
 - Partner perk students are reviewed by owners in partner_perk_claims.verification_status; rejecting ends only perk-plan Pro (matched by plan_type), never paid Pro.
+- Manufacturer-published model production timelines ship as generated data in src/lib/age-decoder/data/ and are used only when the database has no window on file — keeps OEM ground truth versioned and testable.

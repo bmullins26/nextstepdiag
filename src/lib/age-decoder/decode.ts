@@ -82,10 +82,17 @@ export function decodeAge(input: DecodeInput): DecodeOutcome {
   // Brands whose serial date format isn't documented yet: say so honestly
   // instead of telling the tech their serial is invalid.
   if (rules.length && rules.every((r) => r.weight === 0)) {
-    return unknown(
-      "missing_date_code",
-      `${brandKey} serial date decoding isn't supported yet. The serial may be valid — check the data plate for a printed build date.`,
-    );
+    // A zero-weight rule's explain() carries brand-specific guidance (e.g. the
+    // manufacturer states serials have no date code). Production window, when
+    // known, is the only trustworthy age bound in that case.
+    const guidance = rules[0]!.explain(serial, { year: 0 });
+    const base = guidance && !/not yet implemented/i.test(guidance)
+      ? guidance
+      : `${brandKey} serial date decoding isn't supported yet. The serial may be valid — check the data plate for a printed build date.`;
+    const win = modelWindow?.introducedYear
+      ? ` Manufacturer production window for ${modelWindow.modelPrefix}${modelWindow.replacementSeries ? ` (${modelWindow.replacementSeries})` : ""}: ${modelWindow.introducedYear}–${modelWindow.discontinuedYear ?? "current"}. The unit was built within that range; the exact date is not derivable from the serial.`
+      : "";
+    return unknown("missing_date_code", base + win);
   }
 
   const attemptedRules: AttemptedRule[] = [];

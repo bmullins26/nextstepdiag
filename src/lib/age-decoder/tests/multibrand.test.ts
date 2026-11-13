@@ -49,8 +49,46 @@ test("GE AS321543N → January 2021", () => {
   const r = pick(decodeAge({ brand: "GE", model: "GFW650SSN1WW", serial: "AS321543N", now }));
   expect(r?.y).toBe(2021); expect(r?.m).toBe(1);
 });
-test("Fisher & Paykel says unsupported, not invalid serial", () => {
+// Nov 2026 accuracy pass — Fisher & Paykel, Dacor, Sub-Zero/Wolf timelines.
+import { staticModelWindow } from "../oem-timelines";
+test("Fisher & Paykel AD852242C → year ending 8, no guessed month", () => {
   const r = decodeAge({ brand: "Fisher & Paykel", model: "DE7027J1US0", serial: "AD852242C", now });
+  expect(r.status).toBe("ok");
+  const years = r.candidates.map((c) => c.year).sort();
+  expect(years).toEqual([1998, 2008, 2018]);
+  expect(r.status === "ok" && r.manufactureMonth).toBe(null);
+});
+test("Fisher & Paykel decade narrowed by production window", () => {
+  const r = decodeAge({ brand: "Fisher & Paykel", serial: "AD852242C", now,
+    modelWindow: { modelPrefix: "DE7027", introducedYear: 2015, discontinuedYear: null } });
+  expect(r.candidates.map((c) => c.year)).toEqual([2018]);
+});
+test("Fisher & Paykel model prefix inferred when brand blank", () => {
+  const r = decodeAge({ brand: "", model: "DE7027J1US0", serial: "AD852242C", now });
+  expect(r.status).toBe("ok");
+});
+test("Dacor FB08040263 → 2008 week 4", () => {
+  const r = decodeAge({ brand: "Dacor", serial: "FB08040263", now });
+  expect(r.status === "ok" && r.manufactureYear).toBe(2008);
+  expect(r.status === "ok" && r.manufactureWeek).toBe(4);
+});
+test("Sub-Zero says no serial date code and gives official window", () => {
+  const w = staticModelWindow("Sub-Zero", "BI-36UFD/S/TH");
+  expect(w?.introducedYear).toBe(2012);
+  expect(w?.discontinuedYear).toBe(2022);
+  const r = decodeAge({ brand: "Sub-Zero", model: "BI-36UFD/S/TH", serial: "1234567", now, modelWindow: w });
   expect(r.status).toBe("unknown");
-  expect(r.status === "unknown" && r.unknownReason).not.toBe("invalid_serial_format");
+  expect(r.status === "unknown" && r.unknownReason).toBe("missing_date_code");
+  expect(r.breakdown).toContain("2012–2022");
+});
+test("Sub-Zero longest-prefix match: BI-36UFDID starts 2016", () => {
+  expect(staticModelWindow("Sub Zero", "BI-36UFDID/O")?.introducedYear).toBe(2016);
+});
+test("Wolf GR304 is current production from 2013", () => {
+  const w = staticModelWindow("Wolf", "GR304");
+  expect(w?.introducedYear).toBe(2013);
+  expect(w?.discontinuedYear).toBe(null);
+});
+test("Timeline is not applied to other brands", () => {
+  expect(staticModelWindow("GE", "GR304")).toBe(null);
 });
