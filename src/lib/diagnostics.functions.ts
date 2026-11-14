@@ -257,6 +257,7 @@ Rules:
 - Each question must be chosen based on the prior answer to narrow the fault.
 - Be specific: reference real components, terminals, voltages, resistances appropriate to the appliance type.
 - Always populate mostLikelyFailure, mostLikelyFailures (top 2-3 ranked), and recommendedNextTest with your current best hypothesis (update as evidence comes in).
+- recommendedNextTest MUST directly test the CURRENT mostLikelyFailure (the leading hypothesis). It must confirm or rule out that exact component (e.g. for a clutch: check clutch engagement/slip during spin, inspect clutch pads/spring). Never recommend a test for a different component unless that test is the only way to isolate the leading fault, and say why.
 - recommendedNextTest MUST be specific: name the connector/pin (e.g. "J16-4"), component, expected reading, and condition (e.g. "during spin", "at room temperature"). NEVER write generic advice like "check the wiring" or "inspect the pump".
 - Set done=true only when the failure is conclusively isolated; then leave nextQuestion fields empty.
 - If a tech sheet excerpt is provided, ground your reasoning in it.

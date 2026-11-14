@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DiagnosticDemo } from "@/components/landing/diagnostic-demo";
 import { supabase } from "@/integrations/supabase/client";
 import { claimPartnerPerk } from "@/lib/partners/perk.functions";
+import { SiteFooter } from "@/components/site/site-footer";
 import academyLogo from "@/assets/freds-academy-logo.png.asset.json";
 
 // Unlisted partner page: noindex, not linked from the site. Shared directly with academy students.
@@ -22,6 +23,8 @@ export const Route = createFileRoute("/freds-academy")({
       { name: "twitter:card", content: "summary_large_image" },
       { name: "robots", content: "noindex, nofollow" },
     ],
+    // Preload the hero logo so the hero paints complete.
+    links: [{ rel: "preload", as: "image", href: academyLogo.url, fetchPriority: "high" } as never],
   }),
   component: FredsAcademyPage,
 });
@@ -96,7 +99,7 @@ function FredsAcademyPage() {
 
       <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-[1fr_1.1fr] md:py-20">
         <div className="flex justify-center">
-          <img src={academyLogo.url} alt="Fred's Appliance Academy" className="w-64 max-w-full sm:w-80" />
+          <img src={academyLogo.url} alt="Fred's Appliance Academy" width={900} height={687} fetchPriority="high" decoding="sync" className="aspect-[900/687] h-auto w-64 max-w-full sm:w-80" />
         </div>
         <div className="text-center md:text-left">
           <span className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
@@ -134,6 +137,7 @@ function FredsAcademyPage() {
           <div className="mt-6">{cta}</div>
         </div>
       </section>
+      <SiteFooter />
     </main>
   );
 }

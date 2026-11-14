@@ -76,11 +76,11 @@ export function FeedbackWidget() {
       <DialogTrigger asChild>
         <Button
           size="sm"
-          className="fixed bottom-4 right-4 z-40 gap-2 rounded-full shadow-lg md:bottom-6 md:right-6"
+          className="fixed bottom-4 right-4 z-40 h-10 w-10 gap-2 rounded-full p-0 shadow-lg md:bottom-6 md:right-6 md:h-9 md:w-auto md:px-3"
           aria-label="Send feedback"
         >
           <MessageSquare className="h-4 w-4" />
-          Feedback
+          <span className="hidden md:inline">Feedback</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

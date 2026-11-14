@@ -34,11 +34,11 @@ export const scanRecalls = createServerFn({ method: "POST" })
       queries.map(async (q) => {
         try {
           const ctl = new AbortController();
-          const t = setTimeout(() => ctl.abort(), 4000);
+          const t = setTimeout(() => ctl.abort(), 9000);
           const url = `https://www.saferproducts.gov/RestWebServices/Recall?format=json&ProductModel=${encodeURIComponent(q.slice(0, 20))}`;
           const res = await fetch(url, { signal: ctl.signal });
           clearTimeout(t);
-          if (!res.ok) { cpscError = `CPSC ${res.status}`; return; }
+          if (!res.ok) { cpscError = "unavailable"; return; }
           okCount++;
           const rows = (await res.json()) as Array<Record<string, any>>;
           for (const r of rows.slice(0, 5)) {
@@ -54,7 +54,7 @@ export const scanRecalls = createServerFn({ method: "POST" })
             });
           }
         } catch {
-          cpscError = "CPSC lookup timed out";
+          cpscError = "unavailable";
         }
       }),
     );
@@ -143,7 +143,7 @@ export const generateCloseout = createServerFn({ method: "POST" })
           // Not on this model's parts list → drop it rather than show a wrong part.
           if (!hit) return [];
           return [{ name: hit.description || p.name, partNumber: hit.partNumber, confidence: p.confidence, verified: true, price: hit.price, url: hit.url }];
-        }).filter((p, i, a) => !p.partNumber || a.findIndex((x) => x.partNumber === p.partNumber) === i),
+        }).filter((p, i, a) => { const k = (n: string) => n.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^WP/, ""); return !p.partNumber || a.findIndex((x) => k(x.partNumber) === k(p.partNumber)) === i; }),
         testPlan: filterForTopology(object.testPlan, topo, (t) => t.step),
       };
       return { ok: true as const, closeout, partsSource: catalog.length ? { name: vv.provider ?? "Parts diagrams", modelUrl: vv.modelUrl, count: catalog.length, internal: vv.internal } : null };

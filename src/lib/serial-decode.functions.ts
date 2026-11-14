@@ -5,6 +5,7 @@ import { getGateway, DEFAULT_MODEL } from "./ai-gateway.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { logAiUsage } from "./ai-usage-log.server";
 import { decodeAge } from "./age-decoder";
+import * as ageMath from "./age-decoder/age-math";
 import type { DecodeOutcome, Corroboration } from "./age-decoder";
 import { resolveBrand } from "./age-decoder";
 import { decodeSerial as legacyDecodeSerial, pickBestCandidate as legacyPick } from "./serial-decode.legacy";
@@ -354,17 +355,19 @@ Identify the appliance. Do not state any date or age.`,
         })
       : null;
 
+    // Week-precise range when the decoder pinned a week for the same year.
+    const pinnedWeek =
+      outcome?.status === "ok" && (outcome as any).manufactureYear === reconciled?.bestYear
+        ? ((outcome as any).manufactureWeek as number | null) : null;
     const manufactureDate = reconciled?.bestYear
-      ? {
-          year: reconciled.bestYear,
-          month: reconciled.bestMonth,
-          rangeStart: `${reconciled.bestYear}-${String(reconciled.bestMonth ?? 1).padStart(2, "0")}`,
-          rangeEnd: `${reconciled.bestYear}-${String(reconciled.bestMonth ?? 12).padStart(2, "0")}`,
-        }
+      ? (() => {
+          const { manufactureRange } = ageMath;
+          const r = manufactureRange(reconciled.bestYear, reconciled.bestMonth ?? null, pinnedWeek);
+          return { year: reconciled.bestYear, month: reconciled.bestMonth ?? r.month, week: pinnedWeek, rangeStart: r.start, rangeEnd: r.end };
+        })()
       : null;
-    const ageYears = reconciled?.bestYear
-      ? (Date.now() - new Date(reconciled.bestYear, (reconciled.bestMonth ?? 1) - 1, 1).getTime()) /
-        (365.25 * 24 * 3600 * 1000)
+    const ageYears = manufactureDate
+      ? ageMath.completedYears(manufactureDate.rangeStart, new Date())
       : null;
     const appliedRule = outcome?.appliedRule ?? null;
 

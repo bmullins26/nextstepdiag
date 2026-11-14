@@ -40,6 +40,9 @@ import { z } from "zod";
 import { UpgradeDialog } from "@/components/paywall/upgrade-dialog";
 import { ServiceCallPipeline } from "@/components/service-call/service-call-pipeline";
 
+/** Minimum prior repairs before historical shares are shown as percentages. */
+const MIN_HISTORY_SAMPLE = 5;
+
 export const Route = createFileRoute("/_authenticated/diagnose")({
   head: () => ({
     meta: [
@@ -142,6 +145,7 @@ function DiagnosePage() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [resumeCandidates, setResumeCandidates] = useState<ResumeRow[] | null>(null);
   const [resumeDismissed, setResumeDismissed] = useState(false);
+  const startingRef = useRef(false);
   const hydrated = useRef(false);
   const upsert = useServerFn(upsertSession);
   const fetchSession = useServerFn(getSession);
@@ -248,12 +252,15 @@ function DiagnosePage() {
   }, [sessionId, appliance, complaint, findings, history, step?.mostLikelyFailure, step?.recommendedNextTest, step?.currentFindings]);
 
   async function startDiagnosis() {
+    // Guard against double-submits creating duplicate sessions.
+    if (startingRef.current) return;
     if (!complaint.trim()) {
       toast.error("Describe the customer complaint to begin.");
       return;
     }
+    startingRef.current = true;
     setPhase(3);
-    await advance([], findings);
+    try { await advance([], findings); } finally { startingRef.current = false; }
   }
 
   async function advance(h: QA[], f: string[] = findings) {
@@ -650,7 +657,7 @@ function Phase3(props: {
               <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-[11px] text-muted-foreground">
                 <div className="font-semibold text-primary">
                   {step.historicalOutcomes.scope === "exact_model"
-                    ? `Based on ${step.historicalOutcomes.exactModelCount} repair${step.historicalOutcomes.exactModelCount === 1 ? "" : "s"} of this exact model`
+                    ? `${step.historicalOutcomes.exactModelCount} prior repair${step.historicalOutcomes.exactModelCount === 1 ? "" : "s"} for this exact model`
                     : `Based on ${step.historicalOutcomes.sampleSize} similar repair${step.historicalOutcomes.sampleSize === 1 ? "" : "s"} · ${step.historicalOutcomes.totals.confirmed} confirmed`}
                 </div>
                 {step.historicalOutcomes.ranked.length > 0 && (
@@ -658,11 +665,13 @@ function Phase3(props: {
                     {step.historicalOutcomes.ranked.slice(0, 3).map((r) => (
                       <li key={r.failure} className="flex justify-between gap-2">
                         <span className="truncate">{r.failure}</span>
-                        <span className="font-mono">{r.share}%</span>
+                        {/* Percentages only with a meaningful sample; tiny samples show raw counts. */}
+                        <span className="font-mono">{step.historicalOutcomes!.sampleSize >= MIN_HISTORY_SAMPLE ? `${r.share}%` : `${r.rawCount} prior`}</span>
                       </li>
                     ))}
                   </ul>
                 )}
+                <p className="mt-1 text-[10px]">Past repair records, separate from the live likelihoods above{step.historicalOutcomes.sampleSize < MIN_HISTORY_SAMPLE ? " — too few to rank yet" : ""}.</p>
               </div>
             ) : null}
           </div>

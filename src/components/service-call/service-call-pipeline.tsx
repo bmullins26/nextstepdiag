@@ -58,6 +58,14 @@ export function ServiceCallPipeline(p: Props) {
     return () => { off = true; };
   }, [p.brand, p.modelNumber, p.serialNumber]);
   const ent = factory && factory !== "loading" ? factory.entitlement : null;
+  // Only serial-specific fields count as verification; model-level coverage alone does not.
+  const entSerial = !!ent && !!(ent.manufacturedDate || ent.purchaseDate || ent.standard.partsExpires || ent.standard.laborExpires);
+  const verdict = useMemo(() => {
+    const exp = ent?.standard.laborExpires || ent?.standard.partsExpires;
+    if (exp && !Number.isNaN(Date.parse(exp))) return { inWarranty: Date.parse(exp) > Date.now(), estimated: false };
+    if (p.manufactureYear) return { inWarranty: warranty.items.some((i) => i.active && i.scope !== "parts_only"), estimated: true };
+    return null;
+  }, [ent, p.manufactureYear, warranty]);
   const [building, setBuilding] = useState(false);
   const [done, setDone] = useState<Set<number>>(new Set());
 
@@ -66,7 +74,7 @@ export function ServiceCallPipeline(p: Props) {
     setRecalls(null);
     scan({ data: { brand: p.brand, applianceType: p.applianceType, modelNumber: p.modelNumber } })
       .then((r) => !off && setRecalls(r))
-      .catch(() => !off && setRecalls({ recalls: [], knownIssues: [], cpscError: "Lookup failed" }));
+      .catch(() => !off && setRecalls({ recalls: [], knownIssues: [], cpscError: "unavailable" }));
     return () => { off = true; };
   }, [p.brand, p.modelNumber]);
 
@@ -117,14 +125,15 @@ export function ServiceCallPipeline(p: Props) {
           <div className="mt-2 space-y-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${/in warranty/i.test(ent.markedAs ?? "") ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{ent.markedAs ?? "Status unknown"}</span>
-              <span className="text-[10px] text-muted-foreground">Verified · Whirlpool factory records</span>
+              <span className="text-[10px] text-muted-foreground">{entSerial ? "Verified · Whirlpool serial record" : "Whirlpool model coverage · not serial-verified"}</span>
+              {verdict && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${verdict.inWarranty ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{verdict.inWarranty ? "In warranty" : "Out of warranty"}{verdict.estimated ? " (estimate)" : ""}</span>}
             </div>
             {ent.productName && <p className="text-sm font-semibold">{ent.productName}</p>}
             <div className="grid grid-cols-2 gap-2">
-              <div><div className="text-muted-foreground">Built</div><div className="font-mono">{ent.manufacturedDate ?? "—"}</div></div>
-              <div><div className="text-muted-foreground">Purchased</div><div className="font-mono">{ent.purchaseDate ?? "—"}</div></div>
-              <div><div className="text-muted-foreground">Parts until</div><div className="font-mono">{ent.standard.partsExpires ?? "—"}</div></div>
-              <div><div className="text-muted-foreground">Labor until</div><div className="font-mono">{ent.standard.laborExpires ?? "—"}</div></div>
+              <div><div className="text-muted-foreground">Built</div><div className="font-mono">{ent.manufacturedDate ?? (p.manufactureYear ? `${p.manufactureYear} (decoded)` : "—")}</div></div>
+              <div><div className="text-muted-foreground">Purchased</div><div className="font-mono">{ent.purchaseDate ?? "Not on file"}</div></div>
+              <div><div className="text-muted-foreground">Parts until</div><div className="font-mono">{ent.standard.partsExpires ?? (p.manufactureYear ? `~${p.manufactureYear + 1} (est.)` : "—")}</div></div>
+              <div><div className="text-muted-foreground">Labor until</div><div className="font-mono">{ent.standard.laborExpires ?? (p.manufactureYear ? `~${p.manufactureYear + 1} (est.)` : "—")}</div></div>
             </div>
             {ent.extended.length > 0 && (
               <ul className="space-y-1">
@@ -188,7 +197,7 @@ export function ServiceCallPipeline(p: Props) {
                 {r.url && <a href={r.url} target="_blank" rel="noreferrer" className="text-primary underline">View recall</a>}
               </div>
             )) : (
-              <p className="text-xs text-muted-foreground">{recalls.cpscError ? `Recall check unavailable (${recalls.cpscError}).` : "No matching CPSC recall records for this model number. This search only covers models listed in CPSC notices — check the manufacturer's recall page to be sure."}</p>
+              <p className="text-xs text-muted-foreground">{recalls.cpscError ? "The CPSC recall database didn't respond right now, so recalls weren't checked. You can search saferproducts.gov or the manufacturer's recall page directly." : "No matching CPSC recall records for this model number. This search only covers models listed in CPSC notices — check the manufacturer's recall page to be sure."}</p>
             )}
             {recalls.knownIssues.length > 0 && (
               <div>
@@ -239,7 +248,7 @@ export function ServiceCallPipeline(p: Props) {
                     return (
                       <li key={i} className="rounded-lg border border-border p-3 text-sm">
                         <div className="flex justify-between gap-2"><span className="font-semibold">{pt.name}</span><span className="text-[10px] uppercase text-muted-foreground">{pt.verified ? "Fits this model" : pt.confidence}</span></div>
-                        {pt.partNumber && <div className="font-mono text-xs text-primary">{pt.partNumber}{pt.price != null && <span className="ml-2 text-muted-foreground">${pt.price.toFixed(2)}</span>}</div>}
+                        {pt.partNumber && <div className="font-mono text-xs text-primary">{pt.partNumber}{pt.price != null && <span className="ml-2 text-muted-foreground">${pt.price.toFixed(2)} list price{partsSource ? ` (${partsSource.name})` : ""}</span>}</div>}
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {PART_SUPPLIERS.map((s) => (
                             <a key={s.id} href={s.url(q)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:border-primary">

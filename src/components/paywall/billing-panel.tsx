@@ -8,22 +8,8 @@ import { getStripeEnvironment, isPaymentsConfigured } from "@/lib/stripe";
 import { Button } from "@/components/ui/button";
 import { UpgradeDialog } from "./upgrade-dialog";
 import { toast } from "sonner";
+import { planLabel } from "@/lib/billing/plan-label";
 
-function planLabel(planType: string | null, tier: string) {
-  if (tier !== "pro") return "Free";
-  switch (planType) {
-    case "grandfathered":
-      return "Pro (Grandfathered)";
-    case "week_pass":
-      return "Pro · 7-Day Pass";
-    case "monthly":
-      return "Pro Monthly";
-    case "annual":
-      return "Pro Annual";
-    default:
-      return "Pro";
-  }
-}
 
 export function BillingPanel() {
   const { data, isLoading, refetch } = useEntitlements();

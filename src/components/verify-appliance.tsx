@@ -365,7 +365,7 @@ export function VerifyAppliance({
                 : "Unknown"
             }
           />
-          <KV k="Age" v={result.ageYears != null ? `${Math.max(0, Math.round(result.ageYears))} yr` : "Unknown"} />
+          <KV k="Age" v={result.ageYears != null ? `${Math.max(0, Math.floor(result.ageYears))} yr` : "Unknown"} />
           <KV
             k="Confidence"
             v={

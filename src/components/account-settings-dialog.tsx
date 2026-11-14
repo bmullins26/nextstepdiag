@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateMyProfile } from "@/lib/profile.functions";
+import { useEntitlements } from "@/hooks/use-entitlements";
+import { planLabel } from "@/lib/billing/plan-label";
 
 export function AccountSettingsDialog({
   open,
@@ -28,6 +30,8 @@ export function AccountSettingsDialog({
   currentDisplayName: string | null;
   plan: string | null;
 }) {
+  const { data: ent } = useEntitlements();
+  void plan;
   const qc = useQueryClient();
   const updateFn = useServerFn(updateMyProfile);
   const [name, setName] = useState(currentDisplayName ?? "");
@@ -80,7 +84,7 @@ export function AccountSettingsDialog({
               Subscription
             </div>
             <div className="mt-1 text-sm">
-              Current plan: <span className="font-semibold capitalize">{plan ?? "free"}</span>
+              Current plan: <span className="font-semibold">{ent ? planLabel(ent.planType, ent.isPro ? "pro" : "free") : "…"}</span>
             </div>
             <Button variant="outline" size="sm" className="mt-2" disabled>
               Manage subscription

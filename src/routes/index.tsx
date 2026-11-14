@@ -1,3 +1,4 @@
+import { SiteFooter } from "@/components/site/site-footer";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
@@ -176,9 +177,7 @@ function Index() {
         </div>
       </section>
 
-      <footer className="relative border-t border-border py-8 text-center text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-2"><Wrench className="h-3.5 w-3.5 text-primary" /> Built for the field, not the office.</span>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }

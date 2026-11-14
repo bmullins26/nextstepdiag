@@ -112,7 +112,7 @@ function DashboardPage() {
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10">
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-black tracking-tight md:text-3xl">
+            <h1 className="break-words text-xl font-black tracking-tight sm:text-2xl md:text-3xl">
               Welcome back, {greetingName}.
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
