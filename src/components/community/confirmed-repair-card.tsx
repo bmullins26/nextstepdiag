@@ -11,7 +11,7 @@ export function ConfirmedRepairCard({ repair }: { repair: ConfirmedRepair }) {
     >
       <div className="mb-1 flex items-center gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
-          <ShieldCheck className="h-3 w-3" /> Verified Repair
+          <ShieldCheck className="h-3 w-3" /> Repair Outcome
         </span>
         <span className="truncate text-[11px] text-muted-foreground">
           {repair.brand} · {repair.applianceType} · {repair.model}
@@ -27,9 +27,9 @@ export function ConfirmedRepairCard({ repair }: { repair: ConfirmedRepair }) {
             <CheckCircle2 className="h-3 w-3" /> {repair.repairSuccessful ? "Repair successful" : "Not resolved"}
           </span>
         )}
-        <span>Verified by: {repair.technician}</span>
+        <span>Technician: {repair.technician}</span>
         <span>
-          Verified:{" "}
+          Outcome date:{" "}
           {new Date(repair.confirmedAt).toLocaleDateString(undefined, {
             year: "numeric",
             month: "long",

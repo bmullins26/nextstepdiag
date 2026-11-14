@@ -117,7 +117,7 @@ export function OutcomeCapture({
             <CheckCircle2 className="h-4 w-4" />
             {done === "confirmed" && saved?.repairSuccessful === true && "Confirmed — recorded as a successful repair."}
             {done === "confirmed" && saved?.repairSuccessful === false && "Recorded as an unsuccessful repair."}
-            {done === "confirmed" && saved?.repairSuccessful !== true && saved?.repairSuccessful !== false && "Recorded as reported, without a verified successful repair."}
+            {done === "confirmed" && saved?.repairSuccessful !== true && saved?.repairSuccessful !== false && "Recorded as reported, without a successful repair outcome."}
             {done === "incorrect" && "Recorded — actual failure logged for learning."}
             {done === "partial" && "Recorded — partial match captured."}
             {done === "pending_repair" && "Saved as Pending Repair. Confirm the result later from History."}

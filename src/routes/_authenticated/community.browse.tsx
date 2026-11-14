@@ -89,7 +89,7 @@ function BrowsePage() {
             <SelectContent>
               <SelectItem value="recent">Sort: Most recent</SelectItem>
               <SelectItem value="helpful">Sort: Most helpful</SelectItem>
-              <SelectItem value="verified">Sort: Verified repairs</SelectItem>
+              <SelectItem value="verified">Sort: Repair outcomes</SelectItem>
             </SelectContent>
           </Select>
         </div>

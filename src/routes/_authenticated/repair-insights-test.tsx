@@ -86,9 +86,8 @@ function Result({ result }: { result: RepairInsightsResult }) {
       <Block title="Top Repairs" items={d.top_repairs} />
       <Block title="Top Parts" items={d.top_parts} mono />
       <Row k="Confirmed Success" v={String(d.confirmedSuccessCount)} />
-      <Row k="Reported, Unverified" v={String(d.reportedSuccessCount)} />
+      <Row k="Reported success" v={String(d.reportedSuccessCount)} />
       <Row k="Pending / Unsuccessful" v={String(d.pendingCount + d.unsuccessfulCount)} />
-      <Row k="Evidence Strength" v={d.evidenceStrength} />
     </div>
   );
 }

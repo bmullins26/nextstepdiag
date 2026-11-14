@@ -94,7 +94,7 @@ export function ShareRepairPanel({
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
         Publishes brand, appliance type, model, complaint, confirmed failure, part and confirming test as a
-        Verified Repair. Private notes and photos are never shared.
+        Repair Outcome. Private notes and photos are never shared.
       </p>
       <Textarea
         value={publicNotes}

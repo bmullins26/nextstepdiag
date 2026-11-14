@@ -38,7 +38,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /** Transparent, character-by-character derivation of the decoded age. */
 export function DecodeLogicPanel({ logic }: { logic: DecodeLogic }) {
   const [open, setOpen] = useState(false);
-  const cb = logic.confidenceBreakdown;
 
   return (
     <div className="space-y-2">
@@ -114,29 +113,6 @@ export function DecodeLogicPanel({ logic }: { logic: DecodeLogic }) {
             </Section>
           ) : null}
 
-          {cb ? (
-            <Section title={`Confidence · ${cb.percent}% ${cb.label}`}>
-              <ul className="space-y-0.5">
-                {cb.points.map((p, i) => (
-                  <li key={i} className="flex items-baseline justify-between gap-2">
-                    <span className={p.awarded ? "" : "text-muted-foreground"}>
-                      {p.label}
-                      {p.detail ? (
-                        <span className="ml-1 text-[10px] text-muted-foreground">{p.detail}</span>
-                      ) : null}
-                    </span>
-                    <span className={`shrink-0 font-mono ${p.points < 0 ? "text-amber-300" : ""}`}>
-                      {p.points > 0 ? "+" : ""}
-                      {p.points}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-1 border-t border-border/50 pt-1 text-right font-mono">
-                {cb.earned} / {cb.max} → {cb.percent}%
-              </div>
-            </Section>
-          ) : null}
         </div>
       ) : null}
     </div>

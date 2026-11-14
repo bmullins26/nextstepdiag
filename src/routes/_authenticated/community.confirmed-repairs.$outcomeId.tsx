@@ -8,7 +8,7 @@ import { getConfirmedRepair, type ConfirmedRepair } from "@/lib/confirmed-repair
 export const Route = createFileRoute("/_authenticated/community/confirmed-repairs/$outcomeId")({
   head: () => ({
     meta: [
-      { title: "Verified Repair — Community — NextStep" },
+      { title: "Repair Outcome — Community — NextStep" },
       { name: "description", content: "A repair confirmed in the field by a NextStep technician." },
     ],
   }),
@@ -39,7 +39,7 @@ function ConfirmedRepairDetail() {
           <div className="space-y-4">
             <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-4">
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
-                <ShieldCheck className="h-3 w-3" /> Verified Repair
+                <ShieldCheck className="h-3 w-3" /> Repair Outcome
               </span>
               <h1 className="mt-2 text-xl font-bold">{data.confirmedFailure}</h1>
               <p className="text-sm text-muted-foreground">
@@ -52,9 +52,9 @@ function ConfirmedRepairDetail() {
               <Row label="Part replaced" value={data.partReplaced ?? "—"} />
               <Row label="Confirming test" value={data.confirmingTest ?? "—"} />
               <Row label="Repair successful" value={data.repairSuccessful == null ? "—" : data.repairSuccessful ? "Yes" : "No"} />
-              <Row label="Verified by" value={data.technician} />
+              <Row label="Technician" value={data.technician} />
               <Row
-                label="Verified"
+                label="Outcome date"
                 value={new Date(data.confirmedAt).toLocaleDateString(undefined, {
                   year: "numeric",
                   month: "long",

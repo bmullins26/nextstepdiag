@@ -24,7 +24,7 @@ export function RepairInsightsCard({ model, brand }: { model: string; brand?: st
         <History className="h-4 w-4" /> Exact-model repair history
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {insights.brand} {insights.model}. Approved historical imports and technician outcomes only; no similar models are combined.
+        {insights.brand} {insights.model}. Historical imports and technician outcomes only; no similar models are combined.
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Count label="Service calls" value={insights.repair_count} />
@@ -33,7 +33,7 @@ export function RepairInsightsCard({ model, brand }: { model: string; brand?: st
         <Count label="Pending / unsuccessful" value={insights.pendingCount + insights.unsuccessfulCount} />
       </div>
       <div className="text-xs text-muted-foreground">
-        Sources: {insights.historicalRecordCount} historical · {insights.liveRecordCount} live technician · Evidence: {insights.evidenceStrength}
+        Sources: {insights.historicalRecordCount} historical · {insights.liveRecordCount} live technician
       </div>
       <Section title="Reported complaints" items={insights.complaints} />
       <Section title="Diagnostic findings" items={insights.findings} />
@@ -42,7 +42,7 @@ export function RepairInsightsCard({ model, brand }: { model: string; brand?: st
       <Section title="Repair actions" items={insights.repairActions} />
       <Section title="Confirmation tests" items={insights.confirmationTests} />
       <p className="border-t border-border/60 pt-3 text-[11px] leading-relaxed text-muted-foreground">
-        Frequencies show what was recorded, not proof that a part caused the failure. Confirmed and unverified outcomes are counted separately.
+        Counts show what was recorded, not proof that a part caused the failure.
       </p>
     </section>
   );

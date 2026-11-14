@@ -22,7 +22,6 @@ export function EvidenceCard({
   item: EvidenceItem;
   children?: React.ReactNode;
 }) {
-  const conf = Math.round(item.confidence * 100);
   const isCommunity =
     item.sourceType === "community_discussion" || item.sourceType === "community_verified";
   const isInternal = item.link?.startsWith("/");
@@ -38,28 +37,16 @@ export function EvidenceCard({
       <h3 className="text-sm font-bold text-foreground">{item.title}</h3>
       <p className="mt-1 text-xs text-muted-foreground">{item.summary}</p>
 
-      <div className="mt-3 space-y-2">
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="w-14 shrink-0 text-muted-foreground">Confidence</span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary"
-              style={{ width: `${conf}%` }}
-            />
-          </div>
-          <span className="w-9 shrink-0 text-right font-semibold tabular-nums">{conf}%</span>
+      {(item.supportingDiscussionCount != null || item.supportingVerifiedRepairCount != null) && (
+        <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+          {item.supportingDiscussionCount != null && (
+            <span>{item.supportingDiscussionCount} supporting discussion{item.supportingDiscussionCount === 1 ? "" : "s"}</span>
+          )}
+          {item.supportingVerifiedRepairCount != null && item.supportingVerifiedRepairCount > 0 && (
+            <span>{item.supportingVerifiedRepairCount} repair record{item.supportingVerifiedRepairCount === 1 ? "" : "s"}</span>
+          )}
         </div>
-        {(item.supportingDiscussionCount != null || item.supportingVerifiedRepairCount != null) && (
-          <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-            {item.supportingDiscussionCount != null && (
-              <span>{item.supportingDiscussionCount} supporting discussion{item.supportingDiscussionCount === 1 ? "" : "s"}</span>
-            )}
-            {item.supportingVerifiedRepairCount != null && item.supportingVerifiedRepairCount > 0 && (
-              <span>{item.supportingVerifiedRepairCount} verified repair{item.supportingVerifiedRepairCount === 1 ? "" : "s"}</span>
-            )}
-          </div>
-        )}
-      </div>
+      )}
 
       {item.link && (
         <div className="mt-3">

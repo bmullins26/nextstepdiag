@@ -18,7 +18,6 @@ import { UpgradeDialog } from "@/components/paywall/upgrade-dialog";
 import {
   researchErrorCode,
   type ErrorCodeResult,
-  type ErrorCodeConfidence,
 } from "@/lib/error-codes.functions";
 
 const APPLIANCE_TYPES = [
@@ -102,8 +101,8 @@ function ErrorCodesPage() {
             Error Code Lookup
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Researches the fault code from manufacturer service docs and trusted
-            repair sources. Results are cached so the next lookup is instant.
+            Researches the fault code from manufacturer service docs and repair
+            references. Results are cached so the next lookup is instant.
           </p>
         </header>
 
@@ -204,24 +203,6 @@ function ErrorCodesPage() {
   );
 }
 
-const CONFIDENCE_META: Record<
-  ErrorCodeConfidence,
-  { label: string; className: string }
-> = {
-  high: {
-    label: "High confidence",
-    className: "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30",
-  },
-  medium: {
-    label: "Medium confidence",
-    className: "bg-primary/15 text-primary ring-primary/30",
-  },
-  low: {
-    label: "Low confidence — verify",
-    className: "bg-amber-500/15 text-amber-400 ring-amber-500/30",
-  },
-};
-
 function ResultView({ state }: { state: Result }) {
   if (state.kind === "idle") {
     return (
@@ -264,7 +245,6 @@ function ResultView({ state }: { state: Result }) {
   }
 
   const r = state.row;
-  const conf = CONFIDENCE_META[r.confidence];
 
   return (
     <div className="space-y-5">
@@ -273,11 +253,6 @@ function ResultView({ state }: { state: Result }) {
           {r.brand}
           {r.appliance_type ? ` · ${r.appliance_type}` : ""}
           {r.model_number ? ` · ${r.model_number}` : ""} · {r.code}
-        </span>
-        <span
-          className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ring-1 ${conf.className}`}
-        >
-          {conf.label}
         </span>
         <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           {state.source === "cache" ? "Cached" : "Freshly researched"}

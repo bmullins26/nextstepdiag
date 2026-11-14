@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/community/confirmed-repair
   head: () => ({
     meta: [
       { title: "Confirmed Repairs — Community — NextStep" },
-      { name: "description", content: "Verified repairs confirmed by technicians in the field." },
+      { name: "description", content: "Repair outcomes recorded by technicians in the field." },
     ],
   }),
   component: ConfirmedRepairsLayout,

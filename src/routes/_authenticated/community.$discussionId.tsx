@@ -76,7 +76,7 @@ function DiscussionPage() {
                 <DiscussionTypeBadge type={d.discussion_type} />
                 {d.verified_outcome_id && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
-                    <ShieldCheck className="h-3 w-3" /> Verified Repair
+                    <ShieldCheck className="h-3 w-3" /> Repair Outcome
                   </span>
                 )}
               </div>
@@ -110,10 +110,9 @@ function DiscussionPage() {
 
           {d.verified_outcome_id && (
             <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-200">
-              <div className="font-bold">Verified Repair</div>
+              <div className="font-bold">Repair Outcome</div>
               <div>
                 Confirmed by {1 + (d.confirmed_success_count ?? 0)} technician{(1 + (d.confirmed_success_count ?? 0)) === 1 ? "" : "s"}
-                {d.success_rate != null && <> · Success rate {Math.round((d.success_rate ?? 0) * 100)}%</>}
               </div>
             </div>
           )}

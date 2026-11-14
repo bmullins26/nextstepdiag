@@ -91,7 +91,7 @@ function DetailsPage() {
           }`}>{row.status}</span>
         </div>
 
-        <Card title="Verified Appliance">
+        <Card title="Appliance Details">
           <KV k="Brand" v={row.brand || "—"} />
           <KV k="Model" v={row.model_number || "—"} />
           <KV k="Serial" v={row.serial_number || "—"} />

@@ -366,21 +366,9 @@ export function VerifyAppliance({
             }
           />
           <KV k="Age" v={result.ageYears != null ? `${Math.max(0, Math.floor(result.ageYears))} yr` : "Unknown"} />
-          <KV
-            k="Confidence"
-            v={
-              result.confidencePercent != null
-                ? `${result.confidence} · ${result.confidencePercent}%`
-                : result.confidence
-            }
-          />
           {result.ageProvider ? (
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {result.reconciled?.groundTruthLocked ? (
-                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
-                  Verified by user
-                </span>
-              ) : result.factoryRecord ? (
+              {result.reconciled?.groundTruthLocked ? null : result.factoryRecord ? (
                 <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
                   Whirlpool record · built {result.factoryRecord.date}
                   {result.factoryRecord.warrantyStatus ? ` · ${result.factoryRecord.warrantyStatus}` : ""}
@@ -394,12 +382,6 @@ export function VerifyAppliance({
                   Age unavailable
                 </span>
               )}
-              {result.decodeLogic && result.decodeLogic.communityConfirmations > 0 ? (
-                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                  Community verified · {result.decodeLogic.communityConfirmations} technician
-                  {result.decodeLogic.communityConfirmations === 1 ? "" : "s"} confirmed
-                </span>
-              ) : null}
               {result.reconciled && result.reconciled.agreementCount >= 2 ? (
                 <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
                   {result.reconciled.agreementCount} sources agree
@@ -424,7 +406,7 @@ export function VerifyAppliance({
           {result.reconciled && result.reconciled.sources.length > 0 ? (
             <details className="rounded-lg border border-border bg-background/40 p-3" open={result.reconciled.disagreement}>
               <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Sources ({result.reconciled.sources.length}) — verified by cross-reference
+                Sources ({result.reconciled.sources.length})
               </summary>
               <ul className="mt-2 space-y-1.5 text-xs">
                 {result.reconciled.sources
@@ -448,9 +430,6 @@ export function VerifyAppliance({
                           </a>
                         ) : null}
                       </div>
-                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                        {(s.weight * s.confidence).toFixed(2)}
-                      </span>
                     </li>
                   ))}
               </ul>
@@ -468,7 +447,7 @@ export function VerifyAppliance({
                       {a.month ? MONTHS[a.month] + " " : ""}
                       {a.year}
                     </span>
-                    <span className="font-mono">{a.confidencePercent}%</span>
+
                   </li>
                 ))}
               </ul>
@@ -512,10 +491,9 @@ export function VerifyAppliance({
                       {c.year}
                       {c.week ? ` (wk ${c.week})` : ""}
                     </span>
-                    <span className="font-mono">
-                      score {c.score.toFixed(2)}
-                      {c.sourceCount > 0 ? ` · ${c.sourceCount} src` : ""}
-                    </span>
+                    {c.sourceCount > 0 ? (
+                      <span className="text-[10px] text-muted-foreground">{c.sourceCount} sources</span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -564,9 +542,6 @@ export function VerifyAppliance({
                           {h.sourceType}
                         </span>
                       ) : null}
-                      <span className="rounded bg-muted px-1.5 py-0.5">
-                        {h.trust.replace("_", " ")}
-                      </span>
                       {h.year ? <span>cites {h.year}</span> : null}
                     </div>
                   </li>

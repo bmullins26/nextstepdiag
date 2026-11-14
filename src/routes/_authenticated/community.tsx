@@ -105,7 +105,7 @@ function CommunityHome() {
                 View all confirmed repairs
               </Link>
             </Section>
-            <Section title="Verified Discussions" icon={ShieldCheck}>
+            <Section title="Repair Discussions" icon={ShieldCheck}>
               <CardList list={(data?.verified ?? []) as DiscussionSummary[]} />
             </Section>
             <Section title="Trending Models" icon={TrendingUp}>

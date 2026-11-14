@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { computeWarranty } from "@/lib/warranty/rules";
 import { PART_SUPPLIERS } from "@/lib/parts/suppliers";
 import { scanRecalls, generateCloseout, lookupFactoryWarranty, preloadPartsCatalog, type Closeout, type RecallHit, type KnownIssue } from "@/lib/service-call.functions";
+import { warrantyRecordLabel } from "@/lib/technician-display";
 
 type Props = {
   brand: string;
@@ -125,7 +126,7 @@ export function ServiceCallPipeline(p: Props) {
           <div className="mt-2 space-y-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${/in warranty/i.test(ent.markedAs ?? "") ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{ent.markedAs ?? "Status unknown"}</span>
-              <span className="text-[10px] text-muted-foreground">{entSerial ? "Verified · Whirlpool serial record" : "Whirlpool model coverage · not serial-verified"}</span>
+              <span className="text-[10px] text-muted-foreground">{warrantyRecordLabel(entSerial)}</span>
               {verdict && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${verdict.inWarranty ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{verdict.inWarranty ? "In warranty" : "Out of warranty"}{verdict.estimated ? " (estimate)" : ""}</span>}
             </div>
             {ent.productName && <p className="text-sm font-semibold">{ent.productName}</p>}
@@ -247,7 +248,7 @@ export function ServiceCallPipeline(p: Props) {
                     const q = pt.partNumber || `${p.modelNumber} ${pt.name}`;
                     return (
                       <li key={i} className="rounded-lg border border-border p-3 text-sm">
-                        <div className="flex justify-between gap-2"><span className="font-semibold">{pt.name}</span><span className="text-[10px] uppercase text-muted-foreground">{pt.verified ? "Fits this model" : pt.confidence}</span></div>
+                        <div className="flex justify-between gap-2"><span className="font-semibold">{pt.name}</span><span className="text-[10px] uppercase text-muted-foreground">{pt.verified ? "Fits this model" : "Check fit"}</span></div>
                         {pt.partNumber && <div className="font-mono text-xs text-primary">{pt.partNumber}{pt.price != null && <span className="ml-2 text-muted-foreground">${pt.price.toFixed(2)} list price{partsSource ? ` (${partsSource.name})` : ""}</span>}</div>}
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {PART_SUPPLIERS.map((s) => (

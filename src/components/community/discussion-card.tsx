@@ -46,7 +46,7 @@ export function DiscussionCard({ d }: { d: DiscussionSummary }) {
           )}
         </div>
         {d.verified_outcome_id && (
-          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" aria-label="Verified repair" />
+          <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="Repair outcome" />
         )}
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">

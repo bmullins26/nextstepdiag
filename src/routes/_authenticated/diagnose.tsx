@@ -39,9 +39,7 @@ import {
 import { z } from "zod";
 import { UpgradeDialog } from "@/components/paywall/upgrade-dialog";
 import { ServiceCallPipeline } from "@/components/service-call/service-call-pipeline";
-
-/** Minimum prior repairs before historical shares are shown as percentages. */
-const MIN_HISTORY_SAMPLE = 5;
+import { formatRepairHistoryRow } from "@/lib/technician-display";
 
 export const Route = createFileRoute("/_authenticated/diagnose")({
   head: () => ({
@@ -91,6 +89,7 @@ type Step = {
     ranked: Array<{ failure: string; share: number; weightedCount: number; rawCount: number }>;
   } | null;
   evidence?: EvidenceItem[];
+  evidenceThin?: boolean;
 };
 
 type ResumeRow = {
@@ -658,24 +657,25 @@ function Phase3(props: {
                 <div className="font-semibold text-primary">
                   {step.historicalOutcomes.scope === "exact_model"
                     ? `${step.historicalOutcomes.exactModelCount} prior repair${step.historicalOutcomes.exactModelCount === 1 ? "" : "s"} for this exact model`
-                    : `Based on ${step.historicalOutcomes.sampleSize} similar repair${step.historicalOutcomes.sampleSize === 1 ? "" : "s"} · ${step.historicalOutcomes.totals.confirmed} confirmed`}
+                    : `Based on ${step.historicalOutcomes.sampleSize} similar repair${step.historicalOutcomes.sampleSize === 1 ? "" : "s"}`}
                 </div>
                 {step.historicalOutcomes.ranked.length > 0 && (
                   <ul className="mt-1 space-y-0.5">
                     {step.historicalOutcomes.ranked.slice(0, 3).map((r) => (
-                      <li key={r.failure} className="flex justify-between gap-2">
-                        <span className="truncate">{r.failure}</span>
-                        {/* Percentages only with a meaningful sample; tiny samples show raw counts. */}
-                        <span className="font-mono">{step.historicalOutcomes!.sampleSize >= MIN_HISTORY_SAMPLE ? `${r.share}%` : `${r.rawCount} prior`}</span>
+                      <li key={r.failure}>
+                        {formatRepairHistoryRow(r.rawCount, step.historicalOutcomes!.sampleSize, r.failure)}
                       </li>
                     ))}
                   </ul>
                 )}
-                <p className="mt-1 text-[10px]">Past repair records, separate from the live likelihoods above{step.historicalOutcomes.sampleSize < MIN_HISTORY_SAMPLE ? " — too few to rank yet" : ""}.</p>
+                <p className="mt-1 text-[10px]">Past repair records, separate from the live likelihoods above.</p>
               </div>
             ) : null}
           </div>
           <FindingCard label="Recommended Next Test" value={step.recommendedNextTest || "—"} accent="secondary" />
+          {step.evidenceThin === true && (
+            <p className="text-xs text-muted-foreground">Less common issue — double-check readings.</p>
+          )}
           {step.safetyWarning ? (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
               <span className="font-semibold uppercase tracking-wide">Safety </span>
@@ -691,7 +691,7 @@ function Phase3(props: {
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] font-bold uppercase tracking-wide text-primary">Evidence Sources</h2>
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              {step.evidence.length} sources · ranked by tier
+              {step.evidence.length} sources
             </span>
           </div>
           <EvidenceList
@@ -844,7 +844,6 @@ function ApplianceChip({
         </div>
         <div className="text-muted-foreground">Model {appliance.modelNumber}{appliance.serialNumber ? ` · S/N ${appliance.serialNumber}` : ""}</div>
       </div>
-      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">{appliance.confidence}</span>
     </div>
   );
 }
@@ -857,16 +856,10 @@ function GroundingCaption({
   if (source.confidence === "low") {
     return (
       <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-        No verified service literature found — diagnosing from symptoms only. Upload the tech sheet for grounded, model-specific guidance.
+        No tech sheet found for this model — diagnosing from symptoms. Upload the tech sheet for model-specific guidance.
       </div>
     );
   }
-  const trustClass =
-    source.sourceTrust === "oem"
-      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
-      : source.sourceTrust === "trusted_reference"
-        ? "bg-sky-500/15 text-sky-300 border-sky-500/40"
-        : "bg-muted text-muted-foreground border-border";
   return (
     <div className="flex flex-wrap items-center gap-2 px-1 text-[11px] text-muted-foreground">
       <span>Grounded in:</span>
@@ -881,13 +874,6 @@ function GroundingCaption({
         </a>
       ) : (
         <span className="font-semibold text-foreground">{source.displayLabel}</span>
-      )}
-      {source.trustLabel && (
-        <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${trustClass}`}
-        >
-          {source.trustLabel}
-        </span>
       )}
     </div>
   );
