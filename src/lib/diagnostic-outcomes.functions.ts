@@ -20,6 +20,12 @@ const FeedbackFields = {
   testsPerformed: z.array(z.unknown()).optional(),
   evidenceSnapshot: z.array(z.unknown()).optional(),
   photoPath: z.string().nullable().optional(),
+  errorCodes: z.array(z.string().max(80)).max(50).optional(),
+  partsOrdered: z.array(z.string().max(200)).max(100).optional(),
+  partsInstalled: z.array(z.string().max(200)).max(100).optional(),
+  partNumbers: z.array(z.string().max(100)).max(100).optional(),
+  repairActions: z.array(z.string().max(1000)).max(50).optional(),
+  testResults: z.array(z.unknown()).max(100).optional(),
 };
 
 type FeedbackInput = Partial<{
@@ -34,6 +40,12 @@ type FeedbackInput = Partial<{
   testsPerformed: unknown[];
   evidenceSnapshot: unknown[];
   photoPath: string | null;
+  errorCodes: string[];
+  partsOrdered: string[];
+  partsInstalled: string[];
+  partNumbers: string[];
+  repairActions: string[];
+  testResults: unknown[];
 }>;
 
 /** Maps optional feedback fields to column names, omitting undefined values. */
@@ -50,6 +62,12 @@ function feedbackPatch(d: FeedbackInput): Record<string, unknown> {
   if (d.testsPerformed !== undefined) out['tests_performed'] = d.testsPerformed;
   if (d.evidenceSnapshot !== undefined) out['evidence_snapshot'] = d.evidenceSnapshot;
   if (d.photoPath !== undefined) out['photo_path'] = d.photoPath;
+  if (d.errorCodes !== undefined) out['error_codes'] = d.errorCodes;
+  if (d.partsOrdered !== undefined) out['parts_ordered'] = d.partsOrdered;
+  if (d.partsInstalled !== undefined) out['parts_installed'] = d.partsInstalled;
+  if (d.partNumbers !== undefined) out['part_numbers'] = d.partNumbers;
+  if (d.repairActions !== undefined) out['repair_actions'] = d.repairActions;
+  if (d.testResults !== undefined) out['test_results'] = d.testResults;
   return out;
 }
 

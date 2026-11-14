@@ -1,6 +1,7 @@
 import type { EvidenceProvider } from "./types";
 import { techSheetProvider } from "./providers/tech-sheet";
 import { verifiedRepairProvider } from "./providers/verified-repair";
+import { repairHistoryProvider } from "./providers/repair-history";
 import {
   communityDiscussionProvider,
   communityVerifiedProvider,
@@ -19,6 +20,7 @@ export function getEvidenceProviders(): EvidenceProvider[] {
     techSheetProvider,
     knowledgeServiceBulletinProvider,
     verifiedRepairProvider,
+    repairHistoryProvider,
     knowledgeRepairRecordProvider,
     communityVerifiedProvider,
     communityDiscussionProvider,

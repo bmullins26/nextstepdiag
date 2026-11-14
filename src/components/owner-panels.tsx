@@ -82,6 +82,7 @@ import { PendingRepairs } from "@/components/pending-repairs";
 import { featureLabel, formatUsd } from "@/lib/ai-cost";
 import { BetaProgramTab } from "@/components/owner/beta-program-tab";
 import { ToolManagerTab } from "@/components/owner/tool-manager-tab";
+import { RepairIntelligenceTab } from "@/components/owner/repair-intelligence-tab";
 
 function fmtDate(s: string | null | undefined) {
   if (!s) return "—";
@@ -243,6 +244,7 @@ export function OwnerPanels() {
       <TabsList className="inline-flex w-max min-w-full justify-start gap-1 sm:flex sm:h-auto sm:w-full sm:flex-wrap">
         <TabsTrigger value="overview">Overview</TabsTrigger>
         <TabsTrigger value="accuracy">Accuracy</TabsTrigger>
+        <TabsTrigger value="repair-intelligence">Repair Intelligence</TabsTrigger>
         <TabsTrigger value="ai">AI Usage</TabsTrigger>
         <TabsTrigger value="users">Users</TabsTrigger>
         <TabsTrigger value="freds">Fred's Academy</TabsTrigger>
@@ -258,6 +260,7 @@ export function OwnerPanels() {
 
       <TabsContent value="overview" className="mt-6"><OverviewTab /></TabsContent>
       <TabsContent value="accuracy" className="mt-6"><AccuracyTab /></TabsContent>
+      <TabsContent value="repair-intelligence" className="mt-6"><RepairIntelligenceTab /></TabsContent>
       <TabsContent value="ai" className="mt-6"><AiUsageTab /></TabsContent>
       <TabsContent value="users" className="mt-6"><UsersTab /></TabsContent>
       <TabsContent value="freds" className="mt-6"><PartnerStudentsTab partner="freds_academy" /></TabsContent>

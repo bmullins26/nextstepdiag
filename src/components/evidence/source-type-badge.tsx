@@ -6,6 +6,7 @@ const COLOR: Record<EvidenceSourceType, string> = {
   tech_sheet: "border-blue-500/40 bg-blue-500/15 text-blue-300",
   service_bulletin: "border-orange-500/40 bg-orange-500/15 text-orange-300",
   verified_repair: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+  repair_history: "border-accent/40 bg-accent/15 text-accent",
   community_verified: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
   community_discussion: "border-violet-500/40 bg-violet-500/15 text-violet-300",
   external_repair_guide: "border-border bg-muted text-muted-foreground",

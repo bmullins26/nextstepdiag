@@ -15,6 +15,9 @@ export type OutcomeFeedbackValue = {
   verdict: "correct" | "partial" | "incorrect";
   notes: string;
   photoPath: string | null;
+  errorCodes: string;
+  partsOrdered: string;
+  repairAction: string;
 };
 
 /**
@@ -41,6 +44,9 @@ export function OutcomeFeedbackSteps({
   const [verdict, setVerdict] = useState<OutcomeFeedbackValue["verdict"] | null>(null);
   const [notes, setNotes] = useState("");
   const [photoPath, setPhotoPath] = useState<string | null>(null);
+  const [errorCodes, setErrorCodes] = useState("");
+  const [partsOrdered, setPartsOrdered] = useState("");
+  const [repairAction, setRepairAction] = useState("");
   const [uploading, setUploading] = useState(false);
 
   async function uploadPhoto(file: File) {
@@ -72,6 +78,9 @@ export function OutcomeFeedbackSteps({
       verdict: v,
       notes,
       photoPath,
+      errorCodes,
+      partsOrdered,
+      repairAction,
     });
   }
 
@@ -116,6 +125,17 @@ export function OutcomeFeedbackSteps({
                 No
               </Button>
             </div>
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Error codes (optional)">
+              <Input value={errorCodes} onChange={(e) => setErrorCodes(e.target.value)} placeholder="e.g. F7 E1" className="h-11" />
+            </Field>
+            <Field label="Parts ordered, not installed">
+              <Input value={partsOrdered} onChange={(e) => setPartsOrdered(e.target.value)} placeholder="Keep pending parts separate" className="h-11" />
+            </Field>
+          </div>
+          <Field label="Repair action performed (optional)">
+            <Textarea value={repairAction} onChange={(e) => setRepairAction(e.target.value)} placeholder="e.g. Replaced drain pump and cleared hose" className="min-h-16" />
           </Field>
           <Field label="Anything unusual? (optional)">
             <Textarea value={unusualNotes} onChange={(e) => setUnusualNotes(e.target.value)} className="min-h-16" />

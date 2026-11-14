@@ -830,14 +830,19 @@ export type Database = {
           confirmed_at: string | null
           confirming_test: string | null
           created_at: string
+          error_codes: string[]
           evidence_snapshot: Json
           id: string
           manufacturer: string
           model_number: string
           nextstep_verdict: string | null
+          normalized_outcome: string | null
           notes: string | null
           outcome: string
+          part_numbers: string[]
           part_replaced: string | null
+          parts_installed: string[]
+          parts_ordered: string[]
           photo_path: string | null
           platform: string | null
           predicted_confidence: Json
@@ -845,10 +850,12 @@ export type Database = {
           predicted_top_failure: string | null
           public_notes: string | null
           recommended_failure: string
+          repair_actions: string[]
           repair_successful: boolean | null
           session_id: string | null
           shared_at: string | null
           shared_to_community: boolean
+          test_results: Json
           tests_performed: Json
           unusual_notes: string | null
           updated_at: string
@@ -861,14 +868,19 @@ export type Database = {
           confirmed_at?: string | null
           confirming_test?: string | null
           created_at?: string
+          error_codes?: string[]
           evidence_snapshot?: Json
           id?: string
           manufacturer?: string
           model_number?: string
           nextstep_verdict?: string | null
+          normalized_outcome?: string | null
           notes?: string | null
           outcome: string
+          part_numbers?: string[]
           part_replaced?: string | null
+          parts_installed?: string[]
+          parts_ordered?: string[]
           photo_path?: string | null
           platform?: string | null
           predicted_confidence?: Json
@@ -876,10 +888,12 @@ export type Database = {
           predicted_top_failure?: string | null
           public_notes?: string | null
           recommended_failure?: string
+          repair_actions?: string[]
           repair_successful?: boolean | null
           session_id?: string | null
           shared_at?: string | null
           shared_to_community?: boolean
+          test_results?: Json
           tests_performed?: Json
           unusual_notes?: string | null
           updated_at?: string
@@ -892,14 +906,19 @@ export type Database = {
           confirmed_at?: string | null
           confirming_test?: string | null
           created_at?: string
+          error_codes?: string[]
           evidence_snapshot?: Json
           id?: string
           manufacturer?: string
           model_number?: string
           nextstep_verdict?: string | null
+          normalized_outcome?: string | null
           notes?: string | null
           outcome?: string
+          part_numbers?: string[]
           part_replaced?: string | null
+          parts_installed?: string[]
+          parts_ordered?: string[]
           photo_path?: string | null
           platform?: string | null
           predicted_confidence?: Json
@@ -907,10 +926,12 @@ export type Database = {
           predicted_top_failure?: string | null
           public_notes?: string | null
           recommended_failure?: string
+          repair_actions?: string[]
           repair_successful?: boolean | null
           session_id?: string | null
           shared_at?: string | null
           shared_to_community?: boolean
+          test_results?: Json
           tests_performed?: Json
           unusual_notes?: string | null
           updated_at?: string
@@ -1776,6 +1797,81 @@ export type Database = {
         }
         Relationships: []
       }
+      model_repair_aggregates: {
+        Row: {
+          appliance_type: string
+          brand_display: string
+          brand_key: string
+          complaints: Json
+          confirmation_tests: Json
+          confirmed_success_count: number
+          error_codes: Json
+          evidence_strength: string
+          findings: Json
+          historical_record_count: number
+          id: string
+          live_record_count: number
+          model_display: string
+          model_key: string
+          other_outcome_count: number
+          parts_installed: Json
+          pending_count: number
+          repair_actions: Json
+          reported_success_count: number
+          service_call_count: number
+          unsuccessful_count: number
+          updated_at: string
+        }
+        Insert: {
+          appliance_type?: string
+          brand_display?: string
+          brand_key: string
+          complaints?: Json
+          confirmation_tests?: Json
+          confirmed_success_count?: number
+          error_codes?: Json
+          evidence_strength?: string
+          findings?: Json
+          historical_record_count?: number
+          id?: string
+          live_record_count?: number
+          model_display: string
+          model_key: string
+          other_outcome_count?: number
+          parts_installed?: Json
+          pending_count?: number
+          repair_actions?: Json
+          reported_success_count?: number
+          service_call_count?: number
+          unsuccessful_count?: number
+          updated_at?: string
+        }
+        Update: {
+          appliance_type?: string
+          brand_display?: string
+          brand_key?: string
+          complaints?: Json
+          confirmation_tests?: Json
+          confirmed_success_count?: number
+          error_codes?: Json
+          evidence_strength?: string
+          findings?: Json
+          historical_record_count?: number
+          id?: string
+          live_record_count?: number
+          model_display?: string
+          model_key?: string
+          other_outcome_count?: number
+          parts_installed?: Json
+          pending_count?: number
+          repair_actions?: Json
+          reported_success_count?: number
+          service_call_count?: number
+          unsuccessful_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       partner_perk_claims: {
         Row: {
           claimed_at: string
@@ -1851,6 +1947,179 @@ export type Database = {
           last_login_at?: string | null
           plan?: Database["public"]["Enums"]["plan_tier"]
           updated_at?: string
+        }
+        Relationships: []
+      }
+      repair_history_records: {
+        Row: {
+          appliance_type: string
+          appliance_type_raw: string
+          batch_id: string
+          brand_display: string
+          brand_key: string
+          brand_raw: string
+          complaint: string
+          created_at: string
+          error_codes: string[]
+          findings: string
+          id: string
+          model_display: string
+          model_key: string
+          model_raw: string
+          normalized_outcome: string
+          operational_result: string
+          original_notes: string
+          original_outcome: string
+          original_record: Json
+          part_numbers: string[]
+          parts_installed: string[]
+          parts_ordered: string[]
+          record_hash: string
+          repair_actions: string[]
+          review_flags: string[]
+          review_status: string
+          row_number: number
+          service_date: string | null
+          source_url: string | null
+          source_verification_status: string
+          tests_performed: string[]
+          unmapped_fields: Json
+          updated_at: string
+        }
+        Insert: {
+          appliance_type?: string
+          appliance_type_raw?: string
+          batch_id: string
+          brand_display?: string
+          brand_key?: string
+          brand_raw?: string
+          complaint?: string
+          created_at?: string
+          error_codes?: string[]
+          findings?: string
+          id?: string
+          model_display?: string
+          model_key?: string
+          model_raw?: string
+          normalized_outcome: string
+          operational_result?: string
+          original_notes?: string
+          original_outcome?: string
+          original_record: Json
+          part_numbers?: string[]
+          parts_installed?: string[]
+          parts_ordered?: string[]
+          record_hash: string
+          repair_actions?: string[]
+          review_flags?: string[]
+          review_status?: string
+          row_number: number
+          service_date?: string | null
+          source_url?: string | null
+          source_verification_status?: string
+          tests_performed?: string[]
+          unmapped_fields?: Json
+          updated_at?: string
+        }
+        Update: {
+          appliance_type?: string
+          appliance_type_raw?: string
+          batch_id?: string
+          brand_display?: string
+          brand_key?: string
+          brand_raw?: string
+          complaint?: string
+          created_at?: string
+          error_codes?: string[]
+          findings?: string
+          id?: string
+          model_display?: string
+          model_key?: string
+          model_raw?: string
+          normalized_outcome?: string
+          operational_result?: string
+          original_notes?: string
+          original_outcome?: string
+          original_record?: Json
+          part_numbers?: string[]
+          parts_installed?: string[]
+          parts_ordered?: string[]
+          record_hash?: string
+          repair_actions?: string[]
+          review_flags?: string[]
+          review_status?: string
+          row_number?: number
+          service_date?: string | null
+          source_url?: string | null
+          source_verification_status?: string
+          tests_performed?: string[]
+          unmapped_fields?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_history_records_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "repair_import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_import_batches: {
+        Row: {
+          column_mapping: Json
+          completed_at: string | null
+          created_at: string
+          duplicate_rows: number
+          error_message: string | null
+          file_name: string
+          file_sha256: string
+          headers: Json
+          id: string
+          imported_rows: number
+          owner_id: string
+          raw_csv: string
+          review_rows: number
+          status: string
+          total_rows: number
+          unmapped_columns: string[]
+        }
+        Insert: {
+          column_mapping?: Json
+          completed_at?: string | null
+          created_at?: string
+          duplicate_rows?: number
+          error_message?: string | null
+          file_name: string
+          file_sha256: string
+          headers?: Json
+          id?: string
+          imported_rows?: number
+          owner_id: string
+          raw_csv: string
+          review_rows?: number
+          status?: string
+          total_rows?: number
+          unmapped_columns?: string[]
+        }
+        Update: {
+          column_mapping?: Json
+          completed_at?: string | null
+          created_at?: string
+          duplicate_rows?: number
+          error_message?: string | null
+          file_name?: string
+          file_sha256?: string
+          headers?: Json
+          id?: string
+          imported_rows?: number
+          owner_id?: string
+          raw_csv?: string
+          review_rows?: number
+          status?: string
+          total_rows?: number
+          unmapped_columns?: string[]
         }
         Relationships: []
       }
@@ -2322,6 +2591,10 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      refresh_model_repair_aggregate: {
+        Args: { p_brand_key: string; p_model_key: string }
+        Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

@@ -114,6 +114,11 @@ export function PendingRepairs({ limit, compact = false }: { limit?: number; com
                     unusualNotes: v.unusualNotes.trim() || null,
                     nextstepVerdict: v.verdict,
                     photoPath: v.photoPath,
+                    errorCodes: v.errorCodes ? v.errorCodes.split(/[,;|\n]+/).map((s) => s.trim()).filter(Boolean) : [],
+                    partsOrdered: v.partsOrdered ? v.partsOrdered.split(/[;|\n]+/).map((s) => s.trim()).filter(Boolean) : [],
+                    partsInstalled: v.partReplaced.trim() ? [v.partReplaced.trim()] : [],
+                    repairActions: v.repairAction.trim() ? [v.repairAction.trim()] : [],
+                    testResults: v.repairSuccessful === null ? [] : [{ operational: v.repairSuccessful ? "passed" : "failed" }],
                   })
                 }
                 footer={

@@ -3,6 +3,7 @@ export type EvidenceSourceType =
   | "service_bulletin"
   | "tech_sheet"
   | "verified_repair"
+  | "repair_history"
   | "community_verified"
   | "community_discussion"
   | "external_repair_guide";
@@ -12,6 +13,7 @@ export const EVIDENCE_PRIORITY: Record<EvidenceSourceType, number> = {
   tech_sheet: 1.5,
   service_bulletin: 2,
   verified_repair: 3,
+  repair_history: 3.5,
   community_verified: 4,
   community_discussion: 5,
   external_repair_guide: 6,
@@ -22,6 +24,7 @@ export const EVIDENCE_TIER_LABEL: Record<EvidenceSourceType, string> = {
   tech_sheet: "Tech Sheet",
   service_bulletin: "Service Bulletin",
   verified_repair: "Verified Repair Outcome",
+  repair_history: "Approved Repair History Pattern",
   community_verified: "Community — Verified Repair",
   community_discussion: "Community — Discussion",
   external_repair_guide: "External Repair Guide",

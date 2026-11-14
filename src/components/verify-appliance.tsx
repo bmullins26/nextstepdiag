@@ -715,7 +715,7 @@ export function VerifyAppliance({
       )}
 
       {result?.modelNumber ? (
-        <RepairInsightsCard model={result.modelNumber} />
+        <RepairInsightsCard model={result.modelNumber} brand={result.manufacturer || result.brand} />
       ) : null}
     </div>
   );
