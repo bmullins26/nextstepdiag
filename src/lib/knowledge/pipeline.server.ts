@@ -1,8 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { embedTexts } from "./embeddings.server";
-import { factToText, normalizeToFacts } from "./normalize.server";
+import { factToText, normalizeToFacts, type NormalizedFact } from "./normalize.server";
 import {
-  AUTO_CLEAR_CONFIDENCE,
   CHUNK_TARGET_CHARS,
   EMBEDDING_DIMS,
   EMBEDDING_MODEL,
@@ -33,12 +32,7 @@ export function clampAuthorityForOrigin(
 ): KnowledgeAuthority {
   if (origin === "human") return requested;
   if (origin === "ai_inference") return "ai_inference";
-  // An external publisher's trust level survives AI restructuring: it says who
-  // published the material, not that AI verified it. Manufacturer- and
-  // technician-verified authority still cannot be reached this way.
-  return requested === "reviewed_normalized" || requested === "external_verified_source"
-    ? requested
-    : AI_MAX_AUTHORITY;
+  return AI_MAX_AUTHORITY;
 }
 
 export function modelFamilyOf(model: string | null | undefined): string | null {
@@ -289,6 +283,63 @@ export function segmentContent(content: string): {
   }));
 }
 
+export type FactInsert = Record<string, unknown> & { __text: string };
+
+/** Build an AI fact row; every confidence level remains queued for owner review. */
+export function buildFactInsert(args: {
+  text: string;
+  fact: NormalizedFact;
+  sourceId: string;
+  extractionId: string;
+  jobId: string;
+  brand: string | null;
+  manufacturer: string | null;
+  applianceType: string | null;
+  modelNumber: string | null;
+  modelFamily: string | null;
+  sourceAuthority: KnowledgeAuthority;
+  origin: KnowledgeOrigin;
+  originActor: string;
+  pageNumber: number | null;
+  section: string | null;
+}): FactInsert {
+  const { fact: f } = args;
+  return {
+    __text: args.text,
+    source_id: args.sourceId,
+    extraction_id: args.extractionId,
+    job_id: args.jobId,
+    brand: args.brand,
+    manufacturer: args.manufacturer,
+    appliance_type: args.applianceType,
+    model_number: args.modelNumber,
+    model_family: args.modelFamily,
+    symptom: f.symptom,
+    complaint: f.complaint,
+    component: f.component,
+    part: f.part,
+    part_number: f.part_number,
+    test: f.test,
+    test_condition: f.test_condition,
+    expected_result: f.expected_result,
+    actual_result: f.actual_result,
+    failure: f.failure,
+    repair: f.repair,
+    resolution: f.resolution,
+    error_code: f.error_code,
+    diagnostic_step: f.diagnostic_step,
+    source_authority: args.sourceAuthority,
+    origin: args.origin,
+    origin_actor: args.originActor,
+    confidence_score: f.confidence_score,
+    confidence_reason: f.confidence_reason,
+    needs_review: true,
+    review_status: "unreviewed",
+    page_number: args.pageNumber,
+    section: args.section,
+  };
+}
+
 async function runPipeline(
   admin: SupabaseClient,
   args: {
@@ -326,7 +377,6 @@ async function runPipeline(
   const origin: KnowledgeOrigin = "ai_extraction";
   const authority = clampAuthorityForOrigin(origin, args.sourceAuthority);
 
-  type FactInsert = Record<string, unknown> & { __text: string };
   const factInserts: FactInsert[] = [];
   let confSum = 0;
 
@@ -350,39 +400,25 @@ async function runPipeline(
       const text = factToText(f as unknown as Record<string, unknown>);
       if (!text.trim()) continue;
       confSum += f.confidence_score;
-      factInserts.push({
-        __text: text,
-        source_id: args.sourceId,
-        extraction_id: ex.id,
-        job_id: args.jobId,
-        brand: args.brand,
-        manufacturer: args.manufacturer,
-        appliance_type: args.applianceType,
-        model_number: args.modelNumber,
-        model_family: args.modelFamily,
-        symptom: f.symptom,
-        complaint: f.complaint,
-        component: f.component,
-        part: f.part,
-        part_number: f.part_number,
-        test: f.test,
-        test_condition: f.test_condition,
-        expected_result: f.expected_result,
-        actual_result: f.actual_result,
-        failure: f.failure,
-        repair: f.repair,
-        resolution: f.resolution,
-        error_code: f.error_code,
-        diagnostic_step: f.diagnostic_step,
-        source_authority: authority,
-        origin,
-        origin_actor: model,
-        confidence_score: f.confidence_score,
-        confidence_reason: f.confidence_reason,
-        needs_review: f.confidence_score < AUTO_CLEAR_CONFIDENCE,
-        page_number: ex.page_number,
-        section: ex.section,
-      });
+      factInserts.push(
+        buildFactInsert({
+          text,
+          fact: f,
+          sourceId: args.sourceId,
+          extractionId: ex.id,
+          jobId: args.jobId,
+          brand: args.brand,
+          manufacturer: args.manufacturer,
+          applianceType: args.applianceType,
+          modelNumber: args.modelNumber,
+          modelFamily: args.modelFamily,
+          sourceAuthority: authority,
+          origin,
+          originActor: model,
+          pageNumber: ex.page_number,
+          section: ex.section,
+        }),
+      );
     }
   }
 

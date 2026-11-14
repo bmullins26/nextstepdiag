@@ -104,7 +104,7 @@ export const listReviewQueue = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("knowledge_facts")
       .select("*, knowledge_sources(title,source_type,source_authority)")
-      .eq("needs_review", true)
+      .eq("review_status", "unreviewed")
       .is("superseded_by", null)
       .order("confidence_score", { ascending: true })
       .limit(100);
@@ -354,6 +354,9 @@ export const reviewKnowledgeFact = createServerFn({ method: "POST" })
       .eq("id", data.factId)
       .maybeSingle();
     if (!before) throw new Error("Fact not found");
+    if ((before as any).review_status === "quarantined") {
+      throw new Error("Quarantined facts cannot be reviewed.");
+    }
 
     if (data.action === "approved") {
       // Human review promotes AI output to reviewed knowledge. It never
@@ -361,6 +364,7 @@ export const reviewKnowledgeFact = createServerFn({ method: "POST" })
       await supabaseAdmin
         .from("knowledge_facts")
         .update({
+          review_status: "approved",
           needs_review: false,
           reviewed_by: context.userId,
           reviewed_at: new Date().toISOString(),
@@ -375,10 +379,10 @@ export const reviewKnowledgeFact = createServerFn({ method: "POST" })
       await supabaseAdmin
         .from("knowledge_facts")
         .update({
+          review_status: "rejected",
           needs_review: true,
           reviewed_by: context.userId,
           reviewed_at: new Date().toISOString(),
-          superseded_by: data.factId,
         })
         .eq("id", data.factId);
       await supabaseAdmin.from("knowledge_chunks").delete().eq("fact_id", data.factId);
@@ -456,15 +460,7 @@ export const importVerifiedApplianceDataBatch = createServerFn({ method: "POST" 
       })
       .parse(i),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async ({ context }) => {
     await assertOwner(context.supabase, context.userId);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { importVerifiedApplianceData } = await import("@/lib/knowledge/vad/import.server");
-    return importVerifiedApplianceData(supabaseAdmin as any, {
-      uploadedBy: context.userId,
-      limit: data.limit,
-      dryRun: data.dryRun,
-      refresh: data.refresh,
-      kind: data.kind,
-    });
+    throw new Error("VAD import is disabled: buying-guide data is not used for diagnostics.");
   });

@@ -30,8 +30,10 @@ import {
  * retrieval chunks are retired).
  */
 
+export const VAD_DIAGNOSTICS_ENABLED = false;
 export const VAD_REF_TABLE = "verified_appliance_data";
 const UA = "NextStepDiagKnowledgeBot/1.0 (+https://nextstepdiag.com)";
+const VAD_DISABLED_MESSAGE = "VAD import is disabled: buying-guide data is not used for diagnostics.";
 
 export type VadTargetKind = "model" | "category";
 export type VadTarget = { url: string; kind: VadTargetKind };
@@ -184,6 +186,8 @@ export async function importVadPage(
   target: VadTarget,
   opts: { uploadedBy: string; refresh: boolean; dryRun: boolean; identityIndex?: Map<string, VadCatalogIdentity> },
 ): Promise<VadPageResult> {
+  if (!VAD_DIAGNOSTICS_ENABLED) throw new Error(VAD_DISABLED_MESSAGE);
+
   const retrievedAt = new Date().toISOString().slice(0, 10);
   let html: string;
   try {
@@ -365,6 +369,8 @@ export async function importVerifiedApplianceData(
     withIdentity?: boolean;
   },
 ): Promise<VadImportReport> {
+  if (!VAD_DIAGNOSTICS_ENABLED) throw new Error(VAD_DISABLED_MESSAGE);
+
   const all = await listVadTargets();
   const targets = all.filter((t) => !opts.kind || opts.kind === "all" || t.kind === opts.kind);
 

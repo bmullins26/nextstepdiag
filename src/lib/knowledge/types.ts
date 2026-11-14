@@ -38,7 +38,7 @@ export const AUTHORITY_WEIGHT: Record<KnowledgeAuthority, number> = {
   technician_verified_repair: 0.9,
   technician_entered: 0.75,
   reviewed_normalized: 0.6,
-  external_verified_source: 0.5,
+  external_verified_source: 0, // retired
   ai_extracted_pending_review: 0.3,
   ai_inference: 0.15,
 };
@@ -70,8 +70,8 @@ export const EMBEDDING_BATCH_MAX = 100;
 export const CHUNK_TARGET_CHARS = 1100;
 export const CHUNK_OVERLAP_CHARS = 150;
 
-/** Facts at or above this confidence skip the review queue. */
-export const AUTO_CLEAR_CONFIDENCE = 0.82;
+/** Review-queue ordering signal only; confidence never clears owner review. */
+export const REVIEW_PRIORITY_THRESHOLD = 0.82;
 
 export type KnowledgeSourceRow = {
   id: string;
