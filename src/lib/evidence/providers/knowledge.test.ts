@@ -83,6 +83,15 @@ beforeEach(() => {
 });
 
 describe("two-stage knowledge evidence", () => {
+  test("stage 1 and every fallback stage leave model_family unfiltered", async () => {
+    fallbackHits = [hit()];
+    await knowledgeFallbackProvider.fetch(query(), {} as any);
+    const calls = rpcMock.mock.calls.map((call) => call[1]);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls[0]?.include_pending).toBe(false);
+    for (const args of calls) expect(args?.filter_model_family).toBeNull();
+  });
+
   test("an unapproved repair record is never verified_repair", async () => {
     fallbackHits = [hit({ source_type: "repair_record" })];
     const q = query();

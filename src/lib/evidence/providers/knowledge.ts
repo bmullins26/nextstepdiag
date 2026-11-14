@@ -89,7 +89,6 @@ async function retrieve(q: EvidenceQuery): Promise<KnowledgeRetrieval> {
     const embedding = await embedOne(queryText);
     const rpc = async (options: {
       includePending: boolean;
-      model: boolean;
       errorCode: boolean;
       brand: boolean;
     }): Promise<Array<Omit<Hit, "retrievalStage" | "parent_source_authority">>> => {
@@ -98,7 +97,7 @@ async function retrieve(q: EvidenceQuery): Promise<KnowledgeRetrieval> {
         query_text: queryText,
         filter_brand: options.brand ? q.brand || null : null,
         filter_appliance_type: q.applianceType || null,
-        filter_model_family: options.model ? q.model || null : null,
+        filter_model_family: null,
         filter_error_code: options.errorCode ? q.errorCode || null : null,
         include_pending: options.includePending,
         match_count: 24,
@@ -110,7 +109,7 @@ async function retrieve(q: EvidenceQuery): Promise<KnowledgeRetrieval> {
     };
 
     const approved = dedupe(
-      (await rpc({ includePending: false, model: true, errorCode: true, brand: true }))
+      (await rpc({ includePending: false, errorCode: true, brand: true }))
         .filter((hit) => hit.review_status === "approved")
         .map((hit) => ({ ...hit, retrievalStage: 1 as const })),
     ).slice(0, 12);
@@ -121,9 +120,9 @@ async function retrieve(q: EvidenceQuery): Promise<KnowledgeRetrieval> {
     if (!stage1Sufficient) {
       const combined = [...approved];
       const stages = [
-        { includePending: true, model: true, errorCode: true, brand: true },
-        { includePending: true, model: false, errorCode: false, brand: true },
-        { includePending: true, model: false, errorCode: false, brand: false },
+        { includePending: true, errorCode: true, brand: true },
+        { includePending: true, errorCode: false, brand: true },
+        { includePending: true, errorCode: false, brand: false },
       ];
       for (const stage of stages) {
         if (combined.length >= 6) break;
