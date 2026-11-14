@@ -14,6 +14,14 @@ describe("knowledge AI review state", () => {
     }
   });
 
+  test("rejection demotes AI authority while preserving human authority", () => {
+    expect(clampAuthorityForOrigin("ai_extraction", "ai_extracted_pending_review")).toBe(
+      "ai_extracted_pending_review",
+    );
+    expect(clampAuthorityForOrigin("ai_inference", "ai_extracted_pending_review")).toBe("ai_inference");
+    expect(clampAuthorityForOrigin("human", "reviewed_normalized")).toBe("reviewed_normalized");
+  });
+
   test("every built AI fact row requires review regardless of authority or confidence", () => {
     for (const origin of AI_ORIGINS) {
       for (const requested of SOURCE_AUTHORITIES) {

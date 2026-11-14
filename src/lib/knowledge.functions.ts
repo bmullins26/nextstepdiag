@@ -376,6 +376,8 @@ export const reviewKnowledgeFact = createServerFn({ method: "POST" })
         .update({ needs_review: false, source_authority: "reviewed_normalized" })
         .eq("fact_id", data.factId);
     } else {
+      const { clampAuthorityForOrigin } = await import("@/lib/knowledge/pipeline.server");
+      const origin = (before as any).origin;
       await supabaseAdmin
         .from("knowledge_facts")
         .update({
@@ -383,6 +385,11 @@ export const reviewKnowledgeFact = createServerFn({ method: "POST" })
           needs_review: true,
           reviewed_by: context.userId,
           reviewed_at: new Date().toISOString(),
+          ...(origin === "human"
+            ? {}
+            : {
+                source_authority: clampAuthorityForOrigin(origin, "ai_extracted_pending_review"),
+              }),
         })
         .eq("id", data.factId);
       await supabaseAdmin.from("knowledge_chunks").delete().eq("fact_id", data.factId);
