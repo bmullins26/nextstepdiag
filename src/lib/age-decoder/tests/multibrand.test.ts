@@ -4,7 +4,7 @@ const now = new Date("2026-06-01");
 
 test("Bradford White lists every recycled year", () => {
   const r = decodeAge({ brand: "Bradford White", serial: "KA1234567", now });
-  expect(r.status).toBe("ok");
+  expect(r.status).toBe("ambiguous");
   const years = r.candidates.map((c) => c.year).sort();
   expect(years).toEqual([1973, 1993, 2013]);
 });
@@ -19,7 +19,8 @@ test("Carrier WWYY", () => {
 });
 test("Kenmore 796 routes to LG", () => {
   const r = decodeAge({ brand: "Kenmore", model: "796.41272900", serial: "309KWAA12345", now });
-  expect(r.status).toBe("ok");
+  expect(r.status).toBe("ambiguous");
+  expect(r.appliedRule?.family).toBe("LG");
 });
 
 // Real-world audit samples (Nov 2026).
@@ -34,38 +35,43 @@ test("Samsung dryer 0AYD5BBR500025Y → May 2021", () => {
 });
 test("Frigidaire inferred from FFGF model, VF34007940 → 2023", () => {
   const r = decodeAge({ brand: "", model: "FFGF3054TBJ", serial: "VF34007940", now });
-  expect(r.status === "ok" && r.manufactureYear).toBe(2023);
-  expect(r.candidates.map((c) => c.year)).toContain(2013);
+  expect(r.status).toBe("ambiguous");
+  expect(r.candidates.map((c) => c.year)).toEqual(expect.arrayContaining([2023, 2013]));
 });
-test("LG 112TNUW1W694 → Dec 2021, not 2011", () => {
-  const r = pick(decodeAge({ brand: "LG", model: "WT7150CW", serial: "112TNUW1W694", now }));
-  expect(r?.y).toBe(2021); expect(r?.m).toBe(12);
+test("LG 112TNUW1W694 → Dec 2021 or 2011 (no recency pick)", () => {
+  const r = decodeAge({ brand: "LG", model: "WT7150CW", serial: "112TNUW1W694", now });
+  expect(r.status).toBe("ambiguous");
+  expect(r.candidates.every((c) => c.month === 12)).toBe(true);
+  expect(r.candidates.map((c) => c.year)).toEqual(expect.arrayContaining([2021, 2011]));
 });
 test("GE MZ460306 → July, 2024 or 2012", () => {
-  const r = pick(decodeAge({ brand: "GE", model: "GSS25IYNZHFS", serial: "MZ460306", now }));
-  expect(r?.m).toBe(7); expect(r?.all).toEqual(expect.arrayContaining([2024, 2012]));
+  const r = decodeAge({ brand: "GE", model: "GSS25IYNZHFS", serial: "MZ460306", now });
+  expect(r.status).toBe("ambiguous");
+  expect(r.candidates.every((c) => c.month === 7)).toBe(true);
+  expect(r.candidates.map((c) => c.year)).toEqual(expect.arrayContaining([2024, 2012]));
 });
-test("GE AS321543N → January 2021", () => {
-  const r = pick(decodeAge({ brand: "GE", model: "GFW650SSN1WW", serial: "AS321543N", now }));
-  expect(r?.y).toBe(2021); expect(r?.m).toBe(1);
+test("GE AS321543N → January, 2021 among candidates", () => {
+  const r = decodeAge({ brand: "GE", model: "GFW650SSN1WW", serial: "AS321543N", now });
+  expect(r.status).toBe("ambiguous");
+  expect(r.candidates.some((c) => c.year === 2021 && c.month === 1)).toBe(true);
 });
 // Nov 2026 accuracy pass — Fisher & Paykel, Dacor, Sub-Zero/Wolf timelines.
 import { staticModelWindow } from "../oem-timelines";
 test("Fisher & Paykel AD852242C → year ending 8, no guessed month", () => {
   const r = decodeAge({ brand: "Fisher & Paykel", model: "DE7027J1US0", serial: "AD852242C", now });
-  expect(r.status).toBe("ok");
+  expect(r.status).toBe("ambiguous");
   const years = r.candidates.map((c) => c.year).sort();
   expect(years).toEqual([1998, 2008, 2018]);
-  expect(r.status === "ok" && r.manufactureMonth).toBe(null);
+  expect(r.candidates.every((c) => c.month == null)).toBe(true);
 });
 test("Fisher & Paykel decade narrowed by production window", () => {
   const r = decodeAge({ brand: "Fisher & Paykel", serial: "AD852242C", now,
     modelWindow: { modelPrefix: "DE7027", introducedYear: 2015, discontinuedYear: null } });
-  expect(r.candidates.map((c) => c.year)).toEqual([2018]);
+  expect(r.status === "ok" && r.manufactureYear).toBe(2018);
 });
 test("Fisher & Paykel model prefix inferred when brand blank", () => {
   const r = decodeAge({ brand: "", model: "DE7027J1US0", serial: "AD852242C", now });
-  expect(r.status).toBe("ok");
+  expect(r.status).toBe("ambiguous");
 });
 test("Dacor FB08040263 → 2008 week 4", () => {
   const r = decodeAge({ brand: "Dacor", serial: "FB08040263", now });

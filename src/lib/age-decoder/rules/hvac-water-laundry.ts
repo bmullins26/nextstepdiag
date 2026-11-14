@@ -40,7 +40,31 @@ function yyLeading(opts: {
   };
 }
 
+/**
+ * Speed Queen / Alliance commercial: 2nd-to-last letter = year, last = month.
+ * Source: https://docs.alliancelaundry.com/tech_pdf/prodinfo/D2288en.pdf
+ * Letters outside the published table are NOT extrapolated.
+ */
+const ALLIANCE_YEAR: Record<string, number> = { P: 2009, R: 2010, T: 2011, V: 2012, X: 2013, B: 2014, D: 2015, F: 2016, H: 2017, K: 2018, M: 2019, Q: 2020 };
+const ALLIANCE_MONTH: Record<string, number> = {
+  A: 1, B: 1, C: 2, D: 2, E: 3, F: 3, G: 4, H: 4, J: 5, K: 5, L: 6, M: 6,
+  N: 7, Q: 7, P: 8, S: 8, R: 9, U: 9, T: 10, W: 10, V: 11, Y: 11, X: 12, Z: 12,
+};
+const allianceCommercial: Rule = {
+  id: "alliance.commercial-year-month-letters", formatId: "alliance.commercial-year-month-letters",
+  name: "Alliance Laundry Commercial Year/Month Letters", family: "Alliance Laundry",
+  pattern: /^[0-9A-Z]{6,}\d[A-Z]{2}$/, weight: 0.9, priority: 85, effectiveFrom: 2009, effectiveTo: 2020,
+  extract: (s) => {
+    const year = ALLIANCE_YEAR[s[s.length - 2] ?? ""];
+    const month = ALLIANCE_MONTH[s[s.length - 1] ?? ""];
+    return year && month ? [{ year, month }] : [];
+  },
+  noDateMessage: "Format recognized, year not in the published table — read the date on the plate.",
+  explain: (s, c) => `Alliance commercial: year letter '${s[s.length - 2]}' → ${c.year}, month letter '${s[s.length - 1]}' → ${c.month}.`,
+};
+
 export const allianceRules: Rule[] = [
+  allianceCommercial,
   yyLeading({ id: "alliance.yymm", name: "Alliance Laundry YYMM Decoder", family: "Alliance Laundry", second: "month", pattern: /^\d{8,}/, weight: 0.85 }),
 ];
 

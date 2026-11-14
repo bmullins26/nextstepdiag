@@ -102,28 +102,8 @@ export function validateCandidate(
   }
   checks.push({ label: "Within format's era", passed: true });
 
-  // 7. Within the model's production window.
-  const w = ctx.modelWindow;
-  if (w) {
-    if (w.introducedYear != null && c.year < w.introducedYear) {
-      return fail(
-        "outside_model_window",
-        `Model series was introduced in ${w.introducedYear}; ${c.year} is impossible.`,
-      );
-    }
-    // Appliances ship for a while after a series is discontinued — allow +1yr.
-    if (w.discontinuedYear != null && c.year > w.discontinuedYear + 1) {
-      return fail(
-        "outside_model_window",
-        `Model series was discontinued in ${w.discontinuedYear}; ${c.year} is implausible.`,
-      );
-    }
-    checks.push({
-      label: "Within model production window",
-      passed: true,
-      detail: `${w.modelPrefix}: ${w.introducedYear ?? "?"}–${w.discontinuedYear ?? "current"}`,
-    });
-  }
+  // Production windows no longer reject candidates here; they narrow only
+  // in select.ts when candidates are ≥5 years apart.
 
   return { ok: true, checks };
 }

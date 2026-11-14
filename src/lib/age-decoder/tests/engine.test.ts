@@ -49,17 +49,6 @@ describe("validation layer", () => {
     if (!r.ok) expect(r.rejection.reason).toBe("outside_rule_effective_range");
   });
 
-  test("rejects years outside the model production window", () => {
-    const modelWindow: ModelWindow = {
-      modelPrefix: "XYZ",
-      introducedYear: 2021,
-      discontinuedYear: null,
-    };
-    const r = validateCandidate({ year: 2003, score: 1 }, { ...base, modelWindow });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.rejection.reason).toBe("outside_model_window");
-  });
-
   test("accepts a plausible date", () => {
     expect(validateCandidate({ year: 2019, month: 10, week: 42, score: 1 }, base).ok).toBe(true);
   });
@@ -75,62 +64,28 @@ describe("declarative rule compiler", () => {
   });
 });
 
-describe("decode engine explainability + cross-validation", () => {
-  test("returns steps, validation and a confidence breakdown", () => {
-    const out = decodeAge({
-      brand: "Whirlpool",
-      model: "WDT750SAKZ0",
-      serial: "CC1212345",
-      now: NOW,
-    });
+describe("decode engine explainability + strict order", () => {
+  test("returns steps and validation for a single-candidate decode", () => {
+    const out = decodeAge({ brand: "Samsung", serial: "0ARV5BBJ400798K", now: NOW });
     expect(out.status).toBe("ok");
     if (out.status !== "ok") return;
     expect(out.steps.length).toBeGreaterThan(0);
     expect(out.validation.every((v) => v.passed)).toBe(true);
-    expect(out.confidenceBreakdown.percent).toBe(out.confidencePercent);
     expect(out.attemptedRules.length).toBeGreaterThan(0);
   });
 
-  test("model production window rejects impossible candidates", () => {
-    const out = decodeAge({
-      brand: "Whirlpool",
-      model: "WDT750SAKZ0",
-      serial: "CF2328200",
-      now: NOW,
-      modelWindow: { modelPrefix: "WDT750", introducedYear: 2015, discontinuedYear: null },
-    });
-    expect(out.status).toBe("ok");
-    if (out.status !== "ok") return;
-    expect(out.manufactureYear).toBeGreaterThanOrEqual(2015);
-    expect(out.rejected.some((r) => r.reason === "outside_model_window")).toBe(true);
+  test("an external year cross-check no longer picks between cycles", () => {
+    const out = decodeAge({ brand: "LG", model: "WM0642HW/02", serial: "909KWAT04496", now: NOW, crossChecks: { apiYear: 2009 } });
+    expect(out.status).toBe("ambiguous");
   });
 
-  test("agreement with an external source raises confidence", () => {
-    const args = { brand: "LG", model: "WM0642HW/02", serial: "909KWAT04496", now: NOW };
-    const plain = decodeAge(args);
-    const crossed = decodeAge({ ...args, crossChecks: { apiYear: 2009 } });
-    expect(crossed.status).toBe("ok");
-    if (crossed.status !== "ok" || plain.status !== "ok") return;
-    expect(crossed.manufactureYear).toBe(2009);
-    expect(crossed.confidencePercent).toBeGreaterThan(plain.confidencePercent);
-  });
-
-  test("technician confirmations are reflected as community verification", () => {
-    const out = decodeAge({
-      brand: "Whirlpool",
-      model: "WDT750SAKZ0",
-      serial: "CF2328200",
-      now: NOW,
-      crossChecks: { confirmedYear: 2005, communityConfirmations: 3 },
-    });
-    expect(out.status).toBe("ok");
-    if (out.status !== "ok") return;
-    expect(out.manufactureYear).toBe(2005);
-    expect(out.confidenceBreakdown.points.some((p) => p.label === "Community verified")).toBe(true);
+  test("same-serial community confirmations add no bonus", () => {
+    const out = decodeAge({ brand: "Whirlpool", serial: "CF2328200", now: NOW, crossChecks: { confirmedYear: 2005, communityConfirmations: 3 } });
+    expect(out.status).toBe("ambiguous");
   });
 
   test("never returns a future manufacture year", () => {
-    const out = decodeAge({ brand: "Frigidaire", serial: "29151234567", now: NOW });
-    if (out.status === "ok") expect(out.manufactureYear).toBeLessThanOrEqual(2026);
+    const out = decodeAge({ brand: "Whirlpool", serial: "M92510000", now: NOW });
+    expect(out.candidates.every((c) => c.year <= 2026)).toBe(true);
   });
 });

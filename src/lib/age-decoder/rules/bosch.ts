@@ -15,9 +15,11 @@ const bschFD: Rule = {
     if (!m) return [];
     const yy = parseInt(m[1], 10);
     const mm = parseInt(m[2], 10);
-    const year = 1920 + yy;
+    // FD: 00–59 → 2020+YY, 60–99 → 1920+YY (FD0103 = Mar 2021, FD9405 = May 2014).
+    // Sources: https://www.bsh-russia.ru/servis/fd-nomer , https://appliage.com/bosch-serial-number-lookup/
+    const year = yy <= 59 ? 2020 + yy : 1920 + yy;
     const month = mm >= 1 && mm <= 12 ? mm : undefined;
-    return [{ year, month, score: 0.95 }];
+    return [{ year, month }];
   },
   explain: (_serial, c) =>
     `BSH FD code: year=${c.year}${c.month ? `, month=${c.month}` : ""}.`,

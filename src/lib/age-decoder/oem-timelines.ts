@@ -7,6 +7,15 @@ import { SUBZERO_WOLF_TIMELINE } from "./data/subzero-wolf-timeline";
 
 const norm = (s: string) => (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
+/**
+ * Narrowing source: official Sub-Zero Group model-number timelines. Row-level
+ * citations live in data/subzero-wolf-timeline.ts (SUBZERO_WOLF_SOURCES).
+ * Index pages:
+ *   https://www.subzero-wolf.com/assistance/answers/sub-zero/common/sub-zero-model-number-timeline
+ *   https://www.subzero-wolf.com/assistance/answers/wolf/common/wolf-model-number-timeline
+ * Treated like an owner window: first/last bound candidates (last = null →
+ * current production), same ≥5-year-gap rule in select.ts.
+ */
 export function staticModelWindow(brand: string, model?: string | null): ModelWindow | null {
   const m = norm(model ?? "");
   if (!m || resolveBrand(brand) !== "subzero") return null;
@@ -22,5 +31,6 @@ export function staticModelWindow(brand: string, model?: string | null): ModelWi
     introducedYear: best.first,
     discontinuedYear: best.last,
     replacementSeries: `${best.series} — official Sub-Zero Group timeline`,
+    kind: "oem_timeline",
   };
 }

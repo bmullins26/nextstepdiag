@@ -21,3 +21,27 @@ export function completedYears(startIso: string, now: Date): number {
   if (now.getUTCMonth() < s.getUTCMonth() || (now.getUTCMonth() === s.getUTCMonth() && now.getUTCDate() < s.getUTCDate())) y--;
   return Math.max(0, y);
 }
+
+/**
+ * Technician-facing age text. Always floored.
+ *   month or week known → "X yr"; year only → "X–Y yr"; ambiguous → null.
+ */
+export function formatAge(
+  d: { year: number; month?: number | null; week?: number | null } | null | undefined,
+  now: Date,
+  ambiguous = false,
+): string | null {
+  if (!d || ambiguous) return null;
+  if (d.week != null || d.month != null) {
+    const r = manufactureRange(d.year, d.month ?? null, d.week ?? null);
+    return `${completedYears(r.start, now)} yr`;
+  }
+  const lo = completedYears(`${d.year}-12-31`, now);
+  const hi = completedYears(`${d.year}-01-01`, now);
+  return lo === hi ? `${lo} yr` : `${lo}–${hi} yr`;
+}
+
+/** Stored age (e.g. history rows) displayed as whole years, floored. */
+export function formatStoredAge(ageYears: number | null | undefined): string | null {
+  return ageYears == null || !Number.isFinite(ageYears) ? null : `${Math.max(0, Math.floor(ageYears))} yr`;
+}

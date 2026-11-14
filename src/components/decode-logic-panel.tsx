@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export type DecodeLogic = {
-  status: "ok" | "unknown";
+  status: "ok" | "ambiguous" | "unknown";
   ruleId: string | null;
   ruleName: string | null;
   steps: Array<{ label: string; value: string; detail?: string }>;

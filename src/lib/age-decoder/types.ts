@@ -9,7 +9,29 @@ export type UnknownReason =
   | "missing_date_code"
   | "ambiguous_year_cycle"
   | "insufficient_information"
-  | "low_confidence";
+  | "low_confidence"
+  | "year_not_in_table"
+  | "kenmore_prefix_needed"
+  | "no_candidate_fits";
+
+/** Internal provenance of the chosen date. Never shown to technicians. */
+export type DateSource = "plate_printed" | "plate_printed_prior" | "factory_record" | "serial" | "tech_picked";
+
+export type YearMonth = { year: number; month?: number | null };
+
+/** Evidence the server collects; decodeAge applies it in strict order. */
+export type DecodeEvidence = {
+  /** Date printed on the plate that the tech typed/confirmed now. */
+  plateDate?: YearMonth | null;
+  /** Earlier data-plate reports for this exact brand + serial. */
+  priorPlate?: YearMonth[];
+  /** Manufacturer build date (ServiceBench manufacturedDate only). */
+  factory?: YearMonth | null;
+  /** Shipped date: an upper bound only, never a build date. */
+  shippedBy?: YearMonth | null;
+  /** Receipt / invoice date: built on or before this. */
+  receiptBy?: YearMonth | null;
+};
 
 export type DateCandidate = {
   year: number;
@@ -17,6 +39,8 @@ export type DateCandidate = {
   week?: number;  // 1-53
   // Optional internal score (set by extract); higher = more likely.
   score?: number;
+  /** Which reading of the serial produced this date (for explanations). */
+  reading?: string;
   /** Evidence sources that corroborate this year (Firecrawl hits). */
   sources?: SourceHit[];
 };
@@ -115,6 +139,11 @@ export type ModelWindow = {
   introducedYear: number | null;
   discontinuedYear: number | null;
   replacementSeries?: string | null;
+  /** owner = curated range; tech_confirmed = learned from plate dates; oem_timeline = bundled official data. */
+  kind?: "owner" | "tech_confirmed" | "oem_timeline";
+  evidenceCount?: number;
+  observedMinYear?: number | null;
+  observedMaxYear?: number | null;
 };
 
 /** Cross-validation inputs supplied by the server fn (never fetched here). */
@@ -143,6 +172,12 @@ export type Rule = {
   effectiveTo?: number | null;
   /** Higher priority rules are evaluated first. Default 50. */
   priority?: number;
+  /** 0-based positions that must be digits; O→0 and I→1 are corrected only there. */
+  digitPositions?: number[];
+  /** Only applies when the raw brand (lowercased) is one of these. */
+  brandFilter?: string[];
+  /** Shown when the format matches but no date could be read from the table. */
+  noDateMessage?: string;
   extract: (serial: string, model?: string) => DateCandidate[];
   explain: (serial: string, candidate: DateCandidate) => string;
   /** Structured character-by-character derivation for the "Why?" panel. */
@@ -161,6 +196,8 @@ export type DecodeInput = {
   modelWindow?: ModelWindow | null;
   /** Optional cross-validation signals (server-fn injects these). */
   crossChecks?: CrossChecks | null;
+  /** Evidence applied in strict order (plate → factory → bounds → window). */
+  evidence?: DecodeEvidence | null;
 };
 
 export type DecodeOk = {
@@ -180,6 +217,26 @@ export type DecodeOk = {
   validation: ValidationCheck[];
   confidenceBreakdown: ConfidenceBreakdown;
   attemptedRules: { id: string; name: string; matched: boolean; reason?: string }[];
+  /** Internal provenance of the chosen date. */
+  dateSource: DateSource;
+  normalizedSerial: string;
+};
+
+/** More than one date remains: never pick one. */
+export type DecodeAmbiguous = {
+  status: "ambiguous";
+  appliedRule: AppliedRule | null;
+  confidence: "Unknown";
+  confidencePercent: number;
+  breakdown: string;
+  candidates: DateCandidate[];
+  corroboration: Corroboration | null;
+  steps: DecodeStep[];
+  rejected: RejectedCandidate[];
+  validation: ValidationCheck[];
+  confidenceBreakdown: ConfidenceBreakdown | null;
+  attemptedRules: { id: string; name: string; matched: boolean; reason?: string }[];
+  normalizedSerial: string;
 };
 
 export type DecodeUnknown = {
@@ -196,6 +253,7 @@ export type DecodeUnknown = {
   validation: ValidationCheck[];
   confidenceBreakdown: ConfidenceBreakdown | null;
   attemptedRules: { id: string; name: string; matched: boolean; reason?: string }[];
+  normalizedSerial?: string;
 };
 
-export type DecodeOutcome = DecodeOk | DecodeUnknown;
+export type DecodeOutcome = DecodeOk | DecodeAmbiguous | DecodeUnknown;

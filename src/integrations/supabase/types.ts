@@ -1821,39 +1821,51 @@ export type Database = {
       model_production_windows: {
         Row: {
           brand: string | null
+          brand_key: string | null
           created_at: string
           created_by: string | null
           discontinued_year: number | null
+          evidence_count: number
           id: string
           introduced_year: number | null
           manufacturer: string
           model_prefix: string
+          observed_max_year: number | null
+          observed_min_year: number | null
           replacement_series: string | null
           source: string | null
           updated_at: string
         }
         Insert: {
           brand?: string | null
+          brand_key?: string | null
           created_at?: string
           created_by?: string | null
           discontinued_year?: number | null
+          evidence_count?: number
           id?: string
           introduced_year?: number | null
           manufacturer: string
           model_prefix: string
+          observed_max_year?: number | null
+          observed_min_year?: number | null
           replacement_series?: string | null
           source?: string | null
           updated_at?: string
         }
         Update: {
           brand?: string | null
+          brand_key?: string | null
           created_at?: string
           created_by?: string | null
           discontinued_year?: number | null
+          evidence_count?: number
           id?: string
           introduced_year?: number | null
           manufacturer?: string
           model_prefix?: string
+          observed_max_year?: number | null
+          observed_min_year?: number | null
           replacement_series?: string | null
           source?: string | null
           updated_at?: string

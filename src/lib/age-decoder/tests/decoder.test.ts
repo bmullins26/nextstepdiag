@@ -1,42 +1,45 @@
 import { test, expect, describe } from "bun:test";
 import { decodeAge } from "../decode";
-import { fixtures } from "./fixtures";
+import { fixtures, NOW } from "./fixtures";
 
-describe("age decoder (deterministic, no AI)", () => {
+describe("age decoder fixtures (AF-1)", () => {
   for (const f of fixtures) {
     test(f.label, () => {
-      const out = decodeAge({ brand: f.brand, model: f.model, serial: f.serial, now: f.now });
+      const out = decodeAge({ brand: f.brand, model: f.model, serial: f.serial, now: NOW });
       expect(out.status).toBe(f.expect.status);
-      if (f.expect.status === "ok" && out.status === "ok") {
-        if (f.expect.year != null) expect(out.manufactureYear).toBe(f.expect.year);
-        if (f.expect.month != null) expect(out.manufactureMonth).toBe(f.expect.month);
-        if (f.expect.week != null) expect(out.manufactureWeek).toBe(f.expect.week);
-        if (f.expect.confidence) expect(out.confidence).toBe(f.expect.confidence);
-        if (f.expect.ruleId) expect(out.appliedRule.id).toBe(f.expect.ruleId);
-        expect(out.ageYears).toBeGreaterThanOrEqual(0);
-        expect(Number.isFinite(out.ageYears)).toBe(true);
+      const e = f.expect;
+      if (e.status === "ok" && out.status === "ok") {
+        expect(out.manufactureYear).toBe(e.year);
+        if (e.month != null) expect(out.manufactureMonth).toBe(e.month);
+        if (e.week != null) expect(out.manufactureWeek).toBe(e.week);
       }
-      if (f.expect.status === "unknown" && out.status === "unknown") {
-        if (f.expect.unknownReason) expect(out.unknownReason).toBe(f.expect.unknownReason);
+      if (e.status === "ambiguous" && out.status === "ambiguous") {
+        const years = [...new Set(out.candidates.map((c) => c.year))];
+        if (e.first != null) expect(out.candidates[0]!.year).toBe(e.first);
+        if (e.years) expect(years.slice().sort()).toEqual(e.years.slice().sort());
+        for (const x of e.excludes ?? []) expect(years).not.toContain(x);
+        if (e.week != null) expect(out.candidates.every((c) => c.week === e.week)).toBe(true);
+        for (const inc of e.includes ?? []) {
+          expect(out.candidates.some((c) => c.year === inc.year && (inc.month == null || c.month === inc.month) && (inc.week == null || c.week === inc.week))).toBe(true);
+        }
+        // Ambiguous never carries a chosen year or age.
+        expect((out as Record<string, unknown>).manufactureYear).toBeUndefined();
+        expect((out as Record<string, unknown>).ageYears).toBeUndefined();
+      }
+      if (e.status === "unknown" && out.status === "unknown" && e.unknownReason) {
+        expect(out.unknownReason).toBe(e.unknownReason);
       }
     });
   }
 
   test("decodeAge is pure (same input → same output)", () => {
-    const a = decodeAge({ brand: "Frigidaire", serial: "24151234567", now: new Date("2026-06-01") });
-    const b = decodeAge({ brand: "Frigidaire", serial: "24151234567", now: new Date("2026-06-01") });
+    const a = decodeAge({ brand: "Whirlpool", serial: "CR2512345", now: NOW });
+    const b = decodeAge({ brand: "Whirlpool", serial: "CR2512345", now: NOW });
     expect(a).toEqual(b);
   });
-});
-import { reconcileAge } from "../../age-verify/reconcile.server";
-test("Maytag CF0104204 reconciles to 2026, not stacked 2020 alternates", () => {
-  const local = decodeAge({ brand: "Maytag", model: "MTW6205RW1", serial: "CF0104204" });
-  const r = reconcileAge({ api: null, apiOk: false, local, corroboration: null });
-  expect(r.bestYear).toBe(2026);
-});
-test("factory record locks the year", () => {
-  const local = decodeAge({ brand: "Maytag", model: "MTW6205RW1", serial: "CF0104204" });
-  const r = reconcileAge({ api: null, apiOk: false, local, corroboration: null, factory: { year: 2026, month: 1 } });
-  expect(r.bestYear).toBe(2026);
-  expect(r.bestMonth).toBe(1);
+
+  test("a reading with an invalid week drops out (MX06404786 source-letter reading has week 64)", () => {
+    const out = decodeAge({ brand: "Whirlpool", serial: "MX06404786", now: NOW });
+    expect(out.candidates.every((c) => c.week === 6)).toBe(true);
+  });
 });

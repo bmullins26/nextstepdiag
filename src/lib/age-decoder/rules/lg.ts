@@ -1,40 +1,5 @@
 import type { Rule, DateCandidate } from "../types";
 
-const MONTH_MAP: Record<string, number> = {
-  "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9,
-  A: 10, B: 11, C: 12,
-};
-
-/**
- * LG modern (post-2010): serial begins YY + M  (M = 1-9 or A,B,C for Oct/Nov/Dec).
- * Example: "24C..." → Dec 2024.
- */
-const lgYYM: Rule = {
-  id: "lg.yym",
-  formatId: "lg.yym",
-  effectiveFrom: 2010,
-  effectiveTo: null,
-  priority: 85,
-  name: "LG YY+M Decoder (modern)",
-  family: "LG",
-  // Skip 12-char Y+MM+plant serials (e.g. 112TNU…) — those are lg.ymm-plant.
-  pattern: /^(?!\d(0[1-9]|1[0-2])[A-Z]{3})\d{2}[0-9ABC]/,
-  weight: 0.85,
-  extract: (serial) => {
-    const s = serial.toUpperCase();
-    const yy = parseInt(s.slice(0, 2), 10);
-    const mCh = s[2] ?? "";
-    const month = MONTH_MAP[mCh];
-    if (!Number.isFinite(yy) || !month) return [];
-    const nowYY = new Date().getFullYear() % 100;
-    // Only return candidate when YY plausibly maps to 2000+ (modern era).
-    if (yy > nowYY + 1) return [];
-    return [{ year: 2000 + yy, month, score: 0.8 }];
-  },
-  explain: (serial, c) =>
-    `LG modern: YY='${serial.slice(0, 2)}' → ${c.year}, month code '${serial[2]}' → ${c.month}.`,
-};
-
 /**
  * LG legacy (1990s–2010s): serial begins Y + MM  (Y = last digit of year, MM = 2-digit month).
  * Example: "909..." → year ending in 9, month 09 → 1999 / 2009 / 2019 candidates.
@@ -50,7 +15,8 @@ const lgYMM: Rule = {
   family: "LG",
   // Y digit, then MM 01-12. Avoid matching things that are also valid YY+M
   // (we'll dedupe by best score later).
-  pattern: /^\d(0[1-9]|1[0-2])/,
+  pattern: /^(?!\d(0[1-9]|1[0-2])[A-Z]{3})\d(0[1-9]|1[0-2])/,
+  digitPositions: [0, 1, 2],
   weight: 0.70,
   extract: (serial) => {
     const s = serial.toUpperCase();
@@ -64,16 +30,13 @@ const lgYMM: Rule = {
     for (let base = 1990; base <= now; base += 10) {
       const year = base + yDigit;
       if (year >= 1990 && year <= now + 1) {
-        // Recency-weighted: most recent gets higher score.
-        const yearsAgo = now - year;
-        const score = Math.max(0.15, 0.55 - yearsAgo * 0.015);
-        out.push({ year, month: mm, score });
+        out.push({ year, month: mm });
       }
     }
     return out;
   },
   explain: (serial, c) =>
-    `LG legacy: year-digit '${serial[0]}' + MM '${serial.slice(1, 3)}' → ${c.month}/${c.year} (decade chosen by recency + model corroboration).`,
+    `LG legacy: year-digit '${serial[0]}' + MM '${serial.slice(1, 3)}' → ${c.month}/${c.year} (year digit repeats every 10 years).`,
 };
 
 /**
@@ -89,6 +52,7 @@ const lgYMMPlant: Rule = {
   name: "LG Y+MM+Plant Decoder",
   family: "LG",
   pattern: /^\d(0[1-9]|1[0-2])[A-Z]{3}/,
+  digitPositions: [0, 1, 2],
   weight: 0.85,
   extract: (serial) => {
     const s = serial.toUpperCase();
@@ -97,7 +61,7 @@ const lgYMMPlant: Rule = {
     const now = new Date().getFullYear();
     const out: DateCandidate[] = [];
     for (let y = Math.floor(now / 10) * 10 + d; y >= 2000; y -= 10) {
-      if (y <= now + 1) out.push({ year: y, month: mm, score: Math.max(0.15, 0.6 - out.length * 0.2) });
+      if (y <= now + 1) out.push({ year: y, month: mm });
     }
     return out.slice(0, 3);
   },
@@ -105,5 +69,6 @@ const lgYMMPlant: Rule = {
     `LG: year digit '${serial[0]}' → ${c.year}, month '${serial.slice(1, 3)}' → ${c.month}, plant '${serial.slice(3, 6)}'. Year digit repeats every 10 years.`,
 };
 
-// Order matters: modern format first (single candidate, higher weight).
-export const lgRules: Rule[] = [lgYMMPlant, lgYYM, lgYMM];
+// LG documents: first digit = year, next two = month. (The unsourced YY+M
+// rule was removed.)
+export const lgRules: Rule[] = [lgYMMPlant, lgYMM];

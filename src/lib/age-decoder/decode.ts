@@ -9,45 +9,62 @@ import type {
   Corroboration,
   UnknownReason,
   ValidationCheck,
+  ConfidenceBreakdown,
+  DateSource,
 } from "./types";
-import { resolveBrand, inferBrandFromModel, rulesForBrand } from "./registry";
-import { computeAgeYears, applyCorroboration } from "./scoring";
+import { canonicalBrandKey, isKenmore, rulesForBrand } from "./registry";
+import { computeAgeYears } from "./scoring";
 import { validateCandidate } from "./validate";
-import { computeConfidence } from "./confidence";
+import { selectDate } from "./select";
 
-function normalizeSerial(s: string): string {
-  return s.trim().toUpperCase().replace(/\s+/g, "");
+/** Uppercase; strip spaces, dashes and dots. */
+export function normalizeSerial(s: string): string {
+  return (s || "").toUpperCase().replace(/[\s.\-]+/g, "");
 }
 
-const EMPTY_CORROBORATION: Corroboration = {
-  used: false,
-  cached: false,
-  hits: [],
-  yearBoosts: {},
+/** Map O→0 and I→1 only in positions a rule requires to be digits. */
+export function correctDigitPositions(serial: string, positions?: number[]): string {
+  if (!positions?.length) return serial;
+  const a = serial.split("");
+  for (const p of positions) {
+    if (a[p] === "O") a[p] = "0";
+    else if (a[p] === "I") a[p] = "1";
+  }
+  return a.join("");
+}
+
+const EMPTY_CORROBORATION: Corroboration = { used: false, cached: false, hits: [], yearBoosts: {} };
+
+const SOURCE_RULE: Record<Exclude<DateSource, "serial">, AppliedRule> = {
+  plate_printed: { id: "plate.printed", name: "Date printed on plate", family: "Data plate" },
+  plate_printed_prior: { id: "plate.printed-prior", name: "Data plate (reported earlier)", family: "Data plate" },
+  factory_record: { id: "factory.record", name: "Manufacturer build record", family: "Factory record" },
+  tech_picked: { id: "tech.picked", name: "Picked by technician", family: "Technician" },
 };
 
 type AttemptedRule = { id: string; name: string; matched: boolean; reason?: string };
 
+function simpleBreakdown(percent: number, label: ConfidenceBreakdown["label"]): ConfidenceBreakdown {
+  return { points: [], earned: percent, max: 100, percent, label };
+}
+
 /** Pure deterministic age decode. No AI. No network. No DB. */
 export function decodeAge(input: DecodeInput): DecodeOutcome {
-  const brandKey = resolveBrand(input.brand) ?? inferBrandFromModel(input.model);
+  const brandKey = canonicalBrandKey(input.brand, input.model);
   const serial = normalizeSerial(input.serial || "");
-  const corroboration = input.corroboration ?? EMPTY_CORROBORATION;
   const now = input.now ?? new Date();
   const modelWindow = input.modelWindow ?? null;
-  const crossChecks = input.crossChecks ?? null;
+  const ev = input.evidence ?? null;
 
-  const unknown = (
-    reason: UnknownReason,
-    breakdown: string,
-    extra?: Partial<{
-      appliedRule: AppliedRule | null;
-      candidates: DateCandidate[];
-      rejected: RejectedCandidate[];
-      attemptedRules: AttemptedRule[];
-      validation: ValidationCheck[];
-    }>,
-  ): DecodeOutcome => ({
+  const base = {
+    corroboration: EMPTY_CORROBORATION,
+    steps: [] as DecodeStep[],
+    rejected: [] as RejectedCandidate[],
+    validation: [] as ValidationCheck[],
+    attemptedRules: [] as AttemptedRule[],
+  };
+
+  const unknown = (reason: UnknownReason, breakdown: string, extra?: Partial<typeof base> & { appliedRule?: AppliedRule | null; candidates?: DateCandidate[] }): DecodeOutcome => ({
     status: "unknown",
     appliedRule: extra?.appliedRule ?? null,
     confidence: "Unknown",
@@ -55,183 +72,168 @@ export function decodeAge(input: DecodeInput): DecodeOutcome {
     unknownReason: reason,
     breakdown,
     candidates: extra?.candidates ?? [],
-    corroboration,
+    corroboration: EMPTY_CORROBORATION,
     steps: [],
     rejected: extra?.rejected ?? [],
-    validation: extra?.validation ?? [],
+    validation: [],
     confidenceBreakdown: null,
     attemptedRules: extra?.attemptedRules ?? [],
+    normalizedSerial: serial,
   });
 
+  // Plate / prior plate / factory evidence wins even when the serial can't be decoded.
+  const evidenceOnly = () => {
+    const sel = selectDate([], ev, null, now);
+    return sel.kind === "none" ? null : sel;
+  };
+
   if (!brandKey) {
-    return unknown(
-      "unsupported_manufacturer",
-      `Manufacturer "${input.brand}" is not in the rule registry.`,
-    );
+    const sel = evidenceOnly();
+    if (sel) return finish(sel, null, [], base, serial, now);
+    if (isKenmore(input.brand)) {
+      return unknown("kenmore_prefix_needed", "Need the Kenmore model number's first 3 digits to know who built it.");
+    }
+    return unknown("unsupported_manufacturer", `"${input.brand}" isn't supported yet — read the date on the data plate.`);
   }
   if (!serial) {
+    const sel = evidenceOnly();
+    if (sel) return finish(sel, null, [], base, serial, now);
     return unknown("insufficient_information", "No serial number provided.");
   }
 
-  // Evaluate every rule for the brand, highest priority first, so historical
-  // serial formats are all considered instead of only the first match.
   const rules = rulesForBrand(input.brand, input.model)
     .slice()
     .sort((a, b) => (b.priority ?? 50) - (a.priority ?? 50));
 
-  // Brands whose serial date format isn't documented yet: say so honestly
-  // instead of telling the tech their serial is invalid.
   if (rules.length && rules.every((r) => r.weight === 0)) {
-    // A zero-weight rule's explain() carries brand-specific guidance (e.g. the
-    // manufacturer states serials have no date code). Production window, when
-    // known, is the only trustworthy age bound in that case.
+    const sel = evidenceOnly();
+    if (sel) return finish(sel, null, [], base, serial, now);
     const guidance = rules[0]!.explain(serial, { year: 0 });
-    const base = guidance && !/not yet implemented/i.test(guidance)
+    const msg = guidance && !/not yet implemented/i.test(guidance)
       ? guidance
-      : `${brandKey} serial date decoding isn't supported yet. The serial may be valid — check the data plate for a printed build date.`;
+      : `${brandKey} serial date decoding isn't supported yet. Check the data plate for a printed build date.`;
     const win = modelWindow?.introducedYear
-      ? ` Manufacturer production window for ${modelWindow.modelPrefix}${modelWindow.replacementSeries ? ` (${modelWindow.replacementSeries})` : ""}: ${modelWindow.introducedYear}–${modelWindow.discontinuedYear ?? "current"}. The unit was built within that range; the exact date is not derivable from the serial.`
+      ? ` Production years for ${modelWindow.modelPrefix}: ${modelWindow.introducedYear}–${modelWindow.discontinuedYear ?? "current"}. The exact date isn't in the serial.`
       : "";
-    return unknown("missing_date_code", base + win);
+    return unknown("missing_date_code", msg + win);
   }
 
   const attemptedRules: AttemptedRule[] = [];
   const rejected: RejectedCandidate[] = [];
-  const valid: { rule: Rule; candidate: DateCandidate; checks: ValidationCheck[] }[] = [];
+  const valid: { rule: Rule; candidate: DateCandidate; checks: ValidationCheck[]; serial: string }[] = [];
+  let noDateMessage: string | null = null;
 
   for (const rule of rules) {
-    if (!rule.pattern.test(serial)) {
-      attemptedRules.push({
-        id: rule.id,
-        name: rule.name,
-        matched: false,
-        reason: "serial did not match this format",
-      });
+    const s = correctDigitPositions(serial, rule.digitPositions);
+    if (!rule.pattern.test(s)) {
+      attemptedRules.push({ id: rule.id, name: rule.name, matched: false, reason: "serial did not match this format" });
       continue;
     }
-    const raw = rule.extract(serial, input.model);
+    const raw = rule.extract(s, input.model);
     if (!raw.length) {
-      attemptedRules.push({
-        id: rule.id,
-        name: rule.name,
-        matched: false,
-        reason: "no date code extracted",
-      });
+      if (rule.noDateMessage) noDateMessage = rule.noDateMessage;
+      attemptedRules.push({ id: rule.id, name: rule.name, matched: false, reason: "no date code extracted" });
       continue;
     }
-    const boosted = applyCorroboration(raw, corroboration);
     let survivors = 0;
-    for (const c of boosted) {
-      const res = validateCandidate(c, { rule, now, modelWindow });
+    for (const c of raw) {
+      const res = validateCandidate(c, { rule, now });
       if (res.ok) {
-        valid.push({ rule, candidate: c, checks: res.checks });
+        valid.push({ rule, candidate: c, checks: res.checks, serial: s });
         survivors++;
-      } else {
-        rejected.push(res.rejection);
-      }
+      } else rejected.push(res.rejection);
     }
-    attemptedRules.push({
-      id: rule.id,
-      name: rule.name,
-      matched: survivors > 0,
-      reason: survivors > 0 ? undefined : "all candidates failed validation",
-    });
+    attemptedRules.push({ id: rule.id, name: rule.name, matched: survivors > 0, reason: survivors > 0 ? undefined : "all candidates failed validation" });
   }
+
+  const ctx = { ...base, attemptedRules, rejected };
 
   if (!valid.length) {
-    const anyPattern = rules.some((r) => r.pattern.test(serial));
-    const reason = rejected.length
-      ? ("ambiguous_year_cycle" as const)
-      : anyPattern
-        ? ("missing_date_code" as const)
-        : ("invalid_serial_format" as const);
-    const breakdown = rejected.length
-      ? `All ${rejected.length} decoded date(s) were rejected by validation (${rejected[0]!.reason}: ${rejected[0]!.detail})`
-      : anyPattern
-        ? `Serial format matched a ${brandKey} rule but no date code was extracted.`
-        : `Serial "${serial}" did not match any ${brandKey} rule pattern.`;
-    return unknown(reason, breakdown, { rejected, attemptedRules });
+    const sel = evidenceOnly();
+    if (sel) return finish(sel, null, [], ctx, serial, now);
+    if (noDateMessage) return unknown("year_not_in_table", noDateMessage, { rejected, attemptedRules });
+    const anyPattern = rules.some((r) => r.pattern.test(correctDigitPositions(serial, r.digitPositions)));
+    if (rejected.length) {
+      return unknown("ambiguous_year_cycle", `All ${rejected.length} decoded date(s) were rejected (${rejected[0]!.reason}: ${rejected[0]!.detail})`, { rejected, attemptedRules });
+    }
+    return anyPattern
+      ? unknown("missing_date_code", `Serial format matched a ${brandKey} rule but no date code was found — read the date on the data plate.`, { rejected, attemptedRules })
+      : unknown("invalid_serial_format", "This serial format isn't supported yet — read the date on the data plate.", { rejected, attemptedRules });
   }
 
-  // Rank surviving candidates across every rule: candidate score weighted by
-  // how trustworthy the rule is, plus a nudge toward rules whose era matches.
-  const ranked = valid
-    .map((v) => {
-      const eraFit =
-        v.rule.effectiveFrom != null &&
-        v.candidate.year >= v.rule.effectiveFrom &&
-        (v.rule.effectiveTo == null || v.candidate.year <= v.rule.effectiveTo)
-          ? 0.1
-          : 0;
-      const apiMatch = crossChecks?.apiYear === v.candidate.year ? 0.4 : 0;
-      const confirmedMatch = crossChecks?.confirmedYear === v.candidate.year ? 0.8 : 0;
-      return {
-        ...v,
-        rank: (v.candidate.score ?? 0) * v.rule.weight + eraFit + apiMatch + confirmedMatch,
-      };
-    })
-    .sort((a, b) => b.rank - a.rank);
+  const sel = selectDate(valid.map((v) => v.candidate), ev, modelWindow, now);
+  if (sel.kind === "none") {
+    return unknown("no_candidate_fits", "None of the decoded dates fit the other evidence — read the date on the data plate.", {
+      rejected, attemptedRules, candidates: valid.map((v) => v.candidate),
+    });
+  }
+  return finish(sel, valid, valid.map((v) => v.candidate), ctx, valid[0]!.serial, now);
+}
 
-  const best = ranked[0]!;
-  const appliedRule = best.rule;
-  const chosen = best.candidate;
-  // Every surviving date across ALL matching rules (deduped), so reused/recycled
-  // serial codes surface every possible date instead of one silent guess.
+function finish(
+  sel: Exclude<ReturnType<typeof selectDate>, { kind: "none" }>,
+  valid: { rule: Rule; candidate: DateCandidate; checks: ValidationCheck[]; serial: string }[] | null,
+  allCandidates: DateCandidate[],
+  ctx: { corroboration: Corroboration; rejected: RejectedCandidate[]; attemptedRules: AttemptedRule[] },
+  serial: string,
+  now: Date,
+): DecodeOutcome {
   const seen = new Set<string>();
-  const candidates = ranked
-    .filter((r) => {
-      const k = `${r.candidate.year}-${r.candidate.month ?? ""}`;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    })
-    .map((r) => r.candidate);
-
-  const confidenceBreakdown = computeConfidence({
-    rule: appliedRule,
-    chosen,
-    candidates: ranked.filter((r) => r.rule.id === appliedRule.id).map((r) => r.candidate),
-    corroboration,
-    modelWindow,
-    crossChecks,
-    rejectedCount: rejected.length,
+  const uniq = (cs: DateCandidate[]) => cs.filter((c) => {
+    const k = `${c.year}-${c.month ?? ""}-${c.week ?? ""}`;
+    return seen.has(k) ? false : (seen.add(k), true);
   });
 
-  const ageYears = computeAgeYears(chosen.year, chosen.month, input.now);
-  const applied: AppliedRule = {
-    id: appliedRule.id,
-    name: appliedRule.name,
-    family: appliedRule.family,
-  };
+  if (sel.kind === "ambiguous") {
+    const first = valid?.[0]?.rule ?? null;
+    const years = [...new Set(sel.candidates.map((c) => c.year))];
+    return {
+      status: "ambiguous",
+      appliedRule: sel.source === "plate_printed_prior" ? SOURCE_RULE.plate_printed_prior : first ? { id: first.id, name: first.name, family: first.family } : null,
+      confidence: "Unknown",
+      confidencePercent: 0,
+      breakdown: sel.source === "plate_printed_prior"
+        ? `Earlier data-plate reports disagree: ${years.join(" or ")}. Check the plate.`
+        : `Built ${years.join(" or ")} — check the plate. The serial's date code repeats, so more than one date fits.`,
+      candidates: uniq(sel.candidates),
+      corroboration: ctx.corroboration,
+      steps: [],
+      rejected: ctx.rejected,
+      validation: [],
+      confidenceBreakdown: null,
+      attemptedRules: ctx.attemptedRules,
+      normalizedSerial: serial,
+    };
+  }
 
-  const steps: DecodeStep[] =
-    appliedRule.steps?.(serial, chosen) ??
-    [
-      { label: "Rule used", value: appliedRule.name, detail: appliedRule.id },
-      { label: "Serial", value: serial },
-      {
-        label: "Production date",
-        value: `${chosen.month ? `${chosen.month}/` : ""}${chosen.year}`,
-        detail: appliedRule.explain(serial, chosen),
-      },
-    ];
-
+  const chosen = sel.chosen;
+  const match = valid?.find((v) => v.candidate.year === chosen.year && (v.candidate.month ?? null) === (chosen.month ?? null) && (v.candidate.week ?? null) === (chosen.week ?? null));
+  const rule = sel.source === "serial" ? match?.rule ?? valid?.[0]?.rule ?? null : null;
+  const applied: AppliedRule = rule ? { id: rule.id, name: rule.name, family: rule.family } : SOURCE_RULE[sel.source as Exclude<DateSource, "serial">];
+  const breakdown = rule ? rule.explain(serial, chosen) : `${applied.name}: ${chosen.month ? `${chosen.month}/` : ""}${chosen.year}.`;
+  const label = sel.source === "serial" ? "Medium" : "High";
   return {
     status: "ok",
     appliedRule: applied,
     manufactureYear: chosen.year,
     manufactureMonth: chosen.month ?? null,
     manufactureWeek: chosen.week ?? null,
-    ageYears,
-    confidence: confidenceBreakdown.label,
-    confidencePercent: confidenceBreakdown.percent,
-    candidates,
-    breakdown: appliedRule.explain(serial, chosen),
-    corroboration,
-    steps,
-    rejected,
-    validation: best.checks,
-    confidenceBreakdown,
-    attemptedRules,
+    ageYears: computeAgeYears(chosen.year, chosen.month, now),
+    confidence: label,
+    confidencePercent: label === "High" ? 95 : 70,
+    candidates: uniq(allCandidates.length ? allCandidates : [chosen]),
+    breakdown,
+    corroboration: ctx.corroboration,
+    steps: rule?.steps?.(serial, chosen) ?? [
+      { label: "Rule used", value: applied.name, detail: applied.id },
+      { label: "Serial", value: serial },
+      { label: "Production date", value: `${chosen.month ? `${chosen.month}/` : ""}${chosen.year}`, detail: breakdown },
+    ],
+    rejected: ctx.rejected,
+    validation: match?.checks ?? [],
+    confidenceBreakdown: simpleBreakdown(label === "High" ? 95 : 70, label),
+    attemptedRules: ctx.attemptedRules,
+    dateSource: sel.source,
+    normalizedSerial: serial,
   };
 }

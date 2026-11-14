@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatAge, manufactureRange, completedYears } from "@/lib/age-decoder/age-math";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -28,64 +29,29 @@ export type DecodedAppliance = {
   typeSource?: "decoder" | "user_override";
   modelNumber: string;
   serialNumber: string;
-  manufactureDate: { year: number; month?: number | null; rangeStart: string; rangeEnd: string } | null;
+  manufactureDate: { year: number; month?: number | null; week?: number | null; rangeStart: string; rangeEnd: string } | null;
   ageYears: number | null;
+  /** Floored age text: "X yr", or "X–Y yr" when only the year is known. */
+  ageText?: string | null;
+  ageStatus?: "ok" | "ambiguous" | "unknown";
+  normalizedSerial?: string;
+  /** Internal: set to "tech_picked" when the tech tapped a candidate. */
+  datePickedBy?: "tech_picked" | null;
   confidence: string;
-  confidencePercent?: number;
   decodedBreakdown: string;
   ruleFamily: string;
   ruleName?: string;
   ruleBreakdown: string;
   notes: string;
   unknownReason?: string | null;
-  candidates?: Array<{ year: number; month: number | null; week: number | null; score: number; sourceCount: number }>;
-  ageProvider?: {
-    source: "appliance_age_api" | "cache" | "local_fallback";
-    cached: boolean;
-    manufactureYear: number | null;
-    manufactureMonth: number | null;
-    confidencePercent: number | null;
-    alternativeYears: Array<{ year: number; month: number | null; confidencePercent: number; fullDate: string | null }>;
-    description: string | null;
-    responseTimeMs: number;
-    error?: string | null;
-  };
-  corroboration?: {
-    used: boolean;
-    cached: boolean;
-    hitCount: number;
-    sourceTypes?: string[];
-    retailerSignal?: "discontinued" | "in_stock" | null;
-    hits: Array<{ url: string; title?: string; trust: string; sourceType?: string; year?: number; excerpt?: string }>;
-  } | null;
+  candidates?: Array<{ year: number; month: number | null; week: number | null }>;
   reconciled?: {
     bestYear: number | null;
     bestMonth: number | null;
-    confidenceLabel: "High" | "Medium" | "Low" | "Unknown";
-    confidencePercent: number;
-    agreementCount: number;
-    disagreement: boolean;
-    groundTruthLocked: boolean;
-    sources: Array<{
-      kind: string;
-      year: number;
-      month?: number | null;
-      weight: number;
-      confidence: number;
-      label: string;
-      detail?: string;
-      url?: string;
-    }>;
+    sources: Array<{ kind: string; year: number; month?: number | null; label: string; detail?: string }>;
   } | null;
   decodeLogic?: DecodeLogic | null;
   factoryRecord?: { date: string; warrantyStatus: string | null } | null;
-  apiStatus?: {
-    ok: boolean;
-    statusCode: number;
-    source: string | null;
-    error: string | null;
-    responseTimeMs: number;
-  };
 };
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -95,15 +61,21 @@ function humanReason(r: string): string {
     case "unsupported_manufacturer":
       return "we don't have a decoder for this manufacturer yet.";
     case "invalid_serial_format":
-      return "the serial number doesn't match this brand's known formats.";
+      return "this serial format isn't supported yet — read the date on the data plate.";
     case "missing_date_code":
       return "this serial doesn't contain a date code (some brands print it elsewhere on the data plate).";
     case "ambiguous_year_cycle":
-      return "the year code repeats on a cycle and we couldn't pick one confidently.";
+      return "the year code repeats and none of the dates could be used — read the date on the data plate.";
     case "insufficient_information":
       return "not enough information was provided.";
     case "low_confidence":
-      return "the serial yields multiple possible years and we couldn't corroborate one. Please read the date code from the data plate.";
+      return "more than one date fits — read the date on the data plate.";
+    case "year_not_in_table":
+      return "format recognized, year not in the published table — read the date on the plate.";
+    case "kenmore_prefix_needed":
+      return "need the Kenmore model number's first 3 digits to know who built it.";
+    case "no_candidate_fits":
+      return "none of the decoded dates fit the other information — read the date on the data plate.";
     default:
       return r;
   }
@@ -117,6 +89,8 @@ export function VerifyAppliance({
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [serial, setSerial] = useState("");
+  const [plateDate, setPlateDate] = useState("");
+  const [readOnPlate, setReadOnPlate] = useState(false);
   const [decoding, setDecoding] = useState(false);
   const [result, setResult] = useState<DecodedAppliance | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -151,7 +125,7 @@ export function VerifyAppliance({
     setTruthMonth("");
     setTruthNotes("");
     try {
-      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial.trim() || null } });
+      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial.trim() || null, plateDate: plateDate.trim() || null } });
       setResult(r as DecodedAppliance);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Decode failed.");
@@ -167,7 +141,7 @@ export function VerifyAppliance({
     }
     setDecoding(true);
     try {
-      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial.trim() || null } });
+      const r = await decode({ data: { brand, modelNumber: model, serialNumber: serial.trim() || null, plateDate: plateDate.trim() || null } });
       const decoded = r as DecodedAppliance;
       // Fast-track: identification is enough to start diagnosis even if age lookup didn't succeed.
       const ready: DecodedAppliance = {
@@ -180,6 +154,41 @@ export function VerifyAppliance({
       toast.error(e instanceof Error ? e.message : "Decode failed.");
     } finally {
       setDecoding(false);
+    }
+  }
+
+  /** Tech tapped a candidate: use it for this session (internally tech_picked). */
+  async function pickCandidate(c: { year: number; month: number | null; week: number | null }) {
+    if (!result) return;
+    const now = new Date();
+    const r = manufactureRange(c.year, c.month, c.week);
+    setResult({
+      ...result,
+      manufactureDate: { year: c.year, month: c.month ?? r.month, week: c.week, rangeStart: r.start, rangeEnd: r.end },
+      ageYears: completedYears(r.start, now),
+      ageText: formatAge({ year: c.year, month: c.month, week: c.week }, now),
+      ageStatus: "ok",
+      datePickedBy: "tech_picked",
+    });
+    // Counts toward learning only when the tech read it on the plate.
+    if (readOnPlate) {
+      try {
+        await submitTruth({
+          data: {
+            brand: result.brand,
+            modelNumber: result.modelNumber || null,
+            serial: result.serialNumber,
+            knownYear: c.year,
+            knownMonth: c.month,
+            source: "data_plate",
+            notes: "Picked from decoded dates; read on plate",
+            decoderYear: null,
+            decoderConfidence: null,
+          },
+        });
+      } catch {
+        /* non-blocking */
+      }
     }
   }
 
@@ -298,6 +307,19 @@ export function VerifyAppliance({
           </p>
         </div>
 
+        {/* Date printed on plate */}
+        <div className="space-y-1.5">
+          <Label htmlFor="plate-date" className="text-xs uppercase tracking-wide text-muted-foreground">Date printed on plate (optional)</Label>
+          <Input
+            id="plate-date"
+            value={plateDate}
+            onChange={(e) => setPlateDate(e.target.value)}
+            placeholder="2019.03, 03/2019, MFD 2019-03 or FD0103"
+            className="h-12 w-full text-base"
+          />
+          <p className="text-[11px] text-muted-foreground">If the plate shows a build date, enter it — it's used as the answer.</p>
+        </div>
+
         <div className="flex flex-col gap-2">
           <Button
             onClick={handleVerifyAndStart}
@@ -357,198 +379,52 @@ export function VerifyAppliance({
           ) : null}
           <KV k="Model" v={result.modelNumber} />
           <KV k="Serial" v={result.serialNumber} />
-          <KV
-            k="Built"
-            v={
-              result.manufactureDate?.year
-                ? `${result.manufactureDate.month ? MONTHS[result.manufactureDate.month] + " " : ""}${result.manufactureDate.year} (${result.manufactureDate.rangeStart} → ${result.manufactureDate.rangeEnd})`
-                : "Unknown"
-            }
-          />
-          <KV k="Age" v={result.ageYears != null ? `${Math.max(0, Math.floor(result.ageYears))} yr` : "Unknown"} />
-          {result.ageProvider ? (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              {result.reconciled?.groundTruthLocked ? null : result.factoryRecord ? (
-                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
-                  Whirlpool record · built {result.factoryRecord.date}
-                  {result.factoryRecord.warrantyStatus ? ` · ${result.factoryRecord.warrantyStatus}` : ""}
-                </span>
-              ) : result.manufactureDate ? (
-                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                  Decoded from serial
-                </span>
-              ) : (
-                <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Age unavailable
-                </span>
-              )}
-              {result.reconciled && result.reconciled.agreementCount >= 2 ? (
-                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                  {result.reconciled.agreementCount} sources agree
-                </span>
-              ) : null}
-              {result.reconciled?.disagreement ? (
-                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                  Sources disagree
-                </span>
-              ) : null}
-              {result.ageProvider.responseTimeMs ? (
-                <span className="text-[10px] text-muted-foreground">{result.ageProvider.responseTimeMs} ms</span>
-              ) : null}
+          {result.normalizedSerial && result.normalizedSerial !== serial.trim() ? (
+            <div className="-mt-1 text-[11px] text-muted-foreground">Read as: <span className="font-mono">{result.normalizedSerial}</span></div>
+          ) : null}
+          {result.ageStatus === "ambiguous" && !result.manufactureDate ? (
+            <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
+              <div className="text-sm font-semibold">
+                Built {Array.from(new Set((result.candidates ?? []).map((c) => c.year))).join(" or ")} — check the plate
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(result.candidates ?? []).map((c) => (
+                  <Button
+                    key={`${c.year}-${c.month ?? ""}-${c.week ?? ""}`}
+                    type="button"
+                    variant="outline"
+                    className="h-11"
+                    onClick={() => pickCandidate(c)}
+                  >
+                    {c.month ? MONTHS[c.month] + " " : ""}{c.year}{c.week ? ` (wk ${c.week})` : ""}
+                  </Button>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={readOnPlate} onChange={(e) => setReadOnPlate(e.target.checked)} className="h-4 w-4" />
+                I read this on the plate
+              </label>
             </div>
           ) : (
-            <div className="pt-1">
-              <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Age lookup skipped
-              </span>
-            </div>
+            <>
+              <KV
+                k="Built"
+                v={
+                  result.manufactureDate?.year
+                    ? `${result.manufactureDate.month ? MONTHS[result.manufactureDate.month] + " " : ""}${result.manufactureDate.year}${result.manufactureDate.week ? ` (week ${result.manufactureDate.week})` : ""}`
+                    : "Unknown"
+                }
+              />
+              <KV k="Age" v={result.ageText ?? "Unknown"} />
+            </>
           )}
-          {result.reconciled && result.reconciled.sources.length > 0 ? (
-            <details className="rounded-lg border border-border bg-background/40 p-3" open={result.reconciled.disagreement}>
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Sources ({result.reconciled.sources.length})
-              </summary>
-              <ul className="mt-2 space-y-1.5 text-xs">
-                {result.reconciled.sources
-                  .slice()
-                  .sort((a, b) => b.weight * b.confidence - a.weight * a.confidence)
-                  .map((s, i) => (
-                    <li key={i} className="flex items-start justify-between gap-2 border-b border-border/40 pb-1 last:border-b-0">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-semibold ${s.year === result.reconciled?.bestYear ? "text-primary" : "text-muted-foreground"}`}>
-                            {s.month ? MONTHS[s.month] + " " : ""}{s.year}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.label}</span>
-                        </div>
-                        {s.detail ? (
-                          <div className="truncate text-[10px] text-muted-foreground">{s.detail}</div>
-                        ) : null}
-                        {s.url ? (
-                          <a href={s.url} target="_blank" rel="noreferrer" className="break-all text-[10px] text-primary underline-offset-2 hover:underline">
-                            {s.url}
-                          </a>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-              </ul>
-            </details>
-          ) : null}
-          {result.ageProvider?.alternativeYears && result.ageProvider.alternativeYears.length > 0 ? (
-            <div className="rounded-lg border border-border bg-background/40 p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Alternative Years
-              </div>
-              <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                {result.ageProvider.alternativeYears.map((a) => (
-                  <li key={a.year} className="flex justify-between gap-2">
-                    <span>
-                      {a.month ? MONTHS[a.month] + " " : ""}
-                      {a.year}
-                    </span>
-
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {result.manufactureDate?.year && result.confidence === "Low" ? (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-              <span className="rounded-full border border-amber-400/60 bg-amber-400/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
-                Best guess
-              </span>
-              <span>
-                Multiple candidate years — confirm on the data plate if it matters.
-              </span>
+          {result.reconciled && result.reconciled.sources.length > 0 && result.ageStatus === "ok" ? (
+            <div className="text-[11px] text-muted-foreground">
+              From: {result.datePickedBy === "tech_picked" ? "Picked on site" : result.reconciled.sources[0]!.label}
             </div>
           ) : null}
           <KV k="Applied Rule" v={result.ruleName || result.ruleFamily || "—"} />
           {result.decodeLogic ? <DecodeLogicPanel logic={result.decodeLogic} /> : null}
-
-          {result.candidates && new Set(result.candidates.map((c) => c.year)).size > 1 ? (
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-              <div className="font-semibold uppercase tracking-wide">Date code repeats — all possible years</div>
-              <div className="mt-1">
-                This brand reuses serial date codes, so the same serial can match more than one year:{" "}
-                <span className="font-mono font-semibold">
-                  {Array.from(new Set(result.candidates.map((c) => c.year))).sort((a, b) => b - a).join(" · ")}
-                </span>
-                . Check the data plate, install paperwork, or model era to confirm.
-              </div>
-            </div>
-          ) : null}
-          {result.candidates && result.candidates.length > 1 ? (
-            <details open className="rounded-lg border border-border bg-background/40 p-3">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                All possible dates ({result.candidates.length})
-              </summary>
-              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                {result.candidates.map((c) => (
-                  <li key={`${c.year}-${c.month ?? ""}`} className="flex justify-between gap-2">
-                    <span>
-                      {c.month ? MONTHS[c.month] + " " : ""}
-                      {c.year}
-                      {c.week ? ` (wk ${c.week})` : ""}
-                    </span>
-                    {c.sourceCount > 0 ? (
-                      <span className="text-[10px] text-muted-foreground">{c.sourceCount} sources</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-
-          {result.corroboration?.used ? (
-            <details className="rounded-lg border border-border bg-background/40 p-3">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Evidence · {result.corroboration.hitCount} source
-                {result.corroboration.hitCount === 1 ? "" : "s"}
-                {result.corroboration.sourceTypes && result.corroboration.sourceTypes.length
-                  ? ` across ${result.corroboration.sourceTypes.join(", ")}`
-                  : ""}
-                {result.corroboration.cached ? " (cached)" : ""}
-              </summary>
-              {result.corroboration.retailerSignal ? (
-                <div className="mt-2">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                      result.corroboration.retailerSignal === "discontinued"
-                        ? "bg-amber-500/15 text-amber-300 border border-amber-500/40"
-                        : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40"
-                    }`}
-                  >
-                    {result.corroboration.retailerSignal === "discontinued"
-                      ? "Discontinued at retail"
-                      : "Still sold at retail"}
-                  </span>
-                </div>
-              ) : null}
-              <ul className="mt-2 space-y-2 text-xs">
-                {result.corroboration.hits.map((h, i) => (
-                  <li key={i} className="space-y-0.5">
-                    <a
-                      href={h.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="break-all text-primary underline-offset-2 hover:underline"
-                    >
-                      {h.title || h.url}
-                    </a>
-                    <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {h.sourceType ? (
-                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">
-                          {h.sourceType}
-                        </span>
-                      ) : null}
-                      {h.year ? <span>cites {h.year}</span> : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
 
           {result.ageYears == null && result.unknownReason ? (
             <p className="rounded-lg border border-dashed border-border bg-background/40 p-3 text-xs text-muted-foreground">
@@ -590,15 +466,10 @@ export function VerifyAppliance({
             </p>
           )}
 
-          {result.manufactureDate?.year ? (
-            <details
-              className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3"
-              open={result.confidence === "Low" || result.reconciled?.disagreement}
-            >
+          {result.manufactureDate?.year || result.ageStatus === "ambiguous" ? (
+            <details className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
               <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-amber-200">
-                {result.reconciled?.groundTruthLocked
-                  ? "Update the known year"
-                  : "Not right? Report the correct year"}
+                Not right? Report the correct year
               </summary>
               {truthSubmitted ? (
                 <p className="mt-2 text-xs text-emerald-300">

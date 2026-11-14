@@ -60,7 +60,7 @@ export function ServiceCallPipeline(p: Props) {
   }, [p.brand, p.modelNumber, p.serialNumber]);
   const ent = factory && factory !== "loading" ? factory.entitlement : null;
   // Only serial-specific fields count as verification; model-level coverage alone does not.
-  const entSerial = !!ent && !!(ent.manufacturedDate || ent.purchaseDate || ent.standard.partsExpires || ent.standard.laborExpires);
+  const entSerial = !!ent && !!(ent.manufacturedDate || ent.shippedDate || ent.purchaseDate || ent.standard.partsExpires || ent.standard.laborExpires);
   const verdict = useMemo(() => {
     const exp = ent?.standard.laborExpires || ent?.standard.partsExpires;
     if (exp && !Number.isNaN(Date.parse(exp))) return { inWarranty: Date.parse(exp) > Date.now(), estimated: false };
@@ -131,7 +131,7 @@ export function ServiceCallPipeline(p: Props) {
             </div>
             {ent.productName && <p className="text-sm font-semibold">{ent.productName}</p>}
             <div className="grid grid-cols-2 gap-2">
-              <div><div className="text-muted-foreground">Built</div><div className="font-mono">{ent.manufacturedDate ?? (p.manufactureYear ? `${p.manufactureYear} (decoded)` : "—")}</div></div>
+              <div><div className="text-muted-foreground">{!ent.manufacturedDate && ent.shippedDate ? "Shipped" : "Built"}</div><div className="font-mono">{ent.manufacturedDate ?? ent.shippedDate ?? (p.manufactureYear ? `${p.manufactureYear} (decoded)` : "—")}</div></div>
               <div><div className="text-muted-foreground">Purchased</div><div className="font-mono">{ent.purchaseDate ?? "Not on file"}</div></div>
               <div><div className="text-muted-foreground">Parts until</div><div className="font-mono">{ent.standard.partsExpires ?? (p.manufactureYear ? `~${p.manufactureYear + 1} (est.)` : "—")}</div></div>
               <div><div className="text-muted-foreground">Labor until</div><div className="font-mono">{ent.standard.laborExpires ?? (p.manufactureYear ? `~${p.manufactureYear + 1} (est.)` : "—")}</div></div>

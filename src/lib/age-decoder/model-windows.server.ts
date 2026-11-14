@@ -1,43 +1,35 @@
-// Server-side lookup of model production windows + technician cross-checks.
-import type { CrossChecks, ModelWindow } from "./types";
+// Server-side production windows + prior data-plate reports.
+// Windows are keyed by canonical registry brand key + windowModelKey(model),
+// identically on read and write. Provenance is internal only.
+import type { ModelWindow, YearMonth } from "./types";
 import { staticModelWindow } from "./oem-timelines";
+import { canonicalBrandKey, windowModelKey } from "./registry";
+import { normalizeSerial } from "./decode";
 
-function normalizeModel(model: string): string {
-  return (model || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-/**
- * Finds the most specific production window whose prefix the model starts with.
- * Falls back to null when nothing is on file (validation then skips the check).
- */
 export async function loadModelWindow(
   supabase: any,
-  manufacturer: string,
+  brand: string,
   model: string,
 ): Promise<ModelWindow | null> {
-  // Database rows (technician/owner curated) win; manufacturer-published
-  // timelines bundled with the decoder are the fallback.
-  const fromDb = await loadDbModelWindow(supabase, manufacturer, model);
-  return fromDb ?? staticModelWindow(manufacturer, model);
+  const brandKey = canonicalBrandKey(brand, model);
+  if (!brandKey) return null; // e.g. unknown Kenmore prefix: no window read
+  const fromDb = await loadDbModelWindow(supabase, brandKey, model);
+  // Official Sub-Zero Group timeline (see SUBZERO_WOLF_SOURCES) is the fallback.
+  return fromDb ?? staticModelWindow(brand, model);
 }
 
-async function loadDbModelWindow(
-  supabase: any,
-  manufacturer: string,
-  model: string,
-): Promise<ModelWindow | null> {
-  const norm = normalizeModel(model);
+async function loadDbModelWindow(supabase: any, brandKey: string, model: string): Promise<ModelWindow | null> {
+  const norm = windowModelKey(model);
   if (!norm) return null;
   try {
     const { data, error } = await supabase
       .from("model_production_windows")
-      .select("manufacturer, brand, model_prefix, introduced_year, discontinued_year, replacement_series")
-      .ilike("manufacturer", manufacturer);
+      .select("manufacturer, brand, model_prefix, introduced_year, discontinued_year, replacement_series, source, evidence_count, observed_min_year, observed_max_year")
+      .eq("brand_key", brandKey);
     if (error || !data?.length) return null;
-    const matches = (data as any[])
-      .filter((r) => norm.startsWith(normalizeModel(r.model_prefix)))
-      .sort((a, b) => normalizeModel(b.model_prefix).length - normalizeModel(a.model_prefix).length);
-    const best = matches[0];
+    const best = (data as any[])
+      .filter((r) => norm.startsWith(String(r.model_prefix).toUpperCase()))
+      .sort((a, b) => String(b.model_prefix).length - String(a.model_prefix).length)[0];
     if (!best) return null;
     return {
       manufacturer: best.manufacturer,
@@ -46,6 +38,10 @@ async function loadDbModelWindow(
       introducedYear: best.introduced_year,
       discontinuedYear: best.discontinued_year,
       replacementSeries: best.replacement_series,
+      kind: best.source === "tech_confirmed" ? "tech_confirmed" : "owner",
+      evidenceCount: best.evidence_count ?? 0,
+      observedMinYear: best.observed_min_year,
+      observedMaxYear: best.observed_max_year,
     };
   } catch {
     return null;
@@ -53,54 +49,64 @@ async function loadDbModelWindow(
 }
 
 /**
- * Technician confirmations + prior successful decodes for the same model family.
- * Never throws — cross-checks are strictly additive evidence.
+ * Record a plate-confirmed build year. Service role only (server side).
+ * Widens observed min/max and bumps evidence_count. Never throws.
  */
-export async function loadCrossChecks(opts: {
-  supabase: any;
-  manufacturer: string;
-  model: string;
-  serial: string;
-  apiYear?: number | null;
-}): Promise<CrossChecks> {
-  const out: CrossChecks = {
-    apiYear: opts.apiYear ?? null,
-    confirmedYear: null,
-    communityConfirmations: 0,
-    historicalYears: [],
-  };
+export async function recordWindowConfirmation(opts: { brand: string; model: string | null | undefined; year: number }): Promise<void> {
+  const brandKey = canonicalBrandKey(opts.brand, opts.model);
+  const prefix = windowModelKey(opts.model);
+  if (!brandKey || !prefix) return;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows } = await supabaseAdmin
+      .from("model_production_windows")
+      .select("id, source, evidence_count, observed_min_year, observed_max_year")
+      .eq("brand_key", brandKey)
+      .ilike("model_prefix", prefix);
+    const row = rows?.[0];
+    if (row) {
+      await supabaseAdmin.from("model_production_windows").update({
+        evidence_count: (row.evidence_count ?? 0) + 1,
+        observed_min_year: Math.min(row.observed_min_year ?? opts.year, opts.year),
+        observed_max_year: Math.max(row.observed_max_year ?? opts.year, opts.year),
+      }).eq("id", row.id);
+    } else {
+      await supabaseAdmin.from("model_production_windows").insert({
+        brand_key: brandKey,
+        manufacturer: brandKey,
+        model_prefix: prefix,
+        source: "tech_confirmed",
+        evidence_count: 1,
+        observed_min_year: opts.year,
+        observed_max_year: opts.year,
+      });
+    }
+  } catch (e) {
+    console.warn("[age-decoder] window confirmation failed:", e);
+  }
+}
+
+/**
+ * Earlier data-plate reports for the identical canonical brand + normalized
+ * serial. Only source = data_plate counts. Receipts return as an upper bound.
+ */
+export async function loadPriorReports(opts: { supabase: any; brand: string; model: string; serial: string }): Promise<{ plate: YearMonth[]; receiptBy: YearMonth | null }> {
+  const out = { plate: [] as YearMonth[], receiptBy: null as YearMonth | null };
+  const key = canonicalBrandKey(opts.brand, opts.model);
+  const serial = normalizeSerial(opts.serial);
+  if (!key || !serial) return out;
   try {
     const { data } = await opts.supabase
       .from("age_decode_ground_truth")
-      .select("known_year, serial_number, model_number")
-      .ilike("manufacturer", opts.manufacturer)
-      .eq("serial_number", opts.serial);
-    const rows = (data ?? []) as { known_year: number }[];
-    if (rows.length) {
-      // Most-confirmed year wins.
-      const tally = new Map<number, number>();
-      for (const r of rows) tally.set(r.known_year, (tally.get(r.known_year) ?? 0) + 1);
-      const [year, count] = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]!;
-      out.confirmedYear = year;
-      out.communityConfirmations = count;
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    const norm = normalizeModel(opts.model).slice(0, 6);
-    if (norm) {
-      const { data } = await opts.supabase
-        .from("age_decode_attempts")
-        .select("manufacture_year")
-        .eq("status", "ok")
-        .ilike("manufacturer", opts.manufacturer)
-        .ilike("model_number", `${norm}%`)
-        .not("manufacture_year", "is", null)
-        .limit(50);
-      out.historicalYears = [
-        ...new Set(((data ?? []) as { manufacture_year: number }[]).map((r) => r.manufacture_year)),
-      ];
+      .select("manufacturer, model_number, serial_number, known_year, known_month, source")
+      .ilike("serial_number", serial)
+      .in("source", ["data_plate", "receipt"]);
+    for (const r of (data ?? []) as any[]) {
+      if (normalizeSerial(r.serial_number) !== serial) continue;
+      if (canonicalBrandKey(r.manufacturer, r.model_number ?? opts.model) !== key) continue;
+      const ym = { year: r.known_year, month: r.known_month ?? null };
+      if (r.source === "data_plate") out.plate.push(ym);
+      else if (!out.receiptBy || ym.year < out.receiptBy.year) out.receiptBy = ym;
     }
   } catch {
     /* ignore */

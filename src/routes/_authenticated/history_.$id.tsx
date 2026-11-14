@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
+import { formatStoredAge } from "@/lib/age-decoder/age-math";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -95,7 +96,7 @@ function DetailsPage() {
           <KV k="Brand" v={row.brand || "—"} />
           <KV k="Model" v={row.model_number || "—"} />
           <KV k="Serial" v={row.serial_number || "—"} />
-          {row.age_years != null && <KV k="Age" v={`${Math.round(row.age_years)} yr`} />}
+          {row.age_years != null && <KV k="Age" v={formatStoredAge(row.age_years) ?? "—"} />}
         </Card>
 
         <Card title="Customer Complaint">

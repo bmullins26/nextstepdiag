@@ -61,7 +61,7 @@ export function computeAgeYears(
   const refMonth = month && month >= 1 && month <= 12 ? month : 6;
   const date = new Date(year, refMonth - 1, 1);
   const ms = now.getTime() - date.getTime();
-  return Math.max(0, ms / (365.25 * 24 * 3600 * 1000));
+  return Math.max(0, Math.floor(ms / (365.25 * 24 * 3600 * 1000)));
 }
 
 /** Homespy methodology: confidence is capped at 80% by design. */

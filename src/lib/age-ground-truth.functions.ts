@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { normalizeSerial } from "./age-decoder/decode";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -27,7 +28,7 @@ export const submitKnownYear = createServerFn({ method: "POST" })
           user_id: context.userId,
           manufacturer: data.brand,
           model_number: data.modelNumber ?? null,
-          serial_number: data.serial,
+          serial_number: normalizeSerial(data.serial),
           known_year: data.knownYear,
           known_month: data.knownMonth ?? null,
           source: data.source ?? null,
@@ -38,5 +39,11 @@ export const submitKnownYear = createServerFn({ method: "POST" })
         { onConflict: "user_id,manufacturer,serial_number" },
       );
     if (error) throw new Error(error.message);
+    // Only a data-plate reading is a confirmation that grows production windows.
+    // (Tapped candidates reach here only when "I read this on the plate" is ticked.)
+    if (data.source === "data_plate") {
+      const { recordWindowConfirmation } = await import("./age-decoder/model-windows.server");
+      await recordWindowConfirmation({ brand: data.brand, model: data.modelNumber, year: data.knownYear });
+    }
     return { ok: true };
   });

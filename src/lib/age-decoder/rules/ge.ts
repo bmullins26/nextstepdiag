@@ -29,8 +29,7 @@ const geMonthYear: Rule = {
     for (let year = CYCLE_ANCHOR + y; year <= now + 1; year += 12) years.push(year);
     for (let year = CYCLE_ANCHOR + y - 12; year >= 1977; year -= 12) years.push(year);
     years.sort((a, b) => b - a);
-    // Most recent cycle scores highest; model windows can overrule.
-    return years.slice(0, 4).map((year, i): DateCandidate => ({ year, month: m + 1, score: Math.max(0.15, 0.6 - i * 0.15) }));
+    return years.slice(0, 4).map((year): DateCandidate => ({ year, month: m + 1 }));
   },
   explain: (serial, c) =>
     `GE: month letter '${serial[0]}' → ${c.month}, year letter '${serial[1]}' → ${c.year}. GE year letters repeat every 12 years.`,

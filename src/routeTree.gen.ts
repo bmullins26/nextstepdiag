@@ -45,6 +45,7 @@ import { Route as AuthenticatedCommunityNewRouteImport } from './routes/_authent
 import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_authenticated/community.search'
 import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history_.$id'
 import { Route as AuthenticatedOwnerIndexRouteImport } from './routes/_authenticated/owner/index'
+import { Route as AuthenticatedOwnerAgeWindowsRouteImport } from './routes/_authenticated/owner/age-windows'
 import { Route as AuthenticatedOwnerEmailsRouteImport } from './routes/_authenticated/owner/emails'
 import { Route as AuthenticatedOwnerKnowledgeRouteImport } from './routes/_authenticated/owner/knowledge'
 import { Route as AuthenticatedOwnerPaymentsRouteImport } from './routes/_authenticated/owner/payments'
@@ -247,6 +248,12 @@ const AuthenticatedOwnerIndexRoute = AuthenticatedOwnerIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedOwnerRoute,
 } as any)
+const AuthenticatedOwnerAgeWindowsRoute =
+  AuthenticatedOwnerAgeWindowsRouteImport.update({
+    id: '/age-windows',
+    path: '/age-windows',
+    getParentRoute: () => AuthenticatedOwnerRoute,
+  } as any)
 const AuthenticatedOwnerEmailsRoute =
   AuthenticatedOwnerEmailsRouteImport.update({
     id: '/emails',
@@ -357,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/community/new': typeof AuthenticatedCommunityNewRoute
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
+  '/owner/age-windows': typeof AuthenticatedOwnerAgeWindowsRoute
   '/owner/emails': typeof AuthenticatedOwnerEmailsRoute
   '/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
@@ -406,6 +414,7 @@ export interface FileRoutesByTo {
   '/community/new': typeof AuthenticatedCommunityNewRoute
   '/community/search': typeof AuthenticatedCommunitySearchRoute
   '/history/$id': typeof AuthenticatedHistoryIdRoute
+  '/owner/age-windows': typeof AuthenticatedOwnerAgeWindowsRoute
   '/owner/emails': typeof AuthenticatedOwnerEmailsRoute
   '/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
@@ -458,6 +467,7 @@ export interface FileRoutesById {
   '/_authenticated/community/new': typeof AuthenticatedCommunityNewRoute
   '/_authenticated/community/search': typeof AuthenticatedCommunitySearchRoute
   '/_authenticated/history_/$id': typeof AuthenticatedHistoryIdRoute
+  '/_authenticated/owner/age-windows': typeof AuthenticatedOwnerAgeWindowsRoute
   '/_authenticated/owner/emails': typeof AuthenticatedOwnerEmailsRoute
   '/_authenticated/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/_authenticated/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
@@ -510,6 +520,7 @@ export interface FileRouteTypes {
     | '/community/new'
     | '/community/search'
     | '/history/$id'
+    | '/owner/age-windows'
     | '/owner/emails'
     | '/owner/knowledge'
     | '/owner/payments'
@@ -559,6 +570,7 @@ export interface FileRouteTypes {
     | '/community/new'
     | '/community/search'
     | '/history/$id'
+    | '/owner/age-windows'
     | '/owner/emails'
     | '/owner/knowledge'
     | '/owner/payments'
@@ -610,6 +622,7 @@ export interface FileRouteTypes {
     | '/_authenticated/community/new'
     | '/_authenticated/community/search'
     | '/_authenticated/history_/$id'
+    | '/_authenticated/owner/age-windows'
     | '/_authenticated/owner/emails'
     | '/_authenticated/owner/knowledge'
     | '/_authenticated/owner/payments'
@@ -910,6 +923,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOwnerIndexRouteImport
       parentRoute: typeof AuthenticatedOwnerRoute
     }
+    '/_authenticated/owner/age-windows': {
+      id: '/_authenticated/owner/age-windows'
+      path: '/age-windows'
+      fullPath: '/owner/age-windows'
+      preLoaderRoute: typeof AuthenticatedOwnerAgeWindowsRouteImport
+      parentRoute: typeof AuthenticatedOwnerRoute
+    }
     '/_authenticated/owner/emails': {
       id: '/_authenticated/owner/emails'
       path: '/emails'
@@ -1058,6 +1078,7 @@ const AuthenticatedOwnerToolsRouteWithChildren =
   )
 
 interface AuthenticatedOwnerRouteChildren {
+  AuthenticatedOwnerAgeWindowsRoute: typeof AuthenticatedOwnerAgeWindowsRoute
   AuthenticatedOwnerEmailsRoute: typeof AuthenticatedOwnerEmailsRoute
   AuthenticatedOwnerKnowledgeRoute: typeof AuthenticatedOwnerKnowledgeRoute
   AuthenticatedOwnerPaymentsRoute: typeof AuthenticatedOwnerPaymentsRoute
@@ -1066,6 +1087,7 @@ interface AuthenticatedOwnerRouteChildren {
 }
 
 const AuthenticatedOwnerRouteChildren: AuthenticatedOwnerRouteChildren = {
+  AuthenticatedOwnerAgeWindowsRoute: AuthenticatedOwnerAgeWindowsRoute,
   AuthenticatedOwnerEmailsRoute: AuthenticatedOwnerEmailsRoute,
   AuthenticatedOwnerKnowledgeRoute: AuthenticatedOwnerKnowledgeRoute,
   AuthenticatedOwnerPaymentsRoute: AuthenticatedOwnerPaymentsRoute,

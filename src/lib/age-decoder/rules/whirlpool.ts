@@ -1,186 +1,120 @@
 import type { Rule, DateCandidate } from "../types";
 
-// Whirlpool letter→year table. Letters used historically: A..Y excluding
-// I, O, Q, U. Resets ~every 20 years. Most common modern cycle starts 1993.
-// Whirlpool year-letter table per electrical-forensics.com. The letter set
-// skips I, O, Q, U (easily confused with digits) and recycles ~every 20 yrs.
-const WP_LETTERS = "ABCDEFGHJKLMNPRSTVWXY".split("");
-
 /**
- * Returns ALL plausible years for a given year-letter (homespy behavior).
- * 21-letter alphabet → 21-year cycle anchored at A=2021 (verified against
- * Whirlpool's ServiceBench entitlement: "CF01…" = built 1/6/2026). Earlier
- * cycles: A=2000, A=1979.
+ * Whirlpool-family serial date code: [plant][year char][WW week][sequence].
+ * Units not built by Whirlpool carry an extra source letter after the plant
+ * letter (e.g. HRC1848014 → year C, week 18).
+ *
+ * Year characters — published tables:
+ *   https://www.electrical-forensics.com/MajorAppliances/WhirlpoolDateCodes.html
+ *   https://www.appliancepartspros.com/b/whirlpool-serial-number-year-lookup/
+ *   digits 0–9 = 2010–2019 (also 1980s / 1970s on very old units; never 2020+)
+ *   X = 2020 / 1990; A–H = 2021–2028 / 1991–1998; J = 1999 (2029 future)
+ *   K=2000 L=2001 M=2002 P=2003 R=2004 S=2005 T=2006 U=2007 W=2008 Y=2009
+ *
+ * Every valid reading is returned. The decoder never picks between cycles;
+ * plate date / factory record / production window / receipt narrow them.
  */
-function whirlpoolYearsFromLetter(letter: string): number[] {
-  const idx = WP_LETTERS.indexOf(letter.toUpperCase());
-  if (idx < 0) return [];
-  const now = new Date().getFullYear();
-  const years: number[] = [];
-  for (let base = 2021; base >= 1979; base -= WP_LETTERS.length) {
-    const y = base + idx;
-    if (y >= 1979 && y <= now + 1) years.push(y);
-  }
-  return years.sort((a, b) => a - b);
+const SINGLE: Record<string, number> = { K: 2000, L: 2001, M: 2002, P: 2003, R: 2004, S: 2005, T: 2006, U: 2007, W: 2008, Y: 2009 };
+
+export function whirlpoolYears(ch: string): number[] {
+  if (/^\d$/.test(ch)) { const d = Number(ch); return [2010 + d, 1980 + d, 1970 + d]; }
+  if (ch === "X") return [2020, 1990];
+  if (ch >= "A" && ch <= "H") { const i = ch.charCodeAt(0) - 65; return [2021 + i, 1991 + i]; }
+  if (ch === "J") return [1999, 2029];
+  return SINGLE[ch] != null ? [SINGLE[ch]] : [];
 }
 
-/**
- * Whirlpool modern format: [PlantLetter][YearLetter][WW][Sequence]
- * Example: CX48 12345 → C=plant, X=year-letter, 48=week, then sequence.
- */
-const whirlpoolLetterWeek: Rule = {
-  id: "whirlpool.year-letter-week",
-  formatId: "whirlpool.year-letter-week",
-  effectiveFrom: 1973,
+const isLetter = (c?: string) => !!c && /[A-Z]/.test(c);
+const weekAt = (s: string, i: number) => {
+  const t = s.slice(i, i + 2);
+  if (!/^\d{2}$/.test(t)) return null;
+  const w = Number(t);
+  return w >= 1 && w <= 53 ? w : null;
+};
+const monthFromWeek = (w: number) => Math.min(12, Math.max(1, Math.ceil(w / 4.345)));
+
+type Reading = { yearChar: string; weekIndex: number; source?: string };
+
+export function whirlpoolReadings(serial: string): Reading[] {
+  const s = serial.toUpperCase();
+  if (!isLetter(s[0])) return [];
+  const out: Reading[] = [];
+  // (i) plant + year char + week
+  out.push({ yearChar: s[1] ?? "", weekIndex: 2 });
+  if (isLetter(s[1])) {
+    // (ii) plant + source letter + digit year + week  /  (iii) source + letter year
+    out.push({ yearChar: s[2] ?? "", weekIndex: 3, source: s[1] });
+  }
+  return out;
+}
+
+const whirlpoolPlantYearWeek: Rule = {
+  id: "whirlpool.plant-year-week",
+  formatId: "whirlpool.plant-year-week",
+  effectiveFrom: 1970,
   effectiveTo: null,
   priority: 90,
-  name: "Whirlpool Year-Letter / Week Decoder",
+  name: "Whirlpool Plant / Year / Week",
   family: "Whirlpool",
-  pattern: /^[A-Z][ABCDEFGHJKLMNPRSTVWXY]\d{2}\d+$/,
+  pattern: /^[A-Z][A-Z0-9][A-Z0-9]\d{2,}/,
   weight: 0.9,
+  // Digit positions for O→0 / I→1 correction (week digits of reading i).
+  digitPositions: [2, 3],
   extract: (serial) => {
-    const s = serial.toUpperCase();
-    const yearLetter = s[1];
-    const week = parseInt(s.slice(2, 4), 10);
-    const years = whirlpoolYearsFromLetter(yearLetter);
-    if (!years.length) return [];
-    const now = new Date().getFullYear();
-    const wk = Number.isFinite(week) && week >= 1 && week <= 53 ? week : undefined;
-    // Recency-decayed scores. Returns every plausible cycle so corroboration
-    // can pick the right one.
-    return years.map<DateCandidate>((year) => {
-      const yearsAgo = Math.max(0, now - year);
-      const score = Math.max(0.20, 0.65 - yearsAgo * 0.012);
-      return { year, week: wk, score };
-    });
-  },
-  explain: (serial, c) => {
-    const s = serial.toUpperCase();
-    return `Whirlpool: plant '${s[0]}', year letter '${s[1]}' → ${c.year}${c.week ? `, week ${c.week}` : ""}. Year-letter cycles every 21 years (A=2021); chosen by recency + model corroboration.`;
-  },
-};
-
-/**
- * Whirlpool numeric format: [PlantLetter][YearDigit][WW][Sequence]
- * Example: C8123 4567 → year-of-decade 8 (ambiguous between 2008/2018/2028 etc).
- * Low confidence on its own — model number disambiguates.
- */
-const whirlpoolYearDigit: Rule = {
-  id: "whirlpool.year-digit",
-  formatId: "whirlpool.year-digit",
-  effectiveFrom: 1980,
-  effectiveTo: null,
-  priority: 30,
-  name: "Whirlpool Year-of-Decade Decoder",
-  family: "Whirlpool",
-  pattern: /^[A-Z]\d{2}\d+$/,
-  weight: 0.4,
-  extract: (serial) => {
-    const s = serial.toUpperCase();
-    const d = parseInt(s[1] ?? "", 10);
-    if (!Number.isFinite(d)) return [];
-    const now = new Date().getFullYear();
-    const baseDecade = Math.floor(now / 10) * 10;
-    const week = parseInt(s.slice(2, 4), 10);
-    const wk = Number.isFinite(week) && week >= 1 && week <= 53 ? week : undefined;
-    // Last three decades, recency-weighted.
-    return [baseDecade - 20, baseDecade - 10, baseDecade]
-      .map((b, i) => ({ year: b + d, week: wk, score: 0.2 + i * 0.15 }))
-      .filter((c) => c.year <= now + 1);
+    const out: DateCandidate[] = [];
+    for (const r of whirlpoolReadings(serial)) {
+      const week = weekAt(serial.toUpperCase(), r.weekIndex);
+      if (week == null) continue;
+      for (const year of whirlpoolYears(r.yearChar)) {
+        out.push({ year, week, month: monthFromWeek(week), reading: r.source ? `source letter '${r.source}', year '${r.yearChar}'` : `year '${r.yearChar}'` });
+      }
+    }
+    return out;
   },
   explain: (serial, c) =>
-    `Whirlpool: plant '${serial[0]}', year-of-decade '${serial[1]}' → ${c.year}${c.week ? `, week ${c.week}` : ""}. Decade chosen by recency.`,
+    `Whirlpool: plant '${serial[0]}', ${c.reading ?? "year code"} → ${c.year}${c.week ? `, week ${c.week}` : ""}. Year codes repeat, so every matching year is listed.`,
 };
 
 /**
- * Whirlpool/Maytag/Amana 9-character modern format (used ~2020+ on many
- * platforms including current Maytag laundry, e.g. MED7230HWx):
- *
- *   [PP][WW][Y][SSSS]
- *   PP   – 2-letter plant code (ME=Marion OH, MF=Marion, etc.)
- *   WW   – 2-digit week of year (01..53)
- *   Y    – 1-digit year-of-decade
- *   SSSS – 4-digit sequence
- *
- * Example: ME0305172 → plant=ME, week=03, year-digit=5, sequence=0172.
- * Year-digit 5 resolves to 2025 (current decade) or 2015 (previous),
- * disambiguated by recency + corroboration.
+ * Older Maytag-built date code (Maytag, Amana, Jenn-Air, Admiral, Magic Chef,
+ * Crosley, Norge, Neptune): digits followed by two letters; first trailing
+ * letter = year (24-year cycle, used only up to 2013), second = month.
+ * Source: https://www.electrical-forensics.com/MajorAppliances/MaytagDateCodes.html
  */
-const whirlpoolModern9: Rule = {
-  id: "whirlpool.modern-9char",
-  formatId: "whirlpool.modern-9char",
-  effectiveFrom: 2003,
-  effectiveTo: null,
-  priority: 80,
-  name: "Whirlpool/Maytag 9-char Modern Decoder",
-  family: "Whirlpool",
-  pattern: /^[A-Z]{2}\d{7}$/,
-  weight: 0.75,
-  extract: (serial) => {
-    // The exact position of the year-digit and week-digits in Whirlpool's
-    // 9-char post-2020 scheme varies across plants and platforms — some are
-    // `PP WW Y SSSS`, some are `PP W YY SSSS`, some are `PP Y WW SSSS`. We
-    // emit every plausible (year, week) candidate and let the reconciler +
-    // Firecrawl corroboration disambiguate.
-    const s = serial.toUpperCase();
-    const digits = s.slice(2); // 7 digits
-    const now = new Date().getFullYear();
-    const baseDecade = Math.floor(now / 10) * 10;
-    const candidates: DateCandidate[] = [];
-    const seen = new Set<string>();
-
-    const yearFromDigit = (d: number, decadesBack: number) =>
-      baseDecade - decadesBack * 10 + d;
-
-    // Layout A: WW Y SSSS  (week at 0-1, year-digit at 2)
-    const wwA = parseInt(digits.slice(0, 2), 10);
-    const yA = parseInt(digits.slice(2, 3), 10);
-    // Layout B: Y WW SSSS  (year-digit at 0, week at 1-2)
-    const yB = parseInt(digits.slice(0, 1), 10);
-    const wwB = parseInt(digits.slice(1, 3), 10);
-    // Layout C: WW YY SSS  (week at 0-1, 2-digit year at 2-3)
-    const wwC = parseInt(digits.slice(0, 2), 10);
-    const yyC = parseInt(digits.slice(2, 4), 10);
-
-    const push = (year: number, wk: number, score: number) => {
-      if (!Number.isFinite(year) || !Number.isFinite(wk)) return;
-      if (year < 2000 || year > now + 1) return;
-      if (wk < 1 || wk > 53) return;
-      const key = `${year}:${wk}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      const month = Math.min(12, Math.max(1, Math.ceil(wk / 4.345)));
-      candidates.push({ year, week: wk, month, score });
-    };
-
-    // Layout A candidates — most common current layout.
-    if (Number.isFinite(yA) && Number.isFinite(wwA)) {
-      push(yearFromDigit(yA, 0), wwA, 0.55); // current decade
-      push(yearFromDigit(yA, 1), wwA, 0.30); // previous decade
-    }
-    // Layout B candidates.
-    if (Number.isFinite(yB) && Number.isFinite(wwB)) {
-      push(yearFromDigit(yB, 0), wwB, 0.50);
-      push(yearFromDigit(yB, 1), wwB, 0.25);
-    }
-    // Layout C candidates (2-digit year, unambiguous).
-    // Also emit decade cycles because Whirlpool has recycled 2-digit "05"
-    // for '05, '15, '25 on some plants.
-    if (Number.isFinite(yyC) && Number.isFinite(wwC)) {
-      const base = yyC >= 70 ? 1900 + yyC : 2000 + yyC;
-      push(base, wwC, 0.60);           // literal 2-digit year
-      push(base + 10, wwC, 0.45);      // +1 decade cycle
-      push(base + 20, wwC, 0.55);      // +2 decade cycle (recency bump)
-    }
-
-    return candidates;
-  },
-  explain: (serial, c) => {
-    const s = serial.toUpperCase();
-    return `Whirlpool 9-char: plant '${s.slice(0, 2)}', week ${s.slice(2, 4)}, year-digit '${s.slice(4, 5)}' → ${c.year}${c.month ? `, ~${c.month}/${c.year}` : ""}. Decade chosen by recency + corroboration.`;
-  },
+const MAYTAG_YEAR: Record<string, [number, number]> = {
+  E: [1980, 2004], G: [1981, 2005], J: [1982, 2006], L: [1983, 2007], N: [1984, 2008], P: [1985, 2009],
+  R: [1986, 2010], T: [1987, 2011], V: [1988, 2012], X: [1989, 2013], B: [1966, 1990], D: [1967, 1991],
+  F: [1968, 1992], H: [1969, 1993], K: [1970, 1994], M: [1971, 1995], Q: [1972, 1996], S: [1973, 1997],
+  U: [1974, 1998], W: [1975, 1999], Y: [1976, 2000], Z: [1977, 2001], A: [1978, 2002], C: [1979, 2003],
+};
+export const MONTH_PAIRS: Record<string, number> = {
+  A: 1, B: 1, C: 2, D: 2, E: 3, F: 3, G: 4, H: 4, J: 5, K: 5, L: 6, M: 6,
+  N: 7, Q: 7, P: 8, S: 8, R: 9, U: 9, T: 10, W: 10, V: 11, Y: 11, X: 12, Z: 12,
 };
 
-// Prepend the more specific 9-char rule so it wins over the generic
-// [Letter][Letter]... regex on typical Maytag/Whirlpool serials.
-export const whirlpoolRules: Rule[] = [whirlpoolModern9, whirlpoolLetterWeek, whirlpoolYearDigit];
+export const MAYTAG_LEGACY_BRANDS = ["maytag", "amana", "jenn-air", "jennair", "admiral", "magic chef", "magicchef", "crosley", "norge", "neptune"];
+
+export const maytagLegacy: Rule = {
+  id: "maytag.legacy-year-month-letters",
+  formatId: "maytag.legacy-year-month-letters",
+  effectiveFrom: 1966,
+  effectiveTo: 2013,
+  priority: 80,
+  name: "Maytag (older) Year / Month Letters",
+  family: "Maytag",
+  pattern: /^\d{6,}[A-Z]{2}$/,
+  weight: 0.85,
+  brandFilter: MAYTAG_LEGACY_BRANDS,
+  extract: (serial) => {
+    const s = serial.toUpperCase();
+    const y = MAYTAG_YEAR[s[s.length - 2] ?? ""];
+    const month = MONTH_PAIRS[s[s.length - 1] ?? ""];
+    if (!y || !month) return [];
+    return [y[1], y[0]].filter((yr) => yr <= 2013).map((year) => ({ year, month }));
+  },
+  explain: (serial, c) =>
+    `Maytag (older): year letter '${serial[serial.length - 2]}' → ${c.year}, month letter '${serial[serial.length - 1]}' → ${c.month}. Year letters repeat every 24 years.`,
+};
+
+export const whirlpoolRules: Rule[] = [whirlpoolPlantYearWeek, maytagLegacy];

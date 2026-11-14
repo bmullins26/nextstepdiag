@@ -1,7 +1,7 @@
 // Brand → rules registry. New manufacturers register here without touching
 // decode.ts / scoring.ts.
 import type { Rule } from "./types";
-import { whirlpoolRules } from "./rules/whirlpool";
+import { whirlpoolRules, maytagLegacy } from "./rules/whirlpool";
 import { geRules } from "./rules/ge";
 import { frigidaireRules } from "./rules/frigidaire";
 import { lgRules } from "./rules/lg";
@@ -16,6 +16,7 @@ import { allianceRules, goodmanRules, aoSmithRules, traneRules, carrierRules, le
 // Canonical brand keys (lowercase). Map any alias → canonical via BRAND_ALIASES.
 export type BrandKey =
   | "whirlpool"
+  | "maytag_legacy"
   | "ge"
   | "frigidaire"
   | "lg"
@@ -46,20 +47,25 @@ const BRAND_ALIASES: Record<string, BrandKey> = {
   roper: "whirlpool",
   estate: "whirlpool",
   inglis: "whirlpool",
-  "magic chef": "whirlpool",
-  magicchef: "whirlpool",
+  "whirlpool corporation": "whirlpool",
+  bravos: "whirlpool",
+  cabrio: "whirlpool",
+  neptune: "whirlpool",
+  norge: "whirlpool",
   admiral: "whirlpool",
   crosley: "whirlpool",
-  kenmore: "whirlpool",
-  "kenmore / sears": "whirlpool",
+  // Magic Chef decodes only via the older Maytag date code.
+  "magic chef": "maytag_legacy",
+  magicchef: "maytag_legacy",
+  // Kenmore is NOT an alias: the builder comes from the model prefix.
 
   // GE family
   ge: "ge",
+  "ge appliances": "ge",
   "ge (general electric)": "ge",
   "general electric": "ge",
   hotpoint: "ge",
   cafe: "ge",
-  haier: "ge",
   profile: "ge",
   monogram: "ge",
 
@@ -94,7 +100,7 @@ const BRAND_ALIASES: Record<string, BrandKey> = {
   miele: "miele",
 
   // Alliance Laundry
-  "speed queen": "alliance", speedqueen: "alliance", huebsch: "alliance", unimac: "alliance", alliance: "alliance",
+  "speed queen": "alliance", speedqueen: "alliance", huebsch: "alliance", unimac: "alliance", alliance: "alliance", "alliance laundry": "alliance",
   // HVAC
   goodman: "goodman", daikin: "goodman", janitrol: "goodman", "amana hvac": "goodman",
   carrier: "carrier", bryant: "carrier", payne: "carrier", tempstar: "carrier", heil: "carrier",
@@ -113,6 +119,7 @@ const BRAND_ALIASES: Record<string, BrandKey> = {
 
 const REGISTRY: Record<BrandKey, Rule[]> = {
   whirlpool: [...whirlpoolRules],
+  maytag_legacy: [maytagLegacy],
   ge: [...geRules],
   frigidaire: [...frigidaireRules],
   lg: [...lgRules],
@@ -155,14 +162,12 @@ const KENMORE_PREFIX_TO_BRAND: Record<string, BrandKey> = {
   "362": "ge",        // GE-built
   "795": "lg",        // LG-built (newer refrigerators)
   "401": "samsung",   // Samsung-built (newer washers)
-  "596": "whirlpool", // Whirlpool-built refrigerators
   "253": "frigidaire", // Frigidaire-built refrigerators
   "587": "frigidaire", // Frigidaire-built dishwashers
   "790": "frigidaire", // Frigidaire-built ranges
   "721": "lg",        // LG-built microwaves
   "796": "lg",        // LG-built laundry
-  "592": "lg",        // LG-built
-  "647": "alliance",  // Speed Queen-built laundry
+  "592": "samsung",   // Samsung-built
 };
 
 function brandFromModel(model?: string): BrandKey | null {
@@ -192,16 +197,35 @@ export function inferBrandFromModel(model?: string | null): BrandKey | null {
   return null;
 }
 
+export const isKenmore = (brand: string) => brand.trim().toLowerCase().includes("kenmore");
+
+/**
+ * Canonical brand key used for decoding AND for production-window keys.
+ * Kenmore resolves to the real builder via the model prefix; an unknown
+ * Kenmore prefix returns null (never a Whirlpool default).
+ */
+export function canonicalBrandKey(brand: string, model?: string | null): BrandKey | null {
+  if (isKenmore(brand)) return brandFromModel(model ?? undefined);
+  return resolveBrand(brand) ?? inferBrandFromModel(model);
+}
+
 export function rulesForBrand(brand: string, model?: string): Rule[] {
-  let key = resolveBrand(brand) ?? inferBrandFromModel(model);
-  // Kenmore is registered as a Whirlpool alias above, but other prefixes
-  // (GE/Frigidaire/LG/Samsung-built) need model-prefix detection.
-  if (brand.trim().toLowerCase().includes("kenmore")) {
-    const fromModel = brandFromModel(model);
-    if (fromModel) key = fromModel;
-  }
+  const key = canonicalBrandKey(brand, model);
   if (!key) return [];
-  return REGISTRY[key] ?? [];
+  const raw = brand.trim().toLowerCase();
+  return (REGISTRY[key] ?? []).filter((r) => !r.brandFilter || r.brandFilter.includes(raw));
+}
+
+/**
+ * Production-window model key: uppercase, A–Z0–9 only, cut at "/" or space,
+ * trailing revision digits removed. No colour-letter stripping.
+ * MTW6205RW1 → MTW6205RW, WT7150CW/03 → WT7150CW, GSS25IYNZHFS unchanged.
+ */
+export function windowModelKey(model: string | null | undefined): string {
+  const cut = (model ?? "").toUpperCase().trim().split(/[/\s]/)[0] ?? "";
+  const clean = cut.replace(/[^A-Z0-9]/g, "");
+  const stripped = clean.replace(/(?<=[A-Z])\d+$/, "");
+  return stripped || clean;
 }
 
 /** Add a rule for a brand at runtime (used by tests or future manufacturers). */

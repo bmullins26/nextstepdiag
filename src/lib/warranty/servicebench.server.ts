@@ -8,6 +8,8 @@ type Row = { dataKey: string; dataDescripton?: string | null };
 export type SbEntitlement = {
   productName: string | null;
   manufacturedDate: string | null;
+  /** Ship date (actualGoodsIssueDate). Upper bound for the build date only. */
+  shippedDate: string | null;
   purchaseDate: string | null;
   markedAs: string | null;
   standard: { laborMonths: string | null; laborExpires: string | null; partsMonths: string | null; partsExpires: string | null };
@@ -56,7 +58,9 @@ export async function lookupServiceBench(model: string, serial: string): Promise
     }
     return {
       productName: ov.productName ?? null,
-      manufacturedDate: ov.manufacturedDate ?? ov.actualGoodsIssueDate ?? null,
+      // Build date only. actualGoodsIssueDate is the SHIP date — an upper bound, never "built".
+      manufacturedDate: ov.manufacturedDate ?? null,
+      shippedDate: ov.actualGoodsIssueDate ?? null,
       purchaseDate: ov.purchaseDate ?? null,
       markedAs: ov.markedAs ?? null,
       standard: { laborMonths: sw.laborWarranty ?? null, laborExpires: sw.laborExpirationDate ?? null, partsMonths: sw.partsWarranty ?? null, partsExpires: sw.partsExpirationDate ?? null },
