@@ -101,7 +101,7 @@ export const recordOutcome = createServerFn({ method: "POST" })
       actual_failure: data.actualFailure ?? null,
       notes: data.notes ?? null,
       outcome: data.outcome,
-      confirmed_at: data.outcome === "confirmed" ? new Date().toISOString() : null,
+      confirmed_at: data.outcome === "confirmed" && data.repairSuccessful === true ? new Date().toISOString() : null,
       ...feedbackPatch(data),
     };
     const { data: row, error } = await context.supabase
@@ -125,7 +125,7 @@ export const recordOutcome = createServerFn({ method: "POST" })
         "@/lib/knowledge/session-ingest.server"
       );
       if (data.sessionId) queueSessionIngest(data.sessionId, context.userId);
-      if (data.outcome === "confirmed" && (row as any)?.id)
+      if (data.outcome === "confirmed" && data.repairSuccessful === true && (row as any)?.id)
         queueOutcomeIngest((row as any).id, context.userId);
     }
     return row;
@@ -147,7 +147,7 @@ export const updateOutcome = createServerFn({ method: "POST" })
       outcome: data.outcome,
       actual_failure: data.actualFailure ?? null,
       notes: data.notes ?? null,
-      confirmed_at: data.outcome === "confirmed" ? new Date().toISOString() : null,
+      confirmed_at: data.outcome === "confirmed" && data.repairSuccessful === true ? new Date().toISOString() : null,
       ...feedbackPatch(data),
     };
     const { data: row, error } = await context.supabase
@@ -171,7 +171,7 @@ export const updateOutcome = createServerFn({ method: "POST" })
         "@/lib/knowledge/session-ingest.server"
       );
       if (row?.session_id) queueSessionIngest(row.session_id, context.userId);
-      if (data.outcome === "confirmed") queueOutcomeIngest(data.id, context.userId);
+      if (data.outcome === "confirmed" && data.repairSuccessful === true) queueOutcomeIngest(data.id, context.userId);
     }
     return row;
   });

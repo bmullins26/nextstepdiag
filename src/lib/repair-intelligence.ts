@@ -224,6 +224,8 @@ export function normalizeImportRecord(
   if (!brandRaw) flags.push("missing_brand");
   if (!normalizeModel(modelRaw)) flags.push("missing_model_number");
   if (!get("customer_complaint") && !get("diagnostic_findings")) flags.push("missing_complaint_and_findings");
+  const sharedDiagnosticText = [get("customer_complaint"), get("diagnostic_findings"), get("repair_actions"), get("tests_performed"), get("operational_result")].join("\n");
+  if (containsPotentialCustomerInfo(sharedDiagnosticText)) flags.push("possible_customer_information");
 
   const explicitOutcome = get("normalized_repair_outcome").toLowerCase() as RepairOutcome;
   let outcome: RepairOutcome = REPAIR_OUTCOMES.includes(explicitOutcome) ? explicitOutcome : "unresolved";

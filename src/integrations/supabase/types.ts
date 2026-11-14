@@ -2596,6 +2596,7 @@ export type Database = {
         Args: { p_brand_key: string; p_model_key: string }
         Returns: undefined
       }
+      repair_complaint_category: { Args: { value: string }; Returns: string }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
     }

@@ -5,3 +5,4 @@
 - Free diagnostic usage is consumed once per saved session through `consume_diagnostic`; all later steps reuse that session, while unrelated AI lookups keep their separate quota — prevents multi-step calls from draining the monthly diagnostic allowance.
 - Partner perk students are reviewed by owners in partner_perk_claims.verification_status; rejecting ends only perk-plan Pro (matched by plan_type), never paid Pro.
 - Manufacturer-published model production timelines ship as generated data in src/lib/age-decoder/data/ and are used only when the database has no window on file — keeps OEM ground truth versioned and testable.
+- Repair Intelligence keeps raw CSV batches and source records owner-only; technicians and evidence providers read exact-model aggregates with generalized complaint categories, while the existing diagnostic_outcomes workflow remains the only live outcome source.

@@ -57,6 +57,12 @@ describe("repair history CSV normalization", () => {
     expect(record.reviewFlags).toContain("missing_model_number");
   });
 
+  it("holds records with possible customer contact details out of shared aggregates", () => {
+    const record = normalizeImportRecord(row({ brand: "GE", model_number: "G1", customer_complaint: "Call 216-555-0194 about no cooling" }), mapping, 2);
+    expect(record.reviewStatus).toBe("pending");
+    expect(record.reviewFlags).toContain("possible_customer_information");
+  });
+
   it("counts only the latest outcome for a reopened diagnostic session", () => {
     const rows = [
       { id: "first", session_id: "session-1", normalized_outcome: "diagnosed_pending_parts", updated_at: "2026-01-01" },

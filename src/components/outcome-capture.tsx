@@ -115,13 +115,15 @@ export function OutcomeCapture({
         <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-200">
           <div className="flex items-center gap-2 font-semibold">
             <CheckCircle2 className="h-4 w-4" />
-            {done === "confirmed" && "Confirmed — recorded as a successful repair."}
+            {done === "confirmed" && saved?.repairSuccessful === true && "Confirmed — recorded as a successful repair."}
+            {done === "confirmed" && saved?.repairSuccessful === false && "Recorded as an unsuccessful repair."}
+            {done === "confirmed" && saved?.repairSuccessful !== true && saved?.repairSuccessful !== false && "Recorded as reported, without a verified successful repair."}
             {done === "incorrect" && "Recorded — actual failure logged for learning."}
             {done === "partial" && "Recorded — partial match captured."}
             {done === "pending_repair" && "Saved as Pending Repair. Confirm the result later from History."}
           </div>
         </div>
-        {done === "confirmed" && savedOutcomeId && (
+        {done === "confirmed" && saved?.repairSuccessful === true && savedOutcomeId && (
           <ShareRepairPanel
             outcomeId={savedOutcomeId}
             brand={manufacturer}
