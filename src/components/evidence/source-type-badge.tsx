@@ -10,6 +10,8 @@ const COLOR: Record<EvidenceSourceType, string> = {
   community_verified: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
   community_discussion: "border-violet-500/40 bg-violet-500/15 text-violet-300",
   external_repair_guide: "border-border bg-muted text-muted-foreground",
+  technician_reported: "border-border bg-muted text-muted-foreground",
+  fallback_unreviewed: "border-border bg-muted text-muted-foreground",
 };
 
 export function SourceTypeBadge({ sourceType }: { sourceType: EvidenceSourceType }) {

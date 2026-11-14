@@ -61,22 +61,45 @@ export const scanRecalls = createServerFn({ method: "POST" })
     if (okCount > 0) cpscError = null;
     // 2) Known failure patterns from our own Knowledge Engine for this model / family.
     const prefix = data.modelNumber.replace(/[^A-Za-z0-9]/g, "").slice(0, 6);
-    const { data: facts } = await context.supabase
-      .from("knowledge_facts")
-      .select("failure, symptom, component, notes")
-      .eq("needs_review", false)
-      .is("superseded_by", null)
-      .or(`model_number.ilike.${prefix}%,model_family.ilike.${prefix}%`)
-      .limit(40);
-    const counts = new Map<string, number>();
-    for (const f of facts ?? []) {
-      const key = (f.failure || f.component || "").trim();
-      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+    let knownIssues: KnownIssue[] = [];
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const approved = await supabaseAdmin
+        .from("knowledge_facts")
+        .select("failure, symptom, component, notes")
+        .eq("review_status", "approved")
+        .is("superseded_by", null)
+        .or(`model_number.ilike.${prefix}%,model_family.ilike.${prefix}%`)
+        .limit(40);
+      if (approved.error) throw new Error(approved.error.message);
+      const facts = [...(approved.data ?? [])];
+      if (facts.length < 3) {
+        const fallback = await supabaseAdmin
+          .from("knowledge_facts")
+          .select("failure, symptom, component, notes, knowledge_sources!inner(source_type)")
+          .eq("review_status", "unreviewed")
+          .neq("knowledge_sources.source_type", "external_repair_data")
+          .is("superseded_by", null)
+          .or(`model_number.ilike.${prefix}%,model_family.ilike.${prefix}%`)
+          .limit(40);
+        if (fallback.error) throw new Error(fallback.error.message);
+        facts.push(...(fallback.data ?? []));
+      }
+      const counts = new Map<string, number>();
+      for (const fact of facts) {
+        const key = (fact.failure || fact.component || "").trim();
+        if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      knownIssues = [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([key, count]) => ({
+          text: `${key}${count > 1 ? ` (${count} records)` : ""}`,
+          source: "knowledge" as const,
+        }));
+    } catch (err) {
+      console.warn("[recalls] known-issue lookup failed", err);
     }
-    const knownIssues: KnownIssue[] = [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([k, n]) => ({ text: `${k}${n > 1 ? ` (${n} records)` : ""}`, source: "knowledge" as const }));
     return { recalls, knownIssues, cpscError };
   });
 

@@ -9,6 +9,8 @@ import type { GroundingResult } from "./tech-sheets/types";
 import { loadOutcomeStats } from "./diagnostic-outcomes.server";
 import { gatherEvidence, tieredPromptBlock, provenanceBlock } from "./evidence/engine";
 import type { EvidenceItem } from "./evidence/types";
+import { internalTierFor } from "./evidence/types";
+import { knowledgeEvidenceAudit } from "./evidence/providers/knowledge";
 import { enforceDiagnosticQuota, QuotaExceededError } from "./billing/quota.server";
 import { classifyDriveTopology, topologyPromptBlock } from "@/lib/appliance/drive-topology";
 import { runDiagnosticStep } from "./ai/diagnostic-provider.server";
@@ -92,6 +94,7 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
           groundingSource: null,
           historicalOutcomes: null,
           evidence: [] as EvidenceItem[],
+          evidenceThin: true,
           provider: "lovable" as const,
           providerError: null as string | null,
           quotaExceeded: true as const,
@@ -203,28 +206,32 @@ export const nextDiagnosticStep = createServerFn({ method: "POST" })
     };
     const confidenceNote = modeNote[mode];
 
-    const trustNote = grounding?.sourceTrust
-      ? `Source trust tier: ${grounding.sourceTrust} (${grounding.trustLabel}).`
-      : "No verified source — operating in symptom-based mode.";
+    const groundingTier =
+      mode === "exact_model"
+        ? grounding?.sourceTrust === "oem"
+          ? "T1_OEM"
+          : "T2_LIT"
+        : "T5_EXTERNAL";
+    const groundingTierNote = `Grounding reference code: ${groundingTier}.`;
 
     // --- Unified evidence pipeline (community + verified repairs + docs) ----
     let evidence: EvidenceItem[] = [];
+    let evidenceAudit = { stage1Sufficient: false, fallbackUsed: false, evidenceThin: true };
+    const evidenceQuery = {
+      brand: data.appliance.manufacturer,
+      applianceType: data.appliance.applianceType,
+      model: data.appliance.modelNumber,
+      complaint: data.complaint,
+      userId: context.userId,
+    };
     try {
-      evidence = await gatherEvidence(
-        {
-          brand: data.appliance.manufacturer,
-          applianceType: data.appliance.applianceType,
-          model: data.appliance.modelNumber,
-          complaint: data.complaint,
-          userId: context.userId,
-        },
-        { supabase: context.supabase },
-      );
+      evidence = await gatherEvidence(evidenceQuery, { supabase: context.supabase });
+      evidenceAudit = await knowledgeEvidenceAudit(evidenceQuery, evidence);
     } catch (err) {
       console.warn("[diagnose] evidence pipeline failed:", err);
     }
     const evidenceBlock = tieredPromptBlock(evidence);
-    const hierarchyRule = `\nEVIDENCE HIERARCHY (weight in this exact order):\n1) Manufacturer Documentation  2) Tech Sheet  3) Service Bulletins  4) Verified Repair Outcomes  5) Community — Verified Repairs  6) Community — Discussions  7) External Repair Guides.\nCommunity evidence may strengthen a recommendation when it corroborates higher-tier sources but MUST NEVER override manufacturer documentation or a verified repair outcome. When higher-tier evidence conflicts with community evidence, follow the higher tier and note the disagreement.\n`;
+    const hierarchyRule = `\nEvidence is grouped by internal codes T1 (strongest) to T5 (weakest). When sources conflict, follow the higher tier. T5 items are leads from unreviewed or external material: use them to choose tests, and only state a specific value (part number, resistance, voltage, pin) from T5 if no higher tier contradicts it. Never mention tiers, codes, verification, review status, source reliability, or confidence levels to the technician. Never refuse or stop: always give the most likely causes and the next test to perform, even when evidence is limited.`;
 
     const providerResult = await runDiagnosticStep({
       userId: context.userId,
@@ -243,7 +250,7 @@ CRITICAL OUTPUT RULE:
 GROUNDING:
 - ${confidenceNote}
 - You may ONLY reference connector names, pin numbers, test points, resistance values, voltage values, and fault-code definitions when those values are explicitly present in the grounding data below. If absent, speak at the component level instead — do not invent technical details.
-- ${trustNote} When sources conflict: OEM > trusted reference > community.
+- ${groundingTierNote}
 
 MANUFACTURER LOCK (CRITICAL):
 - The appliance is a ${data.appliance.manufacturer} ${data.appliance.applianceType} (model ${data.appliance.modelNumber}).
@@ -288,19 +295,29 @@ Decide the single next diagnostic question, or finalize the call. Reminder: answ
     // Usage is logged inside the provider layer (per-provider, incl. failures).
     const object = providerResult.output;
 
-    // Persist which evidence items informed this diagnosis
+    // Owner-audit metadata only; none of these fields are rendered to technicians.
     try {
-      const evidenceIds = evidence.slice(0, 20).map((e) => ({
-        id: e.id,
-        sourceType: e.sourceType,
-        confidence: e.confidence,
+      const auditItems = evidence.slice(0, 20).map((item) => ({
+        id: item.id,
+        internalTier: internalTierFor(item),
+        reviewStatus: item.metadata?.["reviewStatus"] ?? null,
+        sourceType: item.sourceType,
+        score: item.metadata?.["score"] ?? null,
       }));
-      if (evidenceIds.length && (data as { sessionId?: string }).sessionId) {
-        // Best-effort — do not fail the diagnosis on write errors.
+      if (data.sessionId) {
         await context.supabase
           .from("diagnostic_sessions")
-          .update({ evidence_used: evidenceIds })
-          .eq("id", (data as { sessionId?: string }).sessionId!);
+          .update({
+            evidence_used: {
+              stage1Sufficient: evidenceAudit.stage1Sufficient,
+              fallbackUsed: evidenceAudit.fallbackUsed,
+              evidenceThin: evidenceAudit.evidenceThin,
+              internalConfidence: Math.max(0, ...evidence.map((item) => item.confidence)),
+              promptVersion: "kie-batch1",
+              items: auditItems,
+            },
+          })
+          .eq("id", data.sessionId);
       }
     } catch (err) {
       console.warn("[diagnose] evidence_used update failed:", err);
@@ -334,6 +351,7 @@ Decide the single next diagnostic question, or finalize the call. Reminder: answ
             }
           : null,
       evidence: evidence.slice(0, 12),
+      evidenceThin: evidenceAudit.evidenceThin,
     };
   });
 

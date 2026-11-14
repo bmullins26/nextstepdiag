@@ -9,22 +9,26 @@ import {
 import { externalRepairGuideProvider } from "./providers/stubs";
 import { externalRepairDataProvider } from "./providers/verified-appliance-data";
 import {
+  knowledgeFallbackProvider,
   knowledgeManufacturerDocProvider,
   knowledgeRepairRecordProvider,
-  knowledgeServiceBulletinProvider,
+  knowledgeTechnicianReportedProvider,
+  knowledgeTechLiteratureProvider,
 } from "./providers/knowledge";
 
 export function getEvidenceProviders(): EvidenceProvider[] {
   return [
     knowledgeManufacturerDocProvider,
     techSheetProvider,
-    knowledgeServiceBulletinProvider,
+    knowledgeTechLiteratureProvider,
     verifiedRepairProvider,
     repairHistoryProvider,
     knowledgeRepairRecordProvider,
+    knowledgeTechnicianReportedProvider,
     communityVerifiedProvider,
     communityDiscussionProvider,
     externalRepairDataProvider,
     externalRepairGuideProvider,
+    knowledgeFallbackProvider,
   ];
 }

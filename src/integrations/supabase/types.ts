@@ -2630,6 +2630,7 @@ export type Database = {
           needs_review: boolean
           origin: Database["public"]["Enums"]["knowledge_origin"]
           page_number: number
+          review_status: string
           score: number
           section: string
           similarity: number

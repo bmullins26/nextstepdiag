@@ -73,6 +73,10 @@ export const CHUNK_OVERLAP_CHARS = 150;
 /** Review-queue ordering signal only; confidence never clears owner review. */
 export const REVIEW_PRIORITY_THRESHOLD = 0.82;
 
+/** Approved retrieval must clear both thresholds before fallback is needed. */
+export const MIN_APPROVED_HITS = 3;
+export const MIN_APPROVED_SIMILARITY = 0.7;
+
 export type KnowledgeSourceRow = {
   id: string;
   source_type: KnowledgeSourceType;
@@ -179,6 +183,7 @@ export type KnowledgeSearchHit = {
   origin: KnowledgeOrigin;
   confidence_score: number;
   needs_review: boolean;
+  review_status: "unreviewed" | "approved" | "rejected" | "quarantined";
   similarity: number;
   score: number;
 };
