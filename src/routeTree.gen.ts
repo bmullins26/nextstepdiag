@@ -37,7 +37,7 @@ import { Route as AuthenticatedCommunityBrowseRouteImport } from './routes/_auth
 import { Route as AuthenticatedCommunityConfirmedRepairsRouteImport } from './routes/_authenticated/community.confirmed-repairs'
 import { Route as AuthenticatedCommunityNewRouteImport } from './routes/_authenticated/community.new'
 import { Route as AuthenticatedCommunitySearchRouteImport } from './routes/_authenticated/community.search'
-import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history.$id'
+import { Route as AuthenticatedHistoryIdRouteImport } from './routes/_authenticated/history_.$id'
 import { Route as AuthenticatedOwnerIndexRouteImport } from './routes/_authenticated/owner/index'
 import { Route as AuthenticatedOwnerEmailsRouteImport } from './routes/_authenticated/owner/emails'
 import { Route as AuthenticatedOwnerKnowledgeRouteImport } from './routes/_authenticated/owner/knowledge'
@@ -202,9 +202,9 @@ const AuthenticatedCommunitySearchRoute =
     getParentRoute: () => AuthenticatedCommunityRoute,
   } as any)
 const AuthenticatedHistoryIdRoute = AuthenticatedHistoryIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedHistoryRoute,
+  id: '/history_/$id',
+  path: '/history/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedOwnerIndexRoute = AuthenticatedOwnerIndexRouteImport.update({
   id: '/',
@@ -301,7 +301,7 @@ export interface FileRoutesByFullPath {
   '/diagnose': typeof AuthenticatedDiagnoseRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/error-codes': typeof AuthenticatedErrorCodesRoute
-  '/history': typeof AuthenticatedHistoryRouteWithChildren
+  '/history': typeof AuthenticatedHistoryRoute
   '/owner': typeof AuthenticatedOwnerRouteWithChildren
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/tech-talk': typeof AuthenticatedTechTalkRoute
@@ -345,7 +345,7 @@ export interface FileRoutesByTo {
   '/diagnose': typeof AuthenticatedDiagnoseRoute
   '/documents': typeof AuthenticatedDocumentsRoute
   '/error-codes': typeof AuthenticatedErrorCodesRoute
-  '/history': typeof AuthenticatedHistoryRouteWithChildren
+  '/history': typeof AuthenticatedHistoryRoute
   '/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/tech-talk': typeof AuthenticatedTechTalkRoute
   '/checkout/return': typeof CheckoutReturnRoute
@@ -390,7 +390,7 @@ export interface FileRoutesById {
   '/_authenticated/diagnose': typeof AuthenticatedDiagnoseRoute
   '/_authenticated/documents': typeof AuthenticatedDocumentsRoute
   '/_authenticated/error-codes': typeof AuthenticatedErrorCodesRoute
-  '/_authenticated/history': typeof AuthenticatedHistoryRouteWithChildren
+  '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/owner': typeof AuthenticatedOwnerRouteWithChildren
   '/_authenticated/repair-insights-test': typeof AuthenticatedRepairInsightsTestRoute
   '/_authenticated/tech-talk': typeof AuthenticatedTechTalkRoute
@@ -403,7 +403,7 @@ export interface FileRoutesById {
   '/_authenticated/community/confirmed-repairs': typeof AuthenticatedCommunityConfirmedRepairsRouteWithChildren
   '/_authenticated/community/new': typeof AuthenticatedCommunityNewRoute
   '/_authenticated/community/search': typeof AuthenticatedCommunitySearchRoute
-  '/_authenticated/history/$id': typeof AuthenticatedHistoryIdRoute
+  '/_authenticated/history_/$id': typeof AuthenticatedHistoryIdRoute
   '/_authenticated/owner/emails': typeof AuthenticatedOwnerEmailsRoute
   '/_authenticated/owner/knowledge': typeof AuthenticatedOwnerKnowledgeRoute
   '/_authenticated/owner/payments': typeof AuthenticatedOwnerPaymentsRoute
@@ -537,7 +537,7 @@ export interface FileRouteTypes {
     | '/_authenticated/community/confirmed-repairs'
     | '/_authenticated/community/new'
     | '/_authenticated/community/search'
-    | '/_authenticated/history/$id'
+    | '/_authenticated/history_/$id'
     | '/_authenticated/owner/emails'
     | '/_authenticated/owner/knowledge'
     | '/_authenticated/owner/payments'
@@ -776,12 +776,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCommunitySearchRouteImport
       parentRoute: typeof AuthenticatedCommunityRoute
     }
-    '/_authenticated/history/$id': {
-      id: '/_authenticated/history/$id'
-      path: '/$id'
+    '/_authenticated/history_/$id': {
+      id: '/_authenticated/history_/$id'
+      path: '/history/$id'
       fullPath: '/history/$id'
       preLoaderRoute: typeof AuthenticatedHistoryIdRouteImport
-      parentRoute: typeof AuthenticatedHistoryRoute
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/owner/': {
       id: '/_authenticated/owner/'
@@ -923,17 +923,6 @@ const AuthenticatedCommunityRouteWithChildren =
     AuthenticatedCommunityRouteChildren,
   )
 
-interface AuthenticatedHistoryRouteChildren {
-  AuthenticatedHistoryIdRoute: typeof AuthenticatedHistoryIdRoute
-}
-
-const AuthenticatedHistoryRouteChildren: AuthenticatedHistoryRouteChildren = {
-  AuthenticatedHistoryIdRoute: AuthenticatedHistoryIdRoute,
-}
-
-const AuthenticatedHistoryRouteWithChildren =
-  AuthenticatedHistoryRoute._addFileChildren(AuthenticatedHistoryRouteChildren)
-
 interface AuthenticatedOwnerToolsRouteChildren {
   AuthenticatedOwnerToolsToolIdRoute: typeof AuthenticatedOwnerToolsToolIdRoute
 }
@@ -973,10 +962,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDiagnoseRoute: typeof AuthenticatedDiagnoseRoute
   AuthenticatedDocumentsRoute: typeof AuthenticatedDocumentsRoute
   AuthenticatedErrorCodesRoute: typeof AuthenticatedErrorCodesRoute
-  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRouteWithChildren
+  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedOwnerRoute: typeof AuthenticatedOwnerRouteWithChildren
   AuthenticatedRepairInsightsTestRoute: typeof AuthenticatedRepairInsightsTestRoute
   AuthenticatedTechTalkRoute: typeof AuthenticatedTechTalkRoute
+  AuthenticatedHistoryIdRoute: typeof AuthenticatedHistoryIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -985,10 +975,11 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDiagnoseRoute: AuthenticatedDiagnoseRoute,
   AuthenticatedDocumentsRoute: AuthenticatedDocumentsRoute,
   AuthenticatedErrorCodesRoute: AuthenticatedErrorCodesRoute,
-  AuthenticatedHistoryRoute: AuthenticatedHistoryRouteWithChildren,
+  AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedOwnerRoute: AuthenticatedOwnerRouteWithChildren,
   AuthenticatedRepairInsightsTestRoute: AuthenticatedRepairInsightsTestRoute,
   AuthenticatedTechTalkRoute: AuthenticatedTechTalkRoute,
+  AuthenticatedHistoryIdRoute: AuthenticatedHistoryIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

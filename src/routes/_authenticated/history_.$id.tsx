@@ -7,7 +7,7 @@ import { ArrowLeft, CheckCircle2, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getSession, deleteSession } from "@/lib/sessions.functions";
 
-export const Route = createFileRoute("/_authenticated/history/$id")({
+export const Route = createFileRoute("/_authenticated/history_/$id")({
   head: () => ({ meta: [{ title: "Diagnosis Details — NextStep" }] }),
   component: DetailsPage,
 });
@@ -33,7 +33,7 @@ type Row = {
 };
 
 function DetailsPage() {
-  const { id } = useParams({ from: "/_authenticated/history/$id" });
+  const { id } = useParams({ from: "/_authenticated/history_/$id" });
   const navigate = useNavigate();
   const get = useServerFn(getSession);
   const del = useServerFn(deleteSession);
