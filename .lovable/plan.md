@@ -1,16 +1,14 @@
 # Age Decoder accuracy fix — never present a guessed date
 
-## Conflicts to resolve before build (please answer)
+## Resolved decisions (owner-approved)
 
-1. **Whirlpool digit years vs. rule 9d.** A digit year decodes to 2010–2019, 1980s or 1970s, so `C04101002`, `R64597418`, `M92510000` all have 2–3 candidates 10+ years apart. Rule 9d says they must come back "ambiguous", but the fixtures expect one answer (2010 / 2016 / 2019). Likewise `CF0104204` (F = 2026 or 1996) is expected to be Jan 2026. Options:
-   - A. Fixtures become ambiguous, with the expected year listed first (follows 9d strictly). **This is my default.**
-   - B. Add a sourced rule that drops 1970s/80s/90s readings for this format. I have no source for one, so I won't do B unless you give me one.
-2. **Two-letter prefix makes letter-year serials ambiguous.** If any second letter can be a source letter, `CR2512345` also reads as source R, year 2, week 51 (2012), and `CU2012345`, `FP5013998` and `MU5110613` get second readings too. Proposal: treat the second letter as a source letter only when the third character is also a letter that's valid as a year (as in `HRC1848014`). Then a source letter followed by a digit year isn't decoded; it gets "read the plate".
-3. **ServiceBench "built" date already falls back to the shipped date.** `servicebench.server.ts:59` sets `manufacturedDate = manufacturedDate ?? actualGoodsIssueDate`. Item 9b needs them split into `manufacturedDate` and `shippedDate`. This touches the warranty file, but only that field. The warranty display and labels stay as they are, and warranty start still uses the same date it uses now.
-4. **The `source` and `updated_at` columns already exist** on `model_production_windows` (table has 0 rows, `source` is all null). The migration only adds what's missing, plus a CHECK on `source`.
-5. **Same-serial "ground truth" bonus.** `loadCrossChecks` gives +0.8 to the year most reported for that same serial (the "Community verified" path). Per 9, I'll drop it from scoring. Those reports only feed production windows (item 10), and only when source = data plate.
-6. **Kenmore 592 is currently mapped to LG.** Item 8 changes it to Samsung. Noting this; I'll follow item 8.
-7. **Neptune / Norge** go to the Whirlpool family (item 8) and also get the older Maytag rule (item 2). Both rules run, and their candidates are merged under 9d.
+1. Whirlpool digit years / dual letters: option 1A. All valid candidates are returned as ambiguous, expected year first. No unsourced decade filter.
+2. Two-letter prefix: when the 2nd character is a letter and the 3rd a digit, emit BOTH readings (a: letter year + week; b: source letter + digit year + week) and merge them under 9d. A reading with week outside 01–53 drops out. When the 3rd character is a letter (HRC1848014), it's read as source letter + letter year only.
+3. ServiceBench: split `manufacturedDate` from a new `shippedDate` in servicebench.server.ts. Warranty labels and display are unchanged.
+4. `source`/`updated_at` already exist on model_production_windows (0 rows). The migration adds only what's missing.
+5. Same-serial reports never add score. A prior plate-confirmed row decides at step (a) (see item 9); otherwise it does nothing.
+6. Kenmore 592 → Samsung (per item 8).
+7. Neptune/Norge: Whirlpool family plus the older Maytag rule, with candidates merged.
 
 ## Files to change
 
@@ -37,6 +35,7 @@
 
 ```sql
 ALTER TABLE public.model_production_windows
+  ADD COLUMN IF NOT EXISTS brand_key text,
   ADD COLUMN IF NOT EXISTS evidence_count integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS observed_min_year integer,
   ADD COLUMN IF NOT EXISTS observed_max_year integer;
@@ -45,19 +44,19 @@ ALTER TABLE public.model_production_windows
     CHECK (source IS NULL OR source IN ('owner','tech_confirmed')),
   ADD CONSTRAINT model_production_windows_observed_chk
     CHECK (observed_min_year IS NULL OR observed_max_year IS NULL OR observed_min_year <= observed_max_year);
-CREATE UNIQUE INDEX IF NOT EXISTS model_production_windows_mfr_prefix_uidx
-  ON public.model_production_windows (lower(manufacturer), upper(model_prefix));
+CREATE UNIQUE INDEX IF NOT EXISTS model_production_windows_brandkey_prefix_uidx
+  ON public.model_production_windows (brand_key, upper(model_prefix));
 CREATE INDEX IF NOT EXISTS age_decode_ground_truth_lookup_idx
   ON public.age_decode_ground_truth (lower(manufacturer), upper(serial_number));
 GRANT ALL ON public.model_production_windows TO service_role;
 REVOKE ALL ON public.model_production_windows FROM anon;
 ```
 
-The existing policies stay: authenticated users can read, owners can insert/update/delete. Technician confirmations are written only from server functions using the admin client. The table already has RLS on. Existing rows: none (verified), so the CHECK is safe. `updated_at` already exists; I'll confirm whether it already has an update trigger before adding one. The journal and snapshot are updated the same way as for 0010/0011.
+The table has 0 rows, so there's no backfill. `brand_key` stays nullable in this migration; app code always writes it, and NOT NULL can be added later. Existing policies stay: authenticated read, owner insert/update/delete. Technician confirmations are written server-side with the service role. I'll check for an existing `updated_at` trigger before adding one. The journal and snapshot are updated as for 0010/0011.
 
 ## How each item is implemented
 
-1. **Whirlpool:** pattern `^[A-Z]([A-Z](?=[A-HJ-NPR-Y]))?([0-9X A-HJ KLMPRSTUWY])(\d{2})\d+$`. Year map from the published table: digits give 2010+d and 1980+d and 1970+d; X gives 2020/1990; A–H give 2021–28 / 1991–98; J gives 1999 only (2029 is future); K–Y give one year each. Week 01–53 is required. Week is converted to an approximate month for display, but the precision stays "week". Source URLs go in code comments.
+1. **Whirlpool:** the parser tries every reading: (i) plant + year char + week; (ii) when the 2nd character is a letter and the 3rd a digit, also plant + source letter + digit year + week; (iii) when the 2nd and 3rd are both letters, plant + source + letter year + week. Every reading that passes the week check is kept. Year map from the published table: digits give 2010+d and 1980+d and 1970+d; X gives 2020/1990; A–H give 2021–28 / 1991–98; J gives 1999 only (2029 is future); K–Y give one year each. Week 01–53 is required. Week is converted to an approximate month for display, but the precision stays "week". Source URLs go in code comments.
 2. **Older Maytag:** `^\d{6,}([A-Z])([A-Z])$`. Year from the 24-year table, both cycles, capped at 2013; month from the letter pairs.
 3. **Alliance commercial:** last two characters are letters, read as year and month. A year letter outside the table returns unknown "format recognized, year not in the published table — read the date on the plate". Alias "alliance laundry" added.
 4. **Samsung:** year map gains P2007, Q2008, S2009, Z2010, B2011, with the pattern updated to accept them. Where a letter is in both cycles, both years are kept as candidates.
@@ -66,14 +65,14 @@ The existing policies stay: authenticated users can read, owners can insert/upda
 7. **Frigidaire:** `^[A-Z0-9][A-Z]\d\d{2}\d+$`. Year digit gives decade candidates; week 01–53.
 8. **Aliases and Kenmore:** as listed. An unknown Kenmore prefix returns unknown reason `kenmore_prefix_needed`, shown as "Need the Kenmore model number's first 3 digits to know who built it".
 9. **Date selection (decode + reconcile):** gather every valid candidate from all matching rules, then filter in this order:
-   a. A confirmed plate-printed date (parsed from `2019.03`, `03/2019`, `MFD 2019-03`, or an FD code) returns `ok` immediately, internal source `plate_printed`.
+   a. A confirmed plate-printed date. This includes a prior `age_decode_ground_truth` row for the same canonical brand key + normalized serial whose source is the data plate (internal `plate_printed_prior`). Tapped picks without the plate tick, receipts, and ServiceBench or decoder values never count here. If prior rows disagree, their dates become the candidates (ambiguous). A typed plate date (parsed from `2019.03`, `03/2019`, `MFD 2019-03`, or an FD code) returns `ok` immediately, internal source `plate_printed`.
    b. ServiceBench `manufacturedDate` returns `ok`, source `factory_record`. `shippedDate` only removes candidates after it and is never labelled built.
    c. A receipt or invoice year removes later candidates.
-   d. A production window narrows candidates, but only if `evidence_count >= 1` and every candidate pair is at least 5 years apart. An owner row with a manual introduced/discontinued range counts too, and so does the static OEM timeline (Sub-Zero/Wolf).
+   d. A production window narrows candidates, but only if every candidate pair is at least 5 years apart, and only from: a tech window with `evidence_count >= 1`; an owner row with an introduced/discontinued range; or the official Sub-Zero/Wolf timeline (`data/subzero-wolf-timeline.ts`, values unchanged). For the timeline, first/last production years bound the candidates and last = null means up to now. A code comment at the narrowing site points to `SUBZERO_WOLF_SOURCES` and the two official subzero-wolf.com model-number-timeline index pages.
    e. One candidate left gives `ok`. More than one gives `ambiguous` with every candidate and no chosen year or age.
    
    A user-entered year is used only as "on or before" (receipt) or as a confirmation; it never outranks ServiceBench. A candidate the tech taps sets the session date with internal `tech_picked`; it is not used for learning unless "I read this on the plate" is ticked. Removed: recency sort, the reconciler's score summing, the `historicalYears` and community bonuses, and the corroboration cache reads. The cache table is left in place, not dropped. ServiceBench dates are not written to ground truth.
-10. **Window learning:** the key is the normalized model: uppercase, A–Z0–9 only, cut at `/` or space, then trailing revision digits removed (`MTW6205RW1` → `MTW6205RW`, `WT7150CW/03` → `WT7150CW`, `GSS25IYNZHFS` unchanged). I'm proposing not to strip colour letters, because it's brand-specific and would merge different models. Confirm or give the rule you want. Each confirmation upserts: `evidence_count+1`, widen observed min/max, `source='tech_confirmed'` (an owner row keeps `owner`). Owner console: a table with delete. Technicians never see where a window came from.
+10. **Window learning:** key = canonical registry brand key (e.g. "GE Appliances" → `ge`; Kenmore → the real maker from the prefix map; Magic Chef → `maytag_legacy`) + normalized model, the same on read and write. An unknown Kenmore prefix means no window is read or written. Model normalization (approved): uppercase, A–Z0–9 only, cut at `/` or space, then trailing revision digits removed (`MTW6205RW1` → `MTW6205RW`, `WT7150CW/03` → `WT7150CW`, `GSS25IYNZHFS` unchanged). No colour-letter stripping. Each confirmation upserts: `evidence_count+1`, widen observed min/max, `source='tech_confirmed'` (an owner row keeps `owner`). Owner console: a table with delete. Technicians never see where a window came from.
 11. **Age display:** a shared helper `formatAge(candidateOrRange, now)`: floor; "X yr" when month or week is known; "X–Y yr" when only the year is known; nothing when ambiguous. Used by verify-appliance, the history detail page and the stored `age_years` (floor). The source label is renamed and the unsupported-format copy changes as specified.
 12. **Input normalization:** `normalizeSerial` uppercases and strips spaces, dashes and dots. Each rule declares the positions that must be digits; O→0 and I→1 are applied only there, and the corrected serial is returned as `normalizedSerial`, shown to the tech as "Read as: …". Ground-truth lookups use `ilike` on manufacturer and serial.
 13. **AI identification:** `generateObject` is wrapped in try/catch. On failure, appliance type is null, the age result is still returned, and the tech picks the type with the existing manual override.
@@ -84,6 +83,15 @@ The existing policies stay: authenticated users can read, owners can insert/upda
 Migrations 0010/0011; two-stage retrieval; neutral technician labels; the thin-evidence caution; repair-history counts only; warranty labels without "Verified"; next-test rule; CPSC 9-second fallback; WP parts dedupe; Start Diagnosis guard; Fred's Academy; pricing; question flow.
 
 ## Expected test results
+
+New and updated cases:
+- Whirlpool ambiguous, expected year first: C04101002 {2010, 1980, 1970} wk41; R64597418 {2016, 1986, 1976} wk45, never 2026; M92510000 {2019, 1989, 1979} wk25, never 2029; CF0104204 {2026, 1996} wk1; MX06404786 {2020, 1990} wk6; HRC1848014 {2023, 1993} wk18.
+- Two-letter readings: CR2512345 → 2004 wk25 + {2012, 1982} wk51. CU2012345 → 2007 wk20 + {2012, 1982} wk01. FP5013998 → 2003 wk50 + {2015, 1985} wk01. MU5110613 → 2007 wk51 + {2015, 1985} wk11. All are ambiguous.
+- Invalid-week reading drops out: e.g. a serial whose reading (b) gives week 00 or 54+ keeps only reading (a).
+- Prior plate row for the same brand key + serial → that date with no ambiguity. Two disagreeing prior plate rows → ambiguous. A tapped pick without the plate tick, or a receipt row → not used at step (a).
+- Window key: "GE Appliances" and "GE" share the window; Kenmore 795 reads the LG window; Kenmore 999 reads and writes nothing.
+- Sub-Zero/Wolf timeline narrows a ≥5-year-apart candidate set; open-ended last year is bounded by now.
+
 
 All new fixture cases pass under conflict option 1A (digit-year Whirlpool cases ambiguous, expected year first). That includes:
 - `909KWAT04496` gives candidates including Sep 2009, with no single pick.
