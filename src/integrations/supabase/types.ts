@@ -1220,7 +1220,7 @@ export type Database = {
           embedding_model: string | null
           error_code: string | null
           extraction_id: string | null
-          fact_id: string | null
+          fact_id: string
           id: string
           job_id: string | null
           manufacturer: string | null
@@ -1228,7 +1228,11 @@ export type Database = {
           model_number: string | null
           needs_review: boolean
           origin: Database["public"]["Enums"]["knowledge_origin"]
+          origin_actor: string | null
           page_number: number | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           section: string | null
           source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
           source_id: string
@@ -1249,7 +1253,7 @@ export type Database = {
           embedding_model?: string | null
           error_code?: string | null
           extraction_id?: string | null
-          fact_id?: string | null
+          fact_id: string
           id?: string
           job_id?: string | null
           manufacturer?: string | null
@@ -1257,7 +1261,11 @@ export type Database = {
           model_number?: string | null
           needs_review?: boolean
           origin: Database["public"]["Enums"]["knowledge_origin"]
+          origin_actor?: string | null
           page_number?: number | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           section?: string | null
           source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
           source_id: string
@@ -1278,7 +1286,7 @@ export type Database = {
           embedding_model?: string | null
           error_code?: string | null
           extraction_id?: string | null
-          fact_id?: string | null
+          fact_id?: string
           id?: string
           job_id?: string | null
           manufacturer?: string | null
@@ -1286,7 +1294,11 @@ export type Database = {
           model_number?: string | null
           needs_review?: boolean
           origin?: Database["public"]["Enums"]["knowledge_origin"]
+          origin_actor?: string | null
           page_number?: number | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           section?: string | null
           source_authority?: Database["public"]["Enums"]["knowledge_source_authority"]
           source_id?: string
@@ -1410,6 +1422,7 @@ export type Database = {
           part_number: string | null
           repair: string | null
           resolution: string | null
+          review_status: string
           reviewed_at: string | null
           reviewed_by: string | null
           source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
@@ -1447,6 +1460,7 @@ export type Database = {
           part_number?: string | null
           repair?: string | null
           resolution?: string | null
+          review_status?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           source_authority: Database["public"]["Enums"]["knowledge_source_authority"]
@@ -1484,6 +1498,7 @@ export type Database = {
           part_number?: string | null
           repair?: string | null
           resolution?: string | null
+          review_status?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           source_authority?: Database["public"]["Enums"]["knowledge_source_authority"]
@@ -1584,6 +1599,48 @@ export type Database = {
           },
         ]
       }
+      knowledge_quarantine_log: {
+        Row: {
+          fact_id: string
+          id: number
+          prior_authority: Database["public"]["Enums"]["knowledge_source_authority"]
+          prior_needs_review: boolean
+          prior_review_status: string
+          prior_reviewed_at: string | null
+          prior_reviewed_by: string | null
+          quarantined_at: string
+          reason: string
+          restored_at: string | null
+          source_id: string
+        }
+        Insert: {
+          fact_id: string
+          id?: number
+          prior_authority: Database["public"]["Enums"]["knowledge_source_authority"]
+          prior_needs_review: boolean
+          prior_review_status: string
+          prior_reviewed_at?: string | null
+          prior_reviewed_by?: string | null
+          quarantined_at?: string
+          reason: string
+          restored_at?: string | null
+          source_id: string
+        }
+        Update: {
+          fact_id?: string
+          id?: number
+          prior_authority?: Database["public"]["Enums"]["knowledge_source_authority"]
+          prior_needs_review?: boolean
+          prior_review_status?: string
+          prior_reviewed_at?: string | null
+          prior_reviewed_by?: string | null
+          quarantined_at?: string
+          reason?: string
+          restored_at?: string | null
+          source_id?: string
+        }
+        Relationships: []
+      }
       knowledge_review_log: {
         Row: {
           action: string
@@ -1643,6 +1700,8 @@ export type Database = {
           created_at: string
           file_size: number | null
           id: string
+          ingest_blocked_at: string | null
+          ingest_blocked_reason: string | null
           manufacturer: string | null
           metadata: Json
           mime_type: string | null
@@ -1665,6 +1724,8 @@ export type Database = {
           created_at?: string
           file_size?: number | null
           id?: string
+          ingest_blocked_at?: string | null
+          ingest_blocked_reason?: string | null
           manufacturer?: string | null
           metadata?: Json
           mime_type?: string | null
@@ -1687,6 +1748,8 @@ export type Database = {
           created_at?: string
           file_size?: number | null
           id?: string
+          ingest_blocked_at?: string | null
+          ingest_blocked_reason?: string | null
           manufacturer?: string | null
           metadata?: Json
           mime_type?: string | null
